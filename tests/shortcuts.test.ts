@@ -91,4 +91,53 @@ describe('Shortcuts Engine: Keyboard Normalization & Dispatching', () => {
     input.remove();
     manager.detach();
   });
+
+  it('correctly identifies browser-reserved shortcuts', async () => {
+    const { isReservedBrowserShortcut } = await import('../src/core/shortcuts');
+    // Reserved
+    expect(isReservedBrowserShortcut('ctrl+t')).toBe(true);
+    expect(isReservedBrowserShortcut('alt+d')).toBe(true);
+    expect(isReservedBrowserShortcut('ctrl+w')).toBe(true);
+    expect(isReservedBrowserShortcut('f12')).toBe(true);
+    expect(isReservedBrowserShortcut('ctrl+l')).toBe(true);
+
+    // Non-reserved (safe defaults)
+    expect(isReservedBrowserShortcut('Alt+Shift+D')).toBe(false);
+    expect(isReservedBrowserShortcut('Alt+Shift+T')).toBe(false);
+    expect(isReservedBrowserShortcut('Alt+Shift+X')).toBe(false);
+    expect(isReservedBrowserShortcut('Alt+Shift+E')).toBe(false);
+  });
+
+  it('bypasses tool shortcuts when drawing mode is inactive so page keys are not hijacked', () => {
+    let drawingModeActive = false;
+    const manager = new ShortcutManager(
+      {
+        'toggle-active': 'Alt+Shift+d',
+        'tool-pen': 'p',
+      },
+      () => drawingModeActive
+    );
+
+    const mockCallback = vi.fn();
+    manager.addListener(mockCallback);
+    manager.attach();
+
+    // 1. Drawing mode is INACTIVE: pressing 'P' should NOT trigger tool-pen
+    const eventP = new KeyboardEvent('keydown', { key: 'p', bubbles: true, cancelable: true });
+    window.dispatchEvent(eventP);
+    expect(mockCallback).not.toHaveBeenCalled();
+
+    // 2. Global toggle shortcut Alt+Shift+D SHOULD trigger even when inactive
+    const eventToggle = new KeyboardEvent('keydown', { key: 'd', altKey: true, shiftKey: true, bubbles: true, cancelable: true });
+    window.dispatchEvent(eventToggle);
+    expect(mockCallback).toHaveBeenCalledWith('toggle-active', expect.any(KeyboardEvent));
+
+    // 3. Turn drawing mode ACTIVE: now pressing 'P' SHOULD trigger tool-pen
+    mockCallback.mockClear();
+    drawingModeActive = true;
+    window.dispatchEvent(eventP);
+    expect(mockCallback).toHaveBeenCalledWith('tool-pen', expect.any(KeyboardEvent));
+
+    manager.detach();
+  });
 });

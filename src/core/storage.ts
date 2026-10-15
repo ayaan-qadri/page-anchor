@@ -7,7 +7,8 @@ import {
 } from './types';
 
 export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
-  'toggle-active': 'Alt+D',
+  'toggle-active': 'Alt+Shift+D',
+  'action-toggle-toolbar': 'Alt+Shift+T',
   'tool-select': 'v',
   'tool-pen': 'p',
   'tool-highlighter': 'h',
@@ -19,9 +20,8 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
   'tool-eraser': 'e',
   'action-undo': 'Ctrl+z',
   'action-redo': 'Ctrl+y',
-  'action-clear': 'Ctrl+Alt+k',
-  'action-export': 'Ctrl+Alt+e',
-  'action-toggle-toolbar': 'Alt+t',
+  'action-clear': 'Alt+Shift+X',
+  'action-export': 'Alt+Shift+E',
 };
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {

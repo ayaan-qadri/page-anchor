@@ -136,18 +136,65 @@ export function formatShortcutForDisplay(keyCombo: string): string {
     .replace('Shift', '⇧ Shift');
 }
 
+/**
+ * Standard reserved browser shortcuts across Chrome, Firefox, Edge, and Safari.
+ * Used to warn users when attempting to bind to system/browser reserved keys.
+ */
+export const RESERVED_BROWSER_SHORTCUTS = new Set([
+  'alt+d', // Chrome / Edge address bar
+  'ctrl+l', 'cmd+l', // Address bar
+  'ctrl+t', 'cmd+t', // New tab
+  'ctrl+w', 'cmd+w', // Close tab
+  'ctrl+n', 'cmd+n', // New window
+  'ctrl+shift+n', 'cmd+shift+n', // Incognito
+  'ctrl+shift+t', 'cmd+shift+t', // Reopen tab
+  'ctrl+tab', 'ctrl+shift+tab',
+  'ctrl+d', 'cmd+d', // Bookmark
+  'ctrl+shift+d', 'cmd+shift+d', // Bookmark all
+  'ctrl+b', 'cmd+b', // Bookmarks bar
+  'ctrl+shift+b', 'cmd+shift+b',
+  'ctrl+h', 'cmd+h', // History
+  'ctrl+j', 'cmd+j', // Downloads
+  'ctrl+r', 'cmd+r', 'f5', // Reload
+  'ctrl+shift+r', 'cmd+shift+r', // Hard reload
+  'ctrl+p', 'cmd+p', // Print
+  'ctrl+s', 'cmd+s', // Save
+  'ctrl+f', 'cmd+f', // Find
+  'ctrl+g', 'cmd+g',
+  'ctrl+u', 'cmd+u', // View source
+  'f12',
+  'ctrl+shift+i', 'cmd+alt+i',
+  'ctrl+shift+j', 'cmd+alt+j',
+  'ctrl+shift+c', 'cmd+alt+c',
+  'alt+f4', 'cmd+q', 'cmd+m',
+]);
+
+export function isReservedBrowserShortcut(combo: string): boolean {
+  if (!combo) return false;
+  return RESERVED_BROWSER_SHORTCUTS.has(combo.toLowerCase());
+}
+
 export type ShortcutHandler = (action: ShortcutAction, event: KeyboardEvent) => void;
 
 export class ShortcutManager {
   private activeShortcuts: Record<ShortcutAction, string> = { ...DEFAULT_SHORTCUTS };
   private listeners: ShortcutHandler[] = [];
   private boundHandler: (e: KeyboardEvent) => void;
+  private activeModeGetter?: () => boolean;
 
-  constructor(customShortcuts?: Partial<Record<ShortcutAction, string>>) {
+  constructor(
+    customShortcuts?: Partial<Record<ShortcutAction, string>>,
+    activeModeGetter?: () => boolean
+  ) {
     if (customShortcuts) {
       this.activeShortcuts = { ...this.activeShortcuts, ...customShortcuts };
     }
+    this.activeModeGetter = activeModeGetter;
     this.boundHandler = this.handleKeyDown.bind(this);
+  }
+
+  public setActiveModeGetter(getter: () => boolean): void {
+    this.activeModeGetter = getter;
   }
 
   public setShortcuts(shortcuts: Record<ShortcutAction, string>): void {
@@ -192,9 +239,18 @@ export class ShortcutManager {
     const pressedKey = normalizeKeyEvent(e);
     if (!pressedKey) return;
 
+    const isDrawingActive = this.activeModeGetter ? this.activeModeGetter() : true;
+
     // Check matches
     for (const [actionId, shortcutKey] of Object.entries(this.activeShortcuts)) {
       if (this.isMatch(pressedKey, shortcutKey)) {
+        const isGlobalToggle = actionId === 'toggle-active' || actionId === 'action-toggle-toolbar';
+
+        // When drawing mode is inactive, NEVER intercept single-letter tool keys or page keys!
+        if (!isDrawingActive && !isGlobalToggle) {
+          continue;
+        }
+
         e.preventDefault();
         e.stopPropagation();
         this.listeners.forEach((fn) => fn(actionId as ShortcutAction, e));

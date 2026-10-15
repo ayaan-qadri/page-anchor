@@ -25,8 +25,8 @@ export default defineConfig({
     commands: {
       'toggle-drawing-mode': {
         suggested_key: {
-          default: 'Alt+D',
-          mac: 'Alt+D',
+          default: 'Alt+Shift+D',
+          mac: 'Alt+Shift+D',
         },
         description: 'Toggle Page Anchor drawing toolbar',
       },

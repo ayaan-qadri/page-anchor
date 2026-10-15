@@ -12,7 +12,7 @@ async function initPopup() {
 
   // Load user settings for shortcut hint
   const settings = await loadSettings();
-  const toggleKey = settings.shortcuts['toggle-active'] || 'Alt+D';
+  const toggleKey = settings.shortcuts['toggle-active'] || 'Alt+Shift+D';
   if (hintEl) {
     hintEl.textContent = formatShortcutForDisplay(toggleKey);
   }

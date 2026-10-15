@@ -185,8 +185,8 @@ export default defineContentScript({
         }
       );
 
-      // Initialize Shortcut Manager
-      shortcutManager = new ShortcutManager(settings.shortcuts);
+      // Initialize Shortcut Manager (with active mode guard so webpage keys are never hijacked when drawing mode is off)
+      shortcutManager = new ShortcutManager(settings.shortcuts, () => engine.getActiveMode());
       shortcutManager.addListener((action) => {
         handleShortcutAction(action);
       });

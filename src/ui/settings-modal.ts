@@ -1,5 +1,5 @@
 import { ExtensionSettings, ShortcutAction } from '../core/types';
-import { SHORTCUT_DEFINITIONS, formatShortcutForDisplay, normalizeKeyEvent } from '../core/shortcuts';
+import { SHORTCUT_DEFINITIONS, formatShortcutForDisplay, normalizeKeyEvent, isReservedBrowserShortcut } from '../core/shortcuts';
 import { DEFAULT_SETTINGS, saveSettings } from '../core/storage';
 import { ICONS } from '../icons/svg-icons';
 
@@ -217,6 +217,16 @@ export class SettingsModal {
       this.settings.shortcuts[actionId] = combo;
       btn.textContent = formatShortcutForDisplay(combo);
       btn.classList.remove('recording');
+
+      if (isReservedBrowserShortcut(combo)) {
+        btn.style.borderColor = '#f59e0b';
+        btn.style.color = '#fbbf24';
+        btn.title = `Warning: "${combo}" is reserved by your browser (e.g. tabs/address bar) and may be overridden.`;
+      } else {
+        btn.style.borderColor = '';
+        btn.style.color = '';
+        btn.title = 'Click to record new shortcut';
+      }
 
       if (this.recordingKeyHandler) {
         window.removeEventListener('keydown', this.recordingKeyHandler, true);

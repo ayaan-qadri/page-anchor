@@ -59,24 +59,27 @@ Page Anchor solves this with 5 dedicated performance strategies:
 
 | Action | Default Shortcut | Description |
 | :--- | :---: | :--- |
-| **Toggle Drawing Mode** | `Alt + D` | Turn drawing overlay on / off |
-| **Toggle Toolbar** | `Alt + T` | Collapse or expand floating toolbar |
-| **Select / Move** | `V` | Select elements to reposition or delete |
-| **Pen Tool** | `P` | Freehand drawing tool |
-| **Highlighter** | `H` | Semi-transparent highlighter |
-| **Rectangle** | `R` | Draw rectangle box |
-| **Circle** | `C` | Draw circle or ellipse |
-| **Line** | `L` | Draw straight line |
-| **Arrow** | `A` | Draw directional arrow |
-| **Text Note** | `T` | Click to place text note |
-| **Eraser** | `E` | Sweep or click to erase |
+| **Toggle Drawing Mode** | `Alt + Shift + D` | Turn drawing overlay on / off (Non-conflicting with browser address bar `Alt+D`) |
+| **Toggle Toolbar** | `Alt + Shift + T` | Collapse or expand floating toolbar |
+| **Select / Move** | `V` | Select elements to reposition or delete (active in draw mode) |
+| **Pen Tool** | `P` | Freehand drawing tool (active in draw mode) |
+| **Highlighter** | `H` | Semi-transparent highlighter (active in draw mode) |
+| **Rectangle** | `R` | Draw rectangle box (active in draw mode) |
+| **Circle** | `C` | Draw circle or ellipse (active in draw mode) |
+| **Line** | `L` | Draw straight line (active in draw mode) |
+| **Arrow** | `A` | Draw directional arrow (active in draw mode) |
+| **Text Note** | `T` | Click to place text note (active in draw mode) |
+| **Eraser** | `E` | Sweep or click to erase (active in draw mode) |
 | **Undo** | `Ctrl + Z` | Undo last action |
-| **Redo** | `Ctrl + Y` | Redo undone action |
+| **Redo** | `Ctrl + Y` / `Ctrl + Shift + Z` | Redo undone action |
 | **Delete Selected** | `Delete` / `Backspace` | Remove selected element |
-| **Clear Page** | `Ctrl + Alt + K` | Clear all drawings on current page |
-| **Export Snapshot** | `Ctrl + Alt + E` | Download PNG screenshot |
+| **Clear Page** | `Alt + Shift + X` | Clear all drawings on current page |
+| **Export Snapshot** | `Alt + Shift + E` | Download PNG screenshot |
 
-> **Note**: All shortcuts can be customized in the in-page **Settings Modal** (gear icon) or the dedicated **Extension Options** page.
+> **Browser Safety Guarantee**: 
+> - Global toggles use `Alt + Shift` combinations to ensure zero conflicts with reserved browser shortcuts (e.g. `Alt + D` for the Chrome/Edge address bar, `Ctrl + D` for bookmarks, or `Ctrl + Alt` European `AltGr` characters like `€`).
+> - Single-letter shortcuts (`P`, `T`, `E`, etc.) are strictly active **only when Drawing Mode is active**. When drawing mode is off, all normal webpage typing and website shortcuts (YouTube, GitHub, Twitter) are 100% undisturbed.
+> - All shortcuts can be customized in the in-page **Settings Modal** (gear icon) or the dedicated **Extension Options** page, with automatic conflict warnings if a browser-reserved key is chosen.
 
 ---
 

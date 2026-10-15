@@ -12,6 +12,7 @@ import {
   formatShortcutForDisplay,
   normalizeKeyEvent,
   SHORTCUT_DEFINITIONS,
+  isReservedBrowserShortcut,
 } from '../../src/core/shortcuts';
 
 let currentSettings: ExtensionSettings;
@@ -111,6 +112,16 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
     currentSettings.shortcuts[actionId] = combo;
     btn.textContent = formatShortcutForDisplay(combo);
     btn.classList.remove('recording');
+
+    if (isReservedBrowserShortcut(combo)) {
+      btn.style.borderColor = '#f59e0b';
+      btn.style.color = '#fbbf24';
+      btn.title = `Warning: "${combo}" is reserved by your browser (e.g. tabs/address bar) and may be overridden.`;
+    } else {
+      btn.style.borderColor = '';
+      btn.style.color = '';
+      btn.title = 'Click to record new keystroke';
+    }
 
     if (recordingHandler) {
       window.removeEventListener('keydown', recordingHandler, true);
