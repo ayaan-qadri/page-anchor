@@ -176,7 +176,7 @@ export class ShortcutManager {
   private handleKeyDown(e: KeyboardEvent): void {
     // If user is currently typing in an input, textarea, contenteditable, don't hijack unless it's Escape
     const target = e.target as HTMLElement | null;
-    if (target) {
+    if (target && typeof target.getAttribute === 'function') {
       const tagName = target.tagName?.toLowerCase();
       const isInput =
         tagName === 'input' ||

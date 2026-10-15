@@ -102,27 +102,41 @@ export function distToSegmentSquared(p: Point, v: Point, w: Point): number {
  * Drastically reduces memory and persistence payload size without quality degradation.
  */
 export function simplifyPointsRDP(points: Point[], epsilon = 1.2): Point[] {
-  if (points.length <= 2) return points;
+  const len = points.length;
+  if (len <= 2) return points;
 
-  let dmax = 0;
-  let index = 0;
-  const last = points.length - 1;
+  const sqEpsilon = epsilon * epsilon;
+  const keep = new Uint8Array(len);
+  keep[0] = 1;
+  keep[len - 1] = 1;
 
-  for (let i = 1; i < last; i++) {
-    const d = Math.sqrt(distToSegmentSquared(points[i], points[0], points[last]));
-    if (d > dmax) {
-      index = i;
-      dmax = d;
+  const stack: [number, number][] = [[0, len - 1]];
+
+  while (stack.length > 0) {
+    const [start, end] = stack.pop()!;
+    let maxDistSq = 0;
+    let maxIndex = 0;
+
+    for (let i = start + 1; i < end; i++) {
+      const distSq = distToSegmentSquared(points[i], points[start], points[end]);
+      if (distSq > maxDistSq) {
+        maxDistSq = distSq;
+        maxIndex = i;
+      }
+    }
+
+    if (maxDistSq > sqEpsilon) {
+      keep[maxIndex] = 1;
+      if (maxIndex - start > 1) stack.push([start, maxIndex]);
+      if (end - maxIndex > 1) stack.push([maxIndex, end]);
     }
   }
 
-  if (dmax > epsilon) {
-    const recResults1 = simplifyPointsRDP(points.slice(0, index + 1), epsilon);
-    const recResults2 = simplifyPointsRDP(points.slice(index), epsilon);
-    return recResults1.slice(0, recResults1.length - 1).concat(recResults2);
-  } else {
-    return [points[0], points[last]];
+  const result: Point[] = [];
+  for (let i = 0; i < len; i++) {
+    if (keep[i] === 1) result.push(points[i]);
   }
+  return result;
 }
 
 /**
