@@ -92,20 +92,55 @@ describe('Shortcuts Engine: Keyboard Normalization & Dispatching', () => {
     manager.detach();
   });
 
-  it('correctly identifies browser-reserved shortcuts', async () => {
-    const { isReservedBrowserShortcut } = await import('../src/core/shortcuts');
-    // Reserved
+  it('correctly identifies browser-reserved shortcuts across Chrome, Firefox, Safari, and Edge', async () => {
+    const { isReservedBrowserShortcut, getBrowserShortcutConflict } = await import('../src/core/shortcuts');
+    
+    // Chrome / Edge conflict
+    const chromeConflict = getBrowserShortcutConflict('alt+d');
+    expect(chromeConflict).not.toBeNull();
+    expect(chromeConflict?.browser).toContain('Chrome');
+    expect(chromeConflict?.action).toContain('address bar');
+
+    // Firefox specific conflict
+    const firefoxConflict = getBrowserShortcutConflict('ctrl+shift+a');
+    expect(firefoxConflict).not.toBeNull();
+    expect(firefoxConflict?.browser).toBe('Firefox');
+    expect(firefoxConflict?.action).toContain('Add-ons');
+
+    // Safari specific conflict
+    const safariConflict = getBrowserShortcutConflict('cmd+opt+e');
+    expect(safariConflict).not.toBeNull();
+    expect(safariConflict?.browser).toBe('Safari');
+    expect(safariConflict?.action).toContain('Caches');
+
+    // Edge specific conflict
+    const edgeConflict = getBrowserShortcutConflict('ctrl+shift+s');
+    expect(edgeConflict).not.toBeNull();
+    expect(edgeConflict?.browser).toContain('Edge');
+
+    // Universal navigation
     expect(isReservedBrowserShortcut('ctrl+t')).toBe(true);
-    expect(isReservedBrowserShortcut('alt+d')).toBe(true);
     expect(isReservedBrowserShortcut('ctrl+w')).toBe(true);
     expect(isReservedBrowserShortcut('f12')).toBe(true);
     expect(isReservedBrowserShortcut('ctrl+l')).toBe(true);
 
-    // Non-reserved (safe defaults)
+    // Non-reserved Page Anchor defaults are 100% collision-free
     expect(isReservedBrowserShortcut('Alt+Shift+D')).toBe(false);
     expect(isReservedBrowserShortcut('Alt+Shift+T')).toBe(false);
     expect(isReservedBrowserShortcut('Alt+Shift+X')).toBe(false);
     expect(isReservedBrowserShortcut('Alt+Shift+E')).toBe(false);
+  });
+
+  it('guarantees that every default shortcut in the central registry is collision-free', async () => {
+    const { DEFAULT_SHORTCUTS, isReservedBrowserShortcut } = await import('../src/core/shortcuts');
+    
+    for (const [actionId, keyCombo] of Object.entries(DEFAULT_SHORTCUTS)) {
+      // Exclude single-letter tools because they are guarded and only trigger when drawing mode is active
+      if (keyCombo.length > 1) {
+        const isConflict = isReservedBrowserShortcut(keyCombo);
+        expect(isConflict, `Default shortcut "${keyCombo}" for "${actionId}" must not conflict with any browser!`).toBe(false);
+      }
+    }
   });
 
   it('bypasses tool shortcuts when drawing mode is inactive so page keys are not hijacked', () => {

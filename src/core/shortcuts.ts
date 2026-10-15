@@ -1,11 +1,46 @@
 import { ShortcutAction, ShortcutDefinition } from './types';
-import { DEFAULT_SHORTCUTS } from './storage';
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * PAGE ANCHOR — CENTRAL SHORTCUTS REGISTRY
+ * 
+ * Single source of truth for:
+ * 1. Default shortcut keybindings (all conflict-free across all browsers)
+ * 2. Human-readable shortcut definitions & metadata
+ * 3. Keystroke normalization & platform-aware formatting
+ * 4. Multi-browser reserved shortcut conflict database (Chrome, Firefox, Safari, Edge)
+ * 5. ShortcutManager event dispatcher with active-mode guarding
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+
+export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
+  // Global & Toolbar Toggles (Use Alt+Shift modifier to avoid browser collisions)
+  'toggle-active': 'Alt+Shift+D',
+  'action-toggle-toolbar': 'Alt+Shift+T',
+
+  // Single-letter Tool Selectors (Strictly guarded: active ONLY when drawing mode is ON)
+  'tool-select': 'v',
+  'tool-pen': 'p',
+  'tool-highlighter': 'h',
+  'tool-rect': 'r',
+  'tool-circle': 'c',
+  'tool-line': 'l',
+  'tool-arrow': 'a',
+  'tool-text': 't',
+  'tool-eraser': 'e',
+
+  // Actions (Standard non-conflicting modifiers)
+  'action-undo': 'Ctrl+z',
+  'action-redo': 'Ctrl+y',
+  'action-clear': 'Alt+Shift+X',
+  'action-export': 'Alt+Shift+E',
+};
 
 export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   {
     id: 'toggle-active',
     name: 'Toggle Drawing Mode',
-    description: 'Turn drawing mode on or off',
+    description: 'Turn drawing mode on or off across page',
     defaultKey: DEFAULT_SHORTCUTS['toggle-active'],
   },
   {
@@ -95,7 +130,7 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
 ];
 
 /**
- * Normalizes a KeyboardEvent into a standard canonical shortcut string (e.g. "Ctrl+Shift+K").
+ * Normalizes a KeyboardEvent into a canonical shortcut string (e.g. "Ctrl+Shift+K").
  */
 export function normalizeKeyEvent(e: KeyboardEvent): string {
   const parts: string[] = [];
@@ -137,45 +172,148 @@ export function formatShortcutForDisplay(keyCombo: string): string {
 }
 
 /**
- * Standard reserved browser shortcuts across Chrome, Firefox, Edge, and Safari.
- * Used to warn users when attempting to bind to system/browser reserved keys.
+ * Detailed browser conflict record.
  */
-export const RESERVED_BROWSER_SHORTCUTS = new Set([
-  'alt+d', // Chrome / Edge address bar
-  'ctrl+l', 'cmd+l', // Address bar
-  'ctrl+t', 'cmd+t', // New tab
-  'ctrl+w', 'cmd+w', // Close tab
-  'ctrl+n', 'cmd+n', // New window
-  'ctrl+shift+n', 'cmd+shift+n', // Incognito
-  'ctrl+shift+t', 'cmd+shift+t', // Reopen tab
-  'ctrl+tab', 'ctrl+shift+tab',
-  'ctrl+d', 'cmd+d', // Bookmark
-  'ctrl+shift+d', 'cmd+shift+d', // Bookmark all
-  'ctrl+b', 'cmd+b', // Bookmarks bar
-  'ctrl+shift+b', 'cmd+shift+b',
-  'ctrl+h', 'cmd+h', // History
-  'ctrl+j', 'cmd+j', // Downloads
-  'ctrl+r', 'cmd+r', 'f5', // Reload
-  'ctrl+shift+r', 'cmd+shift+r', // Hard reload
-  'ctrl+p', 'cmd+p', // Print
-  'ctrl+s', 'cmd+s', // Save
-  'ctrl+f', 'cmd+f', // Find
-  'ctrl+g', 'cmd+g',
-  'ctrl+u', 'cmd+u', // View source
-  'f12',
-  'ctrl+shift+i', 'cmd+alt+i',
-  'ctrl+shift+j', 'cmd+alt+j',
-  'ctrl+shift+c', 'cmd+alt+c',
-  'alt+f4', 'cmd+q', 'cmd+m',
-]);
+export interface BrowserConflictInfo {
+  browser: string;
+  action: string;
+}
 
+/**
+ * Comprehensive cross-browser collision dictionary.
+ * Covers Chrome, Firefox, Safari, Edge, Opera, and OS-level system shortcuts.
+ */
+export const BROWSER_RESERVED_CONFLICTS: Record<string, BrowserConflictInfo> = {
+  // ── Universal Browser Navigation ──
+  'ctrl+t': { browser: 'All Browsers', action: 'Open new tab' },
+  'cmd+t': { browser: 'All Browsers (macOS)', action: 'Open new tab' },
+  'ctrl+w': { browser: 'All Browsers', action: 'Close active tab' },
+  'cmd+w': { browser: 'All Browsers (macOS)', action: 'Close active tab' },
+  'ctrl+n': { browser: 'All Browsers', action: 'Open new window' },
+  'cmd+n': { browser: 'All Browsers (macOS)', action: 'Open new window' },
+  'ctrl+shift+t': { browser: 'All Browsers', action: 'Reopen last closed tab' },
+  'cmd+shift+t': { browser: 'All Browsers (macOS)', action: 'Reopen last closed tab' },
+  'ctrl+shift+w': { browser: 'All Browsers', action: 'Close active window' },
+  'cmd+shift+w': { browser: 'All Browsers (macOS)', action: 'Close active window' },
+  'ctrl+tab': { browser: 'All Browsers', action: 'Switch to next tab' },
+  'ctrl+shift+tab': { browser: 'All Browsers', action: 'Switch to previous tab' },
+  'ctrl+r': { browser: 'All Browsers', action: 'Reload page' },
+  'cmd+r': { browser: 'All Browsers (macOS)', action: 'Reload page' },
+  'f5': { browser: 'All Browsers', action: 'Reload page' },
+  'ctrl+shift+r': { browser: 'All Browsers', action: 'Hard reload page' },
+  'cmd+shift+r': { browser: 'Safari / All (macOS)', action: 'Hard reload / Reader Mode' },
+  'ctrl+f5': { browser: 'All Browsers', action: 'Hard reload page' },
+  'ctrl+l': { browser: 'All Browsers', action: 'Focus address bar (omnibox)' },
+  'cmd+l': { browser: 'All Browsers (macOS)', action: 'Focus address bar' },
+  'ctrl+d': { browser: 'All Browsers', action: 'Bookmark current page' },
+  'cmd+d': { browser: 'All Browsers (macOS)', action: 'Bookmark current page' },
+  'ctrl+shift+d': { browser: 'All Browsers', action: 'Bookmark all tabs' },
+  'cmd+shift+d': { browser: 'Safari / Chrome (macOS)', action: 'Add to Reading List / Bookmark tabs' },
+  'ctrl+f': { browser: 'All Browsers', action: 'Find on page' },
+  'cmd+f': { browser: 'All Browsers (macOS)', action: 'Find on page' },
+  'f3': { browser: 'All Browsers', action: 'Find next' },
+  'ctrl+g': { browser: 'All Browsers', action: 'Find next match' },
+  'cmd+g': { browser: 'All Browsers (macOS)', action: 'Find next match' },
+  'ctrl+shift+g': { browser: 'All Browsers', action: 'Find previous match' },
+  'cmd+shift+g': { browser: 'All Browsers (macOS)', action: 'Find previous match' },
+  'ctrl+p': { browser: 'All Browsers', action: 'Print page' },
+  'cmd+p': { browser: 'All Browsers (macOS)', action: 'Print page' },
+  'ctrl+s': { browser: 'All Browsers', action: 'Save page' },
+  'cmd+s': { browser: 'All Browsers (macOS)', action: 'Save page' },
+  'ctrl+u': { browser: 'All Browsers', action: 'View page source' },
+  'ctrl+h': { browser: 'All Browsers', action: 'Open browsing history' },
+  'ctrl+j': { browser: 'All Browsers', action: 'Open downloads manager' },
+  'f11': { browser: 'All Browsers', action: 'Toggle full screen mode' },
+  'ctrl+shift+delete': { browser: 'All Browsers', action: 'Clear browsing data dialog' },
+  'alt+home': { browser: 'All Browsers', action: 'Navigate to home page' },
+  'alt+left': { browser: 'All Browsers', action: 'Back history navigation' },
+  'alt+right': { browser: 'All Browsers', action: 'Forward history navigation' },
+
+  // ── Chrome & Chromium Specific ──
+  'alt+d': { browser: 'Chrome / Edge', action: 'Focus address bar (omnibox)' },
+  'ctrl+shift+n': { browser: 'Chrome / Edge / Opera', action: 'Open Incognito / InPrivate window' },
+  'cmd+shift+n': { browser: 'Chrome / Safari (macOS)', action: 'Open Incognito / Private window' },
+  'ctrl+shift+b': { browser: 'Chrome / Edge', action: 'Toggle bookmarks bar' },
+  'cmd+shift+b': { browser: 'Chrome (macOS)', action: 'Toggle bookmarks bar' },
+  'ctrl+shift+j': { browser: 'Chrome / Edge', action: 'Open JavaScript Console' },
+  'alt+f': { browser: 'Chrome / Edge', action: 'Open main browser menu / Settings' },
+  'alt+e': { browser: 'Chrome / Edge', action: 'Open browser options menu' },
+
+  // ── Mozilla Firefox Specific ──
+  'ctrl+shift+p': { browser: 'Firefox', action: 'Open Private Browsing window' },
+  'ctrl+k': { browser: 'Firefox', action: 'Focus search bar in address area' },
+  'ctrl+e': { browser: 'Firefox', action: 'Focus Web Search bar' },
+  'ctrl+shift+a': { browser: 'Firefox', action: 'Open Add-ons & Themes manager' },
+  'ctrl+shift+k': { browser: 'Firefox', action: 'Open Web Console' },
+  'ctrl+shift+e': { browser: 'Firefox', action: 'Open Network Monitor' },
+  'ctrl+shift+m': { browser: 'Firefox / Chrome / Edge', action: 'Responsive Design Mode (Firefox) / Switch Profile (Edge)' },
+  'ctrl+shift+o': { browser: 'Firefox / Edge / Chrome', action: 'Open Bookmarks organizer / Favorites flyout' },
+  'ctrl+shift+y': { browser: 'Firefox / Edge', action: 'Open Downloads library (Firefox) / Collections (Edge)' },
+  'ctrl+b': { browser: 'Firefox', action: 'Toggle Bookmarks sidebar' },
+  'cmd+b': { browser: 'Firefox (macOS)', action: 'Toggle Bookmarks sidebar' },
+  'alt+t': { browser: 'Firefox', action: 'Open Tools menu bar' },
+  'alt+v': { browser: 'Firefox', action: 'Open View menu bar' },
+  'alt+s': { browser: 'Firefox', action: 'Open History menu bar' },
+  'alt+b': { browser: 'Firefox', action: 'Open Bookmarks menu bar' },
+  'alt+h': { browser: 'Firefox', action: 'Open Help menu bar' },
+
+  // ── Microsoft Edge Specific ──
+  'ctrl+shift+s': { browser: 'Edge / Firefox', action: 'Web Capture / Screenshot tool' },
+  'ctrl+shift+u': { browser: 'Edge', action: 'Start Read Aloud' },
+
+  // ── Apple Safari (macOS) Specific ──
+  'cmd+alt+i': { browser: 'Safari / Chrome (macOS)', action: 'Open Web Inspector' },
+  'cmd+alt+c': { browser: 'Safari / Chrome (macOS)', action: 'Open JavaScript Console' },
+  'cmd+alt+e': { browser: 'Safari', action: 'Empty Developer Caches' },
+  'cmd+alt+u': { browser: 'Safari', action: 'Show Page Source' },
+  'cmd+alt+l': { browser: 'Safari', action: 'Show Downloads' },
+  'cmd+alt+b': { browser: 'Safari', action: 'Manage Bookmarks' },
+  'cmd+alt+a': { browser: 'Safari', action: 'Show All Tabs Overview' },
+  'cmd+y': { browser: 'Safari', action: 'Show History' },
+  'cmd+ctrl+f': { browser: 'Safari (macOS)', action: 'Toggle Full Screen' },
+
+  // ── Developer Tools & System ──
+  'f12': { browser: 'All Browsers', action: 'Open Developer Tools' },
+  'ctrl+shift+i': { browser: 'All Browsers', action: 'Open Developer Tools' },
+  'ctrl+shift+c': { browser: 'All Browsers', action: 'Inspect Element' },
+  'alt+f4': { browser: 'System (Windows)', action: 'Close active application' },
+  'cmd+q': { browser: 'System (macOS)', action: 'Quit application' },
+  'cmd+m': { browser: 'System (macOS)', action: 'Minimize active window' },
+  'cmd+h': { browser: 'System (macOS)', action: 'Hide application' },
+};
+
+/**
+ * Set of all lowercase reserved shortcut strings for fast O(1) membership testing.
+ */
+export const RESERVED_BROWSER_SHORTCUTS = new Set(Object.keys(BROWSER_RESERVED_CONFLICTS));
+
+/**
+ * Checks whether a key combination conflicts with any known browser or OS shortcut.
+ */
 export function isReservedBrowserShortcut(combo: string): boolean {
-  if (!combo) return false;
-  return RESERVED_BROWSER_SHORTCUTS.has(combo.toLowerCase());
+  return getBrowserShortcutConflict(combo) !== null;
+}
+
+/**
+ * Retrieves the specific browser and conflicting action for a given shortcut key combo.
+ * Seamlessly normalizes 'opt' / 'option' to 'alt' across macOS and Windows.
+ */
+export function getBrowserShortcutConflict(combo: string): BrowserConflictInfo | null {
+  if (!combo) return null;
+  const normalized = combo
+    .toLowerCase()
+    .trim()
+    .replace(/\bopt\b/g, 'alt')
+    .replace(/\boption\b/g, 'alt');
+  return BROWSER_RESERVED_CONFLICTS[normalized] || null;
 }
 
 export type ShortcutHandler = (action: ShortcutAction, event: KeyboardEvent) => void;
 
+/**
+ * Robust shortcut listener and dispatcher.
+ * Enforces active-mode tool silencing and form input suppression.
+ */
 export class ShortcutManager {
   private activeShortcuts: Record<ShortcutAction, string> = { ...DEFAULT_SHORTCUTS };
   private listeners: ShortcutHandler[] = [];

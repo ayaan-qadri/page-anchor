@@ -13,6 +13,7 @@ import {
   normalizeKeyEvent,
   SHORTCUT_DEFINITIONS,
   isReservedBrowserShortcut,
+  getBrowserShortcutConflict,
 } from '../../src/core/shortcuts';
 
 let currentSettings: ExtensionSettings;
@@ -113,10 +114,11 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
     btn.textContent = formatShortcutForDisplay(combo);
     btn.classList.remove('recording');
 
-    if (isReservedBrowserShortcut(combo)) {
+    const conflict = getBrowserShortcutConflict(combo);
+    if (conflict) {
       btn.style.borderColor = '#f59e0b';
       btn.style.color = '#fbbf24';
-      btn.title = `Warning: "${combo}" is reserved by your browser (e.g. tabs/address bar) and may be overridden.`;
+      btn.title = `Warning: "${combo}" conflicts with ${conflict.browser} (${conflict.action}). Key may be intercepted by the browser.`;
     } else {
       btn.style.borderColor = '';
       btn.style.color = '';

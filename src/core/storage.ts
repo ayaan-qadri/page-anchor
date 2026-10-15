@@ -3,26 +3,10 @@ import {
   ExtensionSettings,
   PageAnchorData,
   PageMetadataSummary,
-  ShortcutAction,
 } from './types';
+import { DEFAULT_SHORTCUTS } from './shortcuts';
 
-export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
-  'toggle-active': 'Alt+Shift+D',
-  'action-toggle-toolbar': 'Alt+Shift+T',
-  'tool-select': 'v',
-  'tool-pen': 'p',
-  'tool-highlighter': 'h',
-  'tool-rect': 'r',
-  'tool-circle': 'c',
-  'tool-line': 'l',
-  'tool-arrow': 'a',
-  'tool-text': 't',
-  'tool-eraser': 'e',
-  'action-undo': 'Ctrl+z',
-  'action-redo': 'Ctrl+y',
-  'action-clear': 'Alt+Shift+X',
-  'action-export': 'Alt+Shift+E',
-};
+export { DEFAULT_SHORTCUTS };
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   shortcuts: DEFAULT_SHORTCUTS,

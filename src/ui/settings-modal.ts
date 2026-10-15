@@ -1,5 +1,11 @@
 import { ExtensionSettings, ShortcutAction } from '../core/types';
-import { SHORTCUT_DEFINITIONS, formatShortcutForDisplay, normalizeKeyEvent, isReservedBrowserShortcut } from '../core/shortcuts';
+import {
+  SHORTCUT_DEFINITIONS,
+  formatShortcutForDisplay,
+  normalizeKeyEvent,
+  isReservedBrowserShortcut,
+  getBrowserShortcutConflict,
+} from '../core/shortcuts';
 import { DEFAULT_SETTINGS, saveSettings } from '../core/storage';
 import { ICONS } from '../icons/svg-icons';
 
@@ -218,10 +224,11 @@ export class SettingsModal {
       btn.textContent = formatShortcutForDisplay(combo);
       btn.classList.remove('recording');
 
-      if (isReservedBrowserShortcut(combo)) {
+      const conflict = getBrowserShortcutConflict(combo);
+      if (conflict) {
         btn.style.borderColor = '#f59e0b';
         btn.style.color = '#fbbf24';
-        btn.title = `Warning: "${combo}" is reserved by your browser (e.g. tabs/address bar) and may be overridden.`;
+        btn.title = `Warning: "${combo}" conflicts with ${conflict.browser} (${conflict.action}). Key may be intercepted by the browser.`;
       } else {
         btn.style.borderColor = '';
         btn.style.color = '';
