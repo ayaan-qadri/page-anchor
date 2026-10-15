@@ -111,4 +111,7 @@ export interface ExtensionSettings {
   urlMatchMode: 'clean' | 'exact' | 'domain';
   performanceMode: boolean; // Enables spatial indexing & viewport clipping
   toolbarPosition: { x: number; y: number } | null;
+  isToolbarOpen: boolean; // Whether toolbar is open or minimized (persists across reloads)
+  showFloatingPill: boolean; // Whether floating anchor pill is shown
+  areAnnotationsVisible: boolean; // Whether drawings on page are visible
 }

@@ -48,20 +48,47 @@ export default defineContentScript({
     let toolbar: FloatingToolbar;
     let shortcutManager: ShortcutManager;
 
+    let currentLoadedUrl = window.location.href;
     let saveTimeout: number | null = null;
 
     const triggerSave = (elements: AnchorElement[]) => {
       if (saveTimeout) clearTimeout(saveTimeout);
       saveTimeout = window.setTimeout(async () => {
-        await savePageData(window.location.href, elements, document.title);
-        toolbar.updateBadge();
+        await savePageData(currentLoadedUrl, elements, document.title);
+        toolbar?.updateBadge();
       }, 250);
     };
 
     const flushSave = async () => {
-      if (engine) {
-        await savePageData(window.location.href, engine.getElements(), document.title);
+      if (engine && currentLoadedUrl) {
+        await savePageData(currentLoadedUrl, engine.getElements(), document.title);
       }
+    };
+
+    const handleUrlChange = async () => {
+      const newUrl = window.location.href;
+      if (newUrl === currentLoadedUrl) return;
+
+      // 1. Flush pending changes for previous URL
+      if (engine && currentLoadedUrl) {
+        await savePageData(currentLoadedUrl, engine.getElements(), document.title);
+      }
+
+      currentLoadedUrl = newUrl;
+
+      // 2. Load annotations for the new URL
+      const saved = await loadPageData(currentLoadedUrl);
+      const newElements = saved?.elements || [];
+
+      // 3. Reset history and canvas elements for the new page
+      history?.reset(newElements);
+      engine?.setElements(newElements);
+      toolbar?.updateBadge();
+      toolbar?.updateHistoryButtons();
+
+      // 4. Ensure toolbar stays minimized if user had it minimized
+      const latestSettings = await loadSettings();
+      toolbar?.setDrawingMode(!!latestSettings.isToolbarOpen, false);
     };
 
     window.addEventListener('beforeunload', () => {
@@ -70,6 +97,34 @@ export default defineContentScript({
     window.addEventListener('pagehide', () => {
       flushSave();
     });
+    window.addEventListener('popstate', () => {
+      handleUrlChange();
+    });
+    window.addEventListener('hashchange', () => {
+      handleUrlChange();
+    });
+
+    // Intercept SPA navigation (pushState & replaceState)
+    const origPush = window.history.pushState;
+    window.history.pushState = function (data: any, unused: string, url?: string | URL | null) {
+      const res = origPush.call(this, data, unused, url);
+      handleUrlChange();
+      return res;
+    };
+
+    const origReplace = window.history.replaceState;
+    window.history.replaceState = function (data: any, unused: string, url?: string | URL | null) {
+      const res = origReplace.call(this, data, unused, url);
+      handleUrlChange();
+      return res;
+    };
+
+    // Periodic safety check for client-side routers
+    setInterval(() => {
+      if (window.location.href !== currentLoadedUrl) {
+        handleUrlChange();
+      }
+    }, 500);
 
     // Boot Extension
     (async () => {
@@ -151,24 +206,27 @@ export default defineContentScript({
       // Listen for messages from background/popup
       chrome.runtime?.onMessage?.addListener((msg, _sender, sendResponse) => {
         if (msg.type === 'PAGE_ANCHOR_TOGGLE') {
-          toolbar.toggleDrawingMode();
+          toolbar.toggleDrawingMode(true);
           sendResponse({ active: engine.getActiveMode(), count: engine.getElements().length });
         } else if (msg.type === 'PAGE_ANCHOR_GET_STATUS') {
           sendResponse({
             active: engine.getActiveMode(),
             count: engine.getElements().length,
-            url: window.location.href,
+            url: currentLoadedUrl,
             title: document.title,
           });
         } else if (msg.type === 'PAGE_ANCHOR_CLEAR') {
           history.pushState([]);
           engine.clear();
-          clearPageData(window.location.href);
+          clearPageData(currentLoadedUrl);
           toolbar.updateBadge();
           toolbar.updateHistoryButtons();
           sendResponse({ success: true });
         } else if (msg.type === 'PAGE_ANCHOR_EXPORT') {
           exportSnapshot();
+          sendResponse({ success: true });
+        } else if (msg.type === 'PAGE_ANCHOR_URL_CHANGED') {
+          handleUrlChange();
           sendResponse({ success: true });
         }
         return true;

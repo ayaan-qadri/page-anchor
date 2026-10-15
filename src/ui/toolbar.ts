@@ -5,6 +5,7 @@ import { ICONS } from '../icons/svg-icons';
 import { SettingsModal } from './settings-modal';
 import { TextEditorOverlay } from './text-editor';
 import { formatShortcutForDisplay } from '../core/shortcuts';
+import { saveSettings } from '../core/storage';
 
 export interface ToolbarCallbacks {
   onToggleActive?: (active: boolean) => void;
@@ -107,11 +108,31 @@ export class FloatingToolbar {
     this.updateActiveToolUI();
     this.updateHistoryButtons();
     this.updateBadge();
+
+    // Respect persisted open/minimized state (default: false/minimized so it never intrudes on page load!)
+    const shouldBeOpen = !!this.settings.isToolbarOpen;
+    this.setDrawingMode(shouldBeOpen, false);
+
+    // Apply drawing visibility preference
+    if (this.settings.areAnnotationsVisible !== undefined) {
+      this.engine.setAnnotationsVisible(this.settings.areAnnotationsVisible);
+    }
+
+    // Apply pill visibility preference
+    if (this.settings.showFloatingPill === false) {
+      this.pillButton.style.display = 'none';
+    }
   }
 
   public setSettings(settings: ExtensionSettings): void {
     this.settings = settings;
     this.updateTooltips();
+    if (settings.showFloatingPill !== undefined) {
+      this.pillButton.style.display = settings.showFloatingPill ? 'flex' : 'none';
+    }
+    if (settings.areAnnotationsVisible !== undefined) {
+      this.engine.setAnnotationsVisible(settings.areAnnotationsVisible);
+    }
   }
 
   public updateBadge(): void {
@@ -134,7 +155,7 @@ export class FloatingToolbar {
     if (redoBtn) redoBtn.disabled = !this.history.canRedo();
   }
 
-  public setDrawingMode(active: boolean): void {
+  public setDrawingMode(active: boolean, persist = true): void {
     this.engine.setActiveMode(active);
     if (active) {
       this.wrapper.style.display = 'block';
@@ -144,12 +165,16 @@ export class FloatingToolbar {
       this.pillButton.classList.remove('active');
       this.colorPopover.classList.remove('open');
     }
+    if (persist) {
+      this.settings.isToolbarOpen = active;
+      saveSettings({ isToolbarOpen: active }).catch(() => {});
+    }
     this.callbacks.onToggleActive?.(active);
   }
 
-  public toggleDrawingMode(): void {
+  public toggleDrawingMode(persist = true): void {
     const newState = !this.engine.getActiveMode();
-    this.setDrawingMode(newState);
+    this.setDrawingMode(newState, persist);
   }
 
   private buildToolbarContent(): void {
@@ -256,9 +281,25 @@ export class FloatingToolbar {
     });
     this.toolbar.appendChild(settingsBtn);
 
-    // 16. Minimize to Pill
+    // 16. Toggle Annotations Visibility (Eye)
+    const eyeBtn = this.createActionButton(
+      'visibility',
+      this.engine.getAnnotationsVisible() ? 'Hide Drawings' : 'Show Drawings',
+      'action-toggle-toolbar',
+      this.engine.getAnnotationsVisible() ? ICONS.eye : ICONS.eyeOff,
+      () => {
+        const next = !this.engine.getAnnotationsVisible();
+        this.engine.setAnnotationsVisible(next);
+        this.settings.areAnnotationsVisible = next;
+        saveSettings({ areAnnotationsVisible: next }).catch(() => {});
+        eyeBtn.innerHTML = `${next ? ICONS.eye : ICONS.eyeOff}<span class="pa-tooltip">${next ? 'Hide Drawings' : 'Show Drawings'}</span>`;
+      }
+    );
+    this.toolbar.appendChild(eyeBtn);
+
+    // 17. Minimize to Pill
     const minBtn = this.createActionButton('minimize', 'Minimize (Alt+D to toggle)', 'toggle-active', ICONS.minimize, () => {
-      this.setDrawingMode(false);
+      this.setDrawingMode(false, true);
     });
     this.toolbar.appendChild(minBtn);
   }
@@ -463,7 +504,7 @@ export class FloatingToolbar {
 
   private bindPillEvents(): void {
     this.pillButton.addEventListener('click', () => {
-      this.toggleDrawingMode();
+      this.toggleDrawingMode(true);
     });
   }
 }

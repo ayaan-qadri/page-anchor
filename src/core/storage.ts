@@ -34,6 +34,9 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   urlMatchMode: 'clean',
   performanceMode: true,
   toolbarPosition: null,
+  isToolbarOpen: false, // Minimized by default so it never intrudes on page load/reload!
+  showFloatingPill: true,
+  areAnnotationsVisible: true,
 };
 
 const TRACKING_PARAMS = new Set([

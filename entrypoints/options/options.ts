@@ -180,9 +180,13 @@ function setupDrawingForm() {
 function setupPersistenceForm() {
   const matchMode = document.getElementById('pref-url-match-mode') as HTMLSelectElement;
   const perfMode = document.getElementById('pref-performance-mode') as HTMLInputElement;
+  const toolbarOpenMode = document.getElementById('pref-toolbar-open') as HTMLInputElement;
+  const showPillMode = document.getElementById('pref-show-pill') as HTMLInputElement;
 
   matchMode.value = currentSettings.urlMatchMode;
   perfMode.checked = currentSettings.performanceMode;
+  toolbarOpenMode.checked = !!currentSettings.isToolbarOpen;
+  showPillMode.checked = currentSettings.showFloatingPill !== false;
 
   matchMode.addEventListener('change', () => {
     currentSettings.urlMatchMode = matchMode.value as 'clean' | 'exact' | 'domain';
@@ -190,6 +194,14 @@ function setupPersistenceForm() {
 
   perfMode.addEventListener('change', () => {
     currentSettings.performanceMode = perfMode.checked;
+  });
+
+  toolbarOpenMode.addEventListener('change', () => {
+    currentSettings.isToolbarOpen = toolbarOpenMode.checked;
+  });
+
+  showPillMode.addEventListener('change', () => {
+    currentSettings.showFloatingPill = showPillMode.checked;
   });
 }
 

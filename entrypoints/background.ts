@@ -25,4 +25,11 @@ export default defineBackground(() => {
       }
     }
   });
+
+  // Track URL updates in tabs for SPA routing
+  chrome.tabs?.onUpdated?.addListener((tabId, changeInfo) => {
+    if (changeInfo.url) {
+      chrome.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_URL_CHANGED', url: changeInfo.url }).catch(() => {});
+    }
+  });
 });

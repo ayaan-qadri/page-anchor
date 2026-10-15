@@ -141,6 +141,14 @@ export class CanvasEngine {
     return this.isActiveMode;
   }
 
+  public setAnnotationsVisible(visible: boolean): void {
+    this.baseCanvas.style.display = visible ? 'block' : 'none';
+  }
+
+  public getAnnotationsVisible(): boolean {
+    return this.baseCanvas.style.display !== 'none';
+  }
+
   public setElements(elements: AnchorElement[]): void {
     this.elements = elements;
     this.selectedElement = null;
