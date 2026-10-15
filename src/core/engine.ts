@@ -1,12 +1,13 @@
 import {
   AnchorElement,
   BoundingBox,
+  EngineCallbacks,
   Point,
   ShapeElement,
   StrokeElement,
   TextElement,
   ToolType,
-} from './types';
+} from '../types/engine.types';
 import {
   computeBoundingBox,
   intersectsBoundingBox,
@@ -16,11 +17,7 @@ import {
   simplifyPointsRDP,
 } from './geometry';
 
-export interface EngineCallbacks {
-  onElementsChange?: (elements: AnchorElement[]) => void;
-  onSelectionChange?: (selected: AnchorElement | null, selectedList?: AnchorElement[]) => void;
-  onTextCreateRequested?: (pt: Point) => void;
-}
+export type { EngineCallbacks };
 
 export class CanvasEngine {
   private baseCanvas: HTMLCanvasElement;

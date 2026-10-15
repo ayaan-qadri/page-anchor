@@ -5,7 +5,7 @@ import {
   isPointNearElement,
   simplifyPointsRDP,
 } from '../src/core/geometry';
-import { AnchorElement, BoundingBox, Point, ShapeElement, StrokeElement } from '../src/core/types';
+import { AnchorElement, BoundingBox, Point, ShapeElement, StrokeElement } from '../src/types/engine.types';
 
 describe('Performance Benchmarks: Zero-Lag Low-End Device Validation', () => {
   it('BENCHMARK: Viewport Frustum Culling across 10,000 elements executes in under 5ms', () => {

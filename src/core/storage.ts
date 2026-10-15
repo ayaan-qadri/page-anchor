@@ -1,11 +1,13 @@
+import { AnchorElement } from '../types/engine.types';
 import {
-  AnchorElement,
   ExtensionSettings,
   PageAnchorData,
   PageMetadataSummary,
-} from './types';
+  UrlMatchMode,
+} from '../types/storage.types';
 import { DEFAULT_SHORTCUTS } from './shortcuts';
 
+export type { ExtensionSettings, PageAnchorData, PageMetadataSummary, UrlMatchMode };
 export { DEFAULT_SHORTCUTS };
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {

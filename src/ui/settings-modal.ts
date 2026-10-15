@@ -1,4 +1,6 @@
-import { ExtensionSettings, ShortcutAction } from '../core/types';
+import { ShortcutAction } from '../types/shortcuts.types';
+import { ExtensionSettings } from '../types/storage.types';
+import { SettingsModalCallbacks } from '../types/ui.types';
 import {
   SHORTCUT_DEFINITIONS,
   formatShortcutForDisplay,
@@ -9,10 +11,7 @@ import {
 import { DEFAULT_SETTINGS, saveSettings } from '../core/storage';
 import { ICONS } from '../icons/svg-icons';
 
-export interface SettingsModalCallbacks {
-  onSave?: (settings: ExtensionSettings) => void;
-  onClose?: () => void;
-}
+export type { SettingsModalCallbacks };
 
 export class SettingsModal {
   private container: HTMLElement;

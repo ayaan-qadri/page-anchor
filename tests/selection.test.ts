@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CanvasEngine } from '../src/core/engine';
-import { AnchorElement, StrokeElement, ShapeElement, TextElement } from '../src/core/types';
+import { AnchorElement, StrokeElement, ShapeElement, TextElement } from '../src/types/engine.types';
 
 describe('Selection & Move All Engine: Multi-Select and Batch Manipulation', () => {
   let container: HTMLElement;

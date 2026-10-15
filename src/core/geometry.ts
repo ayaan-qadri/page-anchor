@@ -1,4 +1,4 @@
-import { AnchorElement, BoundingBox, Point, StrokeElement } from './types';
+import { AnchorElement, BoundingBox, Point, StrokeElement } from '../types/engine.types';
 
 /**
  * Fast Axis-Aligned Bounding Box (AABB) intersection check.

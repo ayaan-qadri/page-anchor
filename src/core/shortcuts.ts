@@ -1,4 +1,11 @@
-import { ShortcutAction, ShortcutDefinition } from './types';
+import {
+  BrowserConflictInfo,
+  ShortcutAction,
+  ShortcutDefinition,
+  ShortcutHandler,
+} from '../types/shortcuts.types';
+
+export type { BrowserConflictInfo, ShortcutAction, ShortcutDefinition, ShortcutHandler };
 
 /**
  * ═══════════════════════════════════════════════════════════════════════
@@ -179,14 +186,6 @@ export function formatShortcutForDisplay(keyCombo: string): string {
 }
 
 /**
- * Detailed browser conflict record.
- */
-export interface BrowserConflictInfo {
-  browser: string;
-  action: string;
-}
-
-/**
  * Comprehensive cross-browser collision dictionary.
  * Covers Chrome, Firefox, Safari, Edge, Opera, and OS-level system shortcuts.
  */
@@ -314,8 +313,6 @@ export function getBrowserShortcutConflict(combo: string): BrowserConflictInfo |
     .replace(/\boption\b/g, 'alt');
   return BROWSER_RESERVED_CONFLICTS[normalized] || null;
 }
-
-export type ShortcutHandler = (action: ShortcutAction, event: KeyboardEvent) => void;
 
 /**
  * Robust shortcut listener and dispatcher.

@@ -10,7 +10,7 @@ import {
   savePageData,
   saveSettings,
 } from '../src/core/storage';
-import { AnchorElement } from '../src/core/types';
+import { AnchorElement } from '../src/types/engine.types';
 
 describe('Storage Engine: URL Normalization', () => {
   it('strips tracking query parameters and scroll hashes in "clean" mode', () => {

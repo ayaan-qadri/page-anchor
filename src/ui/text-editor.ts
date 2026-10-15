@@ -1,4 +1,4 @@
-import { Point, TextElement } from '../core/types';
+import { Point, TextElement } from '../types/engine.types';
 import { computeBoundingBox } from '../core/geometry';
 
 export interface TextEditorOptions {

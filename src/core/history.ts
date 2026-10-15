@@ -1,4 +1,4 @@
-import { AnchorElement } from './types';
+import { AnchorElement } from '../types/engine.types';
 
 export class HistoryManager {
   private undoStack: AnchorElement[][] = [];

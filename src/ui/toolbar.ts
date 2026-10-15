@@ -1,18 +1,15 @@
 import { CanvasEngine } from '../core/engine';
 import { HistoryManager } from '../core/history';
-import { ExtensionSettings, ToolType } from '../core/types';
+import { ToolType } from '../types/engine.types';
+import { ExtensionSettings } from '../types/storage.types';
+import { ToolbarCallbacks } from '../types/ui.types';
 import { ICONS } from '../icons/svg-icons';
 import { SettingsModal } from './settings-modal';
 import { TextEditorOverlay } from './text-editor';
 import { formatShortcutForDisplay } from '../core/shortcuts';
 import { saveSettings } from '../core/storage';
 
-export interface ToolbarCallbacks {
-  onToggleActive?: (active: boolean) => void;
-  onClear?: () => void;
-  onExport?: () => void;
-  onSettingsUpdate?: (settings: ExtensionSettings) => void;
-}
+export type { ToolbarCallbacks };
 
 const PRESET_COLORS = [
   '#ef4444', // Red

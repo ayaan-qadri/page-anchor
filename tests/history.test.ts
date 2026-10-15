@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { HistoryManager } from '../src/core/history';
-import { AnchorElement } from '../src/core/types';
+import { AnchorElement } from '../src/types/engine.types';
 
 describe('HistoryManager: Undo & Redo Reliability', () => {
   const dummyElement = (id: string): AnchorElement => ({
