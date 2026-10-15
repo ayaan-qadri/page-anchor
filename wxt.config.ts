@@ -1,6 +1,10 @@
 import { defineConfig } from 'wxt';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
+  vite: () => ({
+    plugins: [tailwindcss()],
+  }),
   manifest: ({ browser }) => ({
     name: 'Page Anchor - Web Annotation & Drawing',
     description: 'High-performance freehand drawing, shapes, and text annotations directly on web pages with persistent storage and customizable shortcuts.',

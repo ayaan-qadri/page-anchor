@@ -59,23 +59,27 @@ function setupTabs() {
 
   function activateTab(tab: HTMLButtonElement, shouldFocus = true) {
     tabs.forEach((t) => {
-      t.classList.remove('active');
+      t.classList.remove('active', 'text-sky-400', 'bg-sky-400/10', 'shadow-[0_0_1px_#38bdf8]');
+      t.classList.add('text-slate-400');
       t.setAttribute('aria-selected', 'false');
       t.setAttribute('tabindex', '-1');
     });
     panes.forEach((p) => {
-      p.classList.remove('active');
+      p.classList.remove('active', 'block');
+      p.classList.add('hidden');
       p.hidden = true;
     });
 
-    tab.classList.add('active');
+    tab.classList.remove('text-slate-400');
+    tab.classList.add('active', 'text-sky-400', 'bg-sky-400/10', 'shadow-[0_0_1px_#38bdf8]');
     tab.setAttribute('aria-selected', 'true');
     tab.setAttribute('tabindex', '0');
 
     const targetId = `tab-${tab.getAttribute('data-tab')}`;
     const targetPane = document.getElementById(targetId);
     if (targetPane) {
-      targetPane.classList.add('active');
+      targetPane.classList.remove('hidden');
+      targetPane.classList.add('active', 'block');
       targetPane.hidden = false;
     }
 
@@ -117,18 +121,18 @@ function renderShortcuts() {
 
   SHORTCUT_DEFINITIONS.forEach((def) => {
     const item = document.createElement('div');
-    item.className = 'pa-shortcut-item';
+    item.className = 'pa-shortcut-item flex items-center justify-between p-3.5 bg-white/[0.03] hover:border-white/15 border border-white/[0.06] rounded-[10px] transition-colors';
 
     const info = document.createElement('div');
-    info.className = 'pa-item-info';
+    info.className = 'pa-item-info flex flex-col gap-0.5';
     info.innerHTML = `
-      <div class="pa-item-title">${def.name}</div>
-      <div class="pa-item-desc">${def.description}</div>
+      <div class="pa-item-title font-semibold text-white text-sm">${def.name}</div>
+      <div class="pa-item-desc text-xs text-slate-400">${def.description}</div>
     `;
 
     const keyVal = currentSettings.shortcuts[def.id] || def.defaultKey;
     const badge = document.createElement('button');
-    badge.className = 'pa-key-badge';
+    badge.className = 'pa-key-badge bg-sky-400/10 hover:bg-sky-400/20 border border-sky-400/30 rounded-md px-3.5 py-1.5 text-sky-400 font-mono font-semibold text-xs cursor-pointer transition-all min-w-[100px] text-center focus-visible:outline-2 focus-visible:outline-sky-400';
     badge.textContent = formatShortcutForDisplay(keyVal);
     badge.title = 'Click to record new keystroke (Esc to cancel)';
     badge.setAttribute(
@@ -156,7 +160,8 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
   const actionName = def ? def.name : actionId;
 
   recordingAction = actionId;
-  btn.classList.add('recording');
+  btn.classList.add('recording', 'bg-red-600', 'border-red-500', 'text-white', 'animate-pulse');
+  btn.classList.remove('bg-sky-400/10', 'border-sky-400/30', 'text-sky-400');
   btn.textContent = 'Press keys...';
   btn.setAttribute('aria-label', `Recording shortcut for ${actionName}. Press keys, or press Escape to cancel.`);
   announce(`Recording shortcut for ${actionName}. Press your desired key combination, or press Escape to cancel.`);
@@ -168,7 +173,8 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
     if (e.key === 'Escape') {
       const prevKey = currentSettings.shortcuts[actionId] || (def ? def.defaultKey : '');
       btn.textContent = formatShortcutForDisplay(prevKey);
-      btn.classList.remove('recording');
+      btn.classList.remove('recording', 'bg-red-600', 'border-red-500', 'text-white', 'animate-pulse');
+      btn.classList.add('bg-sky-400/10', 'border-sky-400/30', 'text-sky-400');
       btn.setAttribute(
         'aria-label',
         `Rebind shortcut for ${actionName}. Current shortcut is ${formatShortcutForDisplay(prevKey)}`
@@ -187,7 +193,8 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
 
     currentSettings.shortcuts[actionId] = combo;
     btn.textContent = formatShortcutForDisplay(combo);
-    btn.classList.remove('recording');
+    btn.classList.remove('recording', 'bg-red-600', 'border-red-500', 'text-white', 'animate-pulse');
+    btn.classList.add('bg-sky-400/10', 'border-sky-400/30', 'text-sky-400');
     btn.setAttribute(
       'aria-label',
       `Rebind shortcut for ${actionName}. Current shortcut is ${formatShortcutForDisplay(combo)}`
@@ -195,13 +202,13 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
 
     const conflict = getBrowserShortcutConflict(combo);
     if (conflict) {
-      btn.style.borderColor = '#f59e0b';
-      btn.style.color = '#fbbf24';
+      btn.classList.add('border-amber-500', 'text-amber-400');
+      btn.classList.remove('border-sky-400/30', 'text-sky-400');
       btn.title = `Warning: "${combo}" conflicts with ${conflict.browser} (${conflict.action}). Key may be intercepted by the browser.`;
       announce(`Shortcut set to ${combo}. Warning: conflicts with ${conflict.browser}`);
     } else {
-      btn.style.borderColor = '';
-      btn.style.color = '';
+      btn.classList.remove('border-amber-500', 'text-amber-400');
+      btn.classList.add('border-sky-400/30', 'text-sky-400');
       btn.title = 'Click to record new keystroke';
       announce(`Shortcut for ${actionName} updated to ${combo}`);
     }
@@ -313,10 +320,10 @@ async function renderSavedPages() {
   listContainer.innerHTML = '';
   pages.forEach((page) => {
     const item = document.createElement('div');
-    item.className = 'pa-saved-item';
+    item.className = 'pa-saved-item flex items-center justify-between p-3.5 bg-white/[0.03] border border-white/[0.06] rounded-[10px]';
 
     const info = document.createElement('div');
-    info.className = 'pa-saved-info';
+    info.className = 'pa-saved-info flex flex-col gap-0.5 max-w-[70%]';
 
     const dateStr = new Date(page.updatedAt).toLocaleDateString(undefined, {
       month: 'short',
@@ -326,13 +333,13 @@ async function renderSavedPages() {
     });
 
     info.innerHTML = `
-      <div class="pa-saved-title">${escapeHtml(page.pageTitle || 'Untitled Page')}</div>
-      <a href="${page.url}" target="_blank" class="pa-saved-url" aria-label="Open ${escapeHtml(page.pageTitle || page.url)} in new tab">${escapeHtml(page.url)}</a>
-      <div class="pa-saved-meta">${page.elementCount} elements • Last updated ${dateStr}</div>
+      <div class="pa-saved-title font-semibold text-white text-sm">${escapeHtml(page.pageTitle || 'Untitled Page')}</div>
+      <a href="${page.url}" target="_blank" class="pa-saved-url text-xs text-sky-400 hover:underline truncate" aria-label="Open ${escapeHtml(page.pageTitle || page.url)} in new tab">${escapeHtml(page.url)}</a>
+      <div class="pa-saved-meta text-[11px] text-slate-400">${page.elementCount} elements • Last updated ${dateStr}</div>
     `;
 
     const actions = document.createElement('div');
-    actions.className = 'pa-saved-actions';
+    actions.className = 'pa-saved-actions flex items-center gap-2.5';
 
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'pa-btn-danger';
@@ -410,16 +417,7 @@ function showToast(msg: string) {
   const toast = document.createElement('div');
   toast.setAttribute('role', 'status');
   toast.setAttribute('aria-live', 'polite');
-  toast.style.position = 'fixed';
-  toast.style.bottom = '24px';
-  toast.style.right = '24px';
-  toast.style.background = '#22c55e';
-  toast.style.color = '#ffffff';
-  toast.style.padding = '10px 18px';
-  toast.style.borderRadius = '8px';
-  toast.style.fontWeight = '600';
-  toast.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.4)';
-  toast.style.zIndex = '9999';
+  toast.className = 'fixed bottom-6 right-6 bg-emerald-500 text-white px-4.5 py-2.5 rounded-lg font-semibold shadow-xl shadow-black/40 z-[9999] transition-all';
   toast.textContent = msg;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 2500);
