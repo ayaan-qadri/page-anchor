@@ -34,6 +34,7 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
   'action-redo': 'Ctrl+y',
   'action-clear': 'Alt+Shift+X',
   'action-export': 'Alt+Shift+E',
+  'action-select-all': 'Ctrl+a',
 };
 
 export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
@@ -126,6 +127,12 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     name: 'Export Image',
     description: 'Export annotated page as PNG screenshot',
     defaultKey: DEFAULT_SHORTCUTS['action-export'],
+  },
+  {
+    id: 'action-select-all',
+    name: 'Select All Elements',
+    description: 'Select all drawn elements on page to move or delete all at once',
+    defaultKey: DEFAULT_SHORTCUTS['action-select-all'],
   },
 ];
 

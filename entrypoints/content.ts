@@ -247,6 +247,11 @@ export default defineContentScript({
           engine.setTool('select');
           toolbar.updateActiveToolUI();
           break;
+        case 'action-select-all':
+          toolbar.setDrawingMode(true);
+          engine.selectAll();
+          toolbar.updateActiveToolUI();
+          break;
         case 'tool-pen':
           toolbar.setDrawingMode(true);
           engine.setTool('pen');

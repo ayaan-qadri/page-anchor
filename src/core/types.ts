@@ -92,7 +92,8 @@ export type ShortcutAction =
   | 'action-redo'
   | 'action-clear'
   | 'action-export'
-  | 'action-toggle-toolbar';
+  | 'action-toggle-toolbar'
+  | 'action-select-all';
 
 export interface ShortcutDefinition {
   id: ShortcutAction;

@@ -18,7 +18,7 @@ import {
 
 export interface EngineCallbacks {
   onElementsChange?: (elements: AnchorElement[]) => void;
-  onSelectionChange?: (selected: AnchorElement | null) => void;
+  onSelectionChange?: (selected: AnchorElement | null, selectedList?: AnchorElement[]) => void;
   onTextCreateRequested?: (pt: Point) => void;
 }
 
@@ -30,10 +30,12 @@ export class CanvasEngine {
   private container: HTMLElement;
 
   private elements: AnchorElement[] = [];
-  private selectedElement: AnchorElement | null = null;
-  private selectedOriginalPos: { x: number; y: number } | null = null;
+  private selectedElements: AnchorElement[] = [];
   private isDraggingSelected = false;
   private dragStartPoint: Point | null = null;
+  private isMarqueeSelecting = false;
+  private marqueeStartPoint: Point | null = null;
+  private currentMarqueeBBox: BoundingBox | null = null;
 
   // Active tool state
   private activeTool: ToolType = 'pen';
@@ -95,7 +97,9 @@ export class CanvasEngine {
 
   public setTool(tool: ToolType): void {
     this.activeTool = tool;
-    this.selectedElement = null;
+    if (tool !== 'select') {
+      this.selectedElements = [];
+    }
     this.updateCursor();
     this.renderBase();
   }
@@ -132,7 +136,7 @@ export class CanvasEngine {
     } else {
       this.activeCanvas.style.pointerEvents = 'none';
       this.activeCanvas.style.cursor = 'default';
-      this.selectedElement = null;
+      this.selectedElements = [];
       this.renderBase();
     }
   }
@@ -151,7 +155,7 @@ export class CanvasEngine {
 
   public setElements(elements: AnchorElement[]): void {
     this.elements = elements;
-    this.selectedElement = null;
+    this.selectedElements = [];
     this.renderBase();
   }
 
@@ -167,25 +171,77 @@ export class CanvasEngine {
 
   public removeElement(id: string): void {
     this.elements = this.elements.filter((el) => el.id !== id);
-    if (this.selectedElement?.id === id) {
-      this.selectedElement = null;
-    }
+    this.selectedElements = this.selectedElements.filter((el) => el.id !== id);
     this.callbacks.onElementsChange?.(this.elements);
     this.renderBase();
   }
 
   public clear(): void {
     this.elements = [];
-    this.selectedElement = null;
+    this.selectedElements = [];
     this.clearActiveCanvas();
     this.callbacks.onElementsChange?.(this.elements);
     this.renderBase();
   }
 
-  public deleteSelected(): void {
-    if (this.selectedElement) {
-      this.removeElement(this.selectedElement.id);
+  /**
+   * Selects all elements on the canvas and puts the engine into 'select' mode
+   * so all elements can be dragged and moved together in unison.
+   */
+  public selectAll(): void {
+    if (this.elements.length === 0) return;
+    this.activeTool = 'select';
+    this.updateCursor();
+    this.selectedElements = [...this.elements];
+    this.callbacks.onSelectionChange?.(this.selectedElements[0] || null, this.selectedElements);
+    this.renderBase();
+  }
+
+  public clearSelection(): void {
+    if (this.selectedElements.length > 0) {
+      this.selectedElements = [];
+      this.callbacks.onSelectionChange?.(null, []);
+      this.renderBase();
     }
+  }
+
+  public getSelectedElements(): AnchorElement[] {
+    return [...this.selectedElements];
+  }
+
+  public getSelectedElement(): AnchorElement | null {
+    return this.selectedElements[0] || null;
+  }
+
+  public setSelectedElement(el: AnchorElement | null): void {
+    this.selectedElements = el ? [el] : [];
+    this.callbacks.onSelectionChange?.(el, this.selectedElements);
+    this.renderBase();
+  }
+
+  /**
+   * Translates all elements on the canvas by (dx, dy).
+   */
+  public moveAll(dx: number, dy: number): void {
+    if (this.elements.length === 0 || (dx === 0 && dy === 0)) return;
+    for (const el of this.elements) {
+      this.moveElement(el, dx, dy);
+    }
+    this.callbacks.onElementsChange?.(this.elements);
+    this.renderBase();
+  }
+
+  /**
+   * Deletes all currently selected elements.
+   */
+  public deleteSelected(): void {
+    if (this.selectedElements.length === 0) return;
+    const selectedIds = new Set(this.selectedElements.map((el) => el.id));
+    this.elements = this.elements.filter((el) => !selectedIds.has(el.id));
+    this.selectedElements = [];
+    this.callbacks.onSelectionChange?.(null, []);
+    this.callbacks.onElementsChange?.(this.elements);
+    this.renderBase();
   }
 
   private updateCursor(): void {
@@ -276,20 +332,41 @@ export class CanvasEngine {
     const docPt = this.clientToDoc(e.clientX, e.clientY);
 
     if (this.activeTool === 'select') {
-      // Hit test existing elements from top to bottom
       const hit = this.hitTest(docPt);
-      this.selectedElement = hit;
-      this.callbacks.onSelectionChange?.(hit);
-
       if (hit) {
+        if (e.shiftKey || e.ctrlKey || e.metaKey) {
+          const idx = this.selectedElements.findIndex((el) => el.id === hit.id);
+          if (idx >= 0) {
+            this.selectedElements.splice(idx, 1);
+          } else {
+            this.selectedElements.push(hit);
+          }
+        } else if (this.selectedElements.some((el) => el.id === hit.id)) {
+          // Keep current selection so drag moves all of them
+        } else {
+          this.selectedElements = [hit];
+        }
+
         this.isDraggingSelected = true;
         this.dragStartPoint = docPt;
-        if (hit.type === 'text') {
-          this.selectedOriginalPos = { x: hit.x, y: hit.y };
-        } else if (hit.type === 'rect' || hit.type === 'circle' || hit.type === 'line' || hit.type === 'arrow' || hit.type === 'double-arrow') {
-          this.selectedOriginalPos = { x: hit.startX, y: hit.startY };
-        }
+        this.callbacks.onSelectionChange?.(this.selectedElements[0] || null, this.selectedElements);
+        this.renderBase();
+        return;
       }
+
+      // If clicked inside union bbox of selected elements, allow dragging the whole group
+      if (this.selectedElements.length > 1 && this.isPointInsideUnionBBox(docPt)) {
+        this.isDraggingSelected = true;
+        this.dragStartPoint = docPt;
+        return;
+      }
+
+      // Clicked empty space: clear selection and start marquee
+      this.selectedElements = [];
+      this.isMarqueeSelecting = true;
+      this.marqueeStartPoint = docPt;
+      this.currentMarqueeBBox = null;
+      this.callbacks.onSelectionChange?.(null, []);
       this.renderBase();
       return;
     }
@@ -350,13 +427,28 @@ export class CanvasEngine {
       return;
     }
 
-    if (this.activeTool === 'select' && this.isDraggingSelected && this.selectedElement && this.dragStartPoint) {
+    if (this.activeTool === 'select') {
       const currentDocPt = this.clientToDoc(e.clientX, e.clientY);
-      const dx = currentDocPt.x - this.dragStartPoint.x;
-      const dy = currentDocPt.y - this.dragStartPoint.y;
-      this.moveElement(this.selectedElement, dx, dy);
-      this.dragStartPoint = currentDocPt;
-      this.renderBase();
+      if (this.isDraggingSelected && this.selectedElements.length > 0 && this.dragStartPoint) {
+        const dx = currentDocPt.x - this.dragStartPoint.x;
+        const dy = currentDocPt.y - this.dragStartPoint.y;
+        for (const el of this.selectedElements) {
+          this.moveElement(el, dx, dy);
+        }
+        this.dragStartPoint = currentDocPt;
+        this.renderBase();
+        return;
+      }
+
+      if (this.isMarqueeSelecting && this.marqueeStartPoint) {
+        const minX = Math.min(this.marqueeStartPoint.x, currentDocPt.x);
+        const minY = Math.min(this.marqueeStartPoint.y, currentDocPt.y);
+        const maxX = Math.max(this.marqueeStartPoint.x, currentDocPt.x);
+        const maxY = Math.max(this.marqueeStartPoint.y, currentDocPt.y);
+        this.currentMarqueeBBox = { minX, minY, maxX, maxY };
+        this.drawMarquee();
+        return;
+      }
       return;
     }
 
@@ -401,9 +493,26 @@ export class CanvasEngine {
     this.pointerId = null;
 
     if (this.activeTool === 'select') {
-      this.isDraggingSelected = false;
-      this.dragStartPoint = null;
-      this.callbacks.onElementsChange?.(this.elements);
+      if (this.isDraggingSelected) {
+        this.isDraggingSelected = false;
+        this.dragStartPoint = null;
+        this.callbacks.onElementsChange?.(this.elements);
+      }
+      if (this.isMarqueeSelecting && this.currentMarqueeBBox) {
+        const w = this.currentMarqueeBBox.maxX - this.currentMarqueeBBox.minX;
+        const h = this.currentMarqueeBBox.maxY - this.currentMarqueeBBox.minY;
+        if (w > 3 || h > 3) {
+          this.selectedElements = this.elements.filter((el) =>
+            intersectsBoundingBox(el.bbox, this.currentMarqueeBBox!)
+          );
+          this.callbacks.onSelectionChange?.(this.selectedElements[0] || null, this.selectedElements);
+        }
+        this.isMarqueeSelecting = false;
+        this.marqueeStartPoint = null;
+        this.currentMarqueeBBox = null;
+        this.clearActiveCanvas();
+        this.renderBase();
+      }
       return;
     }
 
@@ -496,7 +605,9 @@ export class CanvasEngine {
   }
 
   private clearActiveCanvas(): void {
-    this.activeCtx.clearRect(0, 0, this.activeCanvas.width, this.activeCanvas.height);
+    if (this.activeCtx) {
+      this.activeCtx.clearRect(0, 0, this.activeCanvas.width, this.activeCanvas.height);
+    }
   }
 
   /**
@@ -505,7 +616,7 @@ export class CanvasEngine {
    */
   private drawActiveStroke(): void {
     this.clearActiveCanvas();
-    if (this.currentStrokePoints.length === 0) return;
+    if (this.currentStrokePoints.length === 0 || !this.activeCtx) return;
 
     const ctx = this.activeCtx;
     ctx.save();
@@ -530,7 +641,7 @@ export class CanvasEngine {
    */
   private drawActiveShape(): void {
     this.clearActiveCanvas();
-    if (!this.currentShape) return;
+    if (!this.currentShape || !this.activeCtx) return;
 
     const ctx = this.activeCtx;
     ctx.save();
@@ -546,6 +657,8 @@ export class CanvasEngine {
    */
   public renderBase(): void {
     const ctx = this.baseCtx;
+    if (!ctx) return;
+
     ctx.clearRect(0, 0, this.baseCanvas.width, this.baseCanvas.height);
 
     ctx.save();
@@ -570,9 +683,9 @@ export class CanvasEngine {
       }
     }
 
-    // Highlight selected element if any
-    if (this.selectedElement) {
-      this.renderSelectionOutline(ctx, this.selectedElement);
+    // Highlight selected elements if any
+    if (this.selectedElements.length > 0) {
+      this.renderSelection(ctx);
     }
 
     ctx.restore();
@@ -709,7 +822,114 @@ export class CanvasEngine {
     }
   }
 
-  private renderSelectionOutline(ctx: CanvasRenderingContext2D, el: AnchorElement): void {
+  private isPointInsideUnionBBox(pt: Point): boolean {
+    if (this.selectedElements.length === 0) return false;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const el of this.selectedElements) {
+      minX = Math.min(minX, el.bbox.minX);
+      minY = Math.min(minY, el.bbox.minY);
+      maxX = Math.max(maxX, el.bbox.maxX);
+      maxY = Math.max(maxY, el.bbox.maxY);
+    }
+    return pt.x >= minX - 8 && pt.x <= maxX + 8 && pt.y >= minY - 8 && pt.y <= maxY + 8;
+  }
+
+  private drawMarquee(): void {
+    this.clearActiveCanvas();
+    if (!this.currentMarqueeBBox || !this.activeCtx) return;
+
+    const ctx = this.activeCtx;
+    ctx.save();
+    ctx.scale(this.dpr, this.dpr);
+    ctx.translate(-window.scrollX, -window.scrollY);
+
+    const b = this.currentMarqueeBBox;
+    const w = b.maxX - b.minX;
+    const h = b.maxY - b.minY;
+
+    ctx.fillStyle = 'rgba(59, 130, 246, 0.12)';
+    ctx.fillRect(b.minX, b.minY, w, h);
+
+    ctx.strokeStyle = '#3b82f6';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(b.minX, b.minY, w, h);
+
+    ctx.restore();
+  }
+
+  private renderSelection(ctx: CanvasRenderingContext2D): void {
+    if (this.selectedElements.length === 1) {
+      this.renderSingleSelectionOutline(ctx, this.selectedElements[0]);
+      return;
+    }
+
+    // Multi-selection: Compute union bounding box
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const el of this.selectedElements) {
+      minX = Math.min(minX, el.bbox.minX);
+      minY = Math.min(minY, el.bbox.minY);
+      maxX = Math.max(maxX, el.bbox.maxX);
+      maxY = Math.max(maxY, el.bbox.maxY);
+
+      // Draw subtle dashed outline around individual element
+      this.renderIndividualItemOutline(ctx, el);
+    }
+
+    const pad = 8;
+    const unionBBox: BoundingBox = {
+      minX: minX - pad,
+      minY: minY - pad,
+      maxX: maxX + pad,
+      maxY: maxY + pad,
+    };
+
+    ctx.save();
+    ctx.strokeStyle = '#3b82f6';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+
+    const w = unionBBox.maxX - unionBBox.minX;
+    const h = unionBBox.maxY - unionBBox.minY;
+    ctx.strokeRect(unionBBox.minX, unionBBox.minY, w, h);
+
+    // Draw corner anchor handles
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#3b82f6';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([]);
+    const corners = [
+      { x: unionBBox.minX, y: unionBBox.minY },
+      { x: unionBBox.maxX, y: unionBBox.minY },
+      { x: unionBBox.minX, y: unionBBox.maxY },
+      { x: unionBBox.maxX, y: unionBBox.maxY },
+    ];
+    for (const c of corners) {
+      ctx.fillRect(c.x - 4, c.y - 4, 8, 8);
+      ctx.strokeRect(c.x - 4, c.y - 4, 8, 8);
+    }
+
+    // Render multi-select badge: "✓ X elements selected (drag to move all)"
+    const badgeText = `${this.selectedElements.length} elements selected (drag to move all)`;
+    ctx.font = '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    const textWidth = ctx.measureText(badgeText).width;
+    const badgeW = textWidth + 18;
+    const badgeH = 24;
+    const badgeX = unionBBox.minX;
+    const badgeY = Math.max(unionBBox.minY - badgeH - 6, window.scrollY + 8);
+
+    ctx.fillStyle = 'rgba(30, 64, 175, 0.95)';
+    this.roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 6);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(badgeText, badgeX + 9, badgeY + badgeH / 2);
+
+    ctx.restore();
+  }
+
+  private renderSingleSelectionOutline(ctx: CanvasRenderingContext2D, el: AnchorElement): void {
     const pad = 6;
     ctx.save();
     ctx.strokeStyle = '#3b82f6';
@@ -739,6 +959,17 @@ export class CanvasEngine {
       ctx.fillRect(c.x - 3, c.y - 3, 6, 6);
       ctx.strokeRect(c.x - 3, c.y - 3, 6, 6);
     }
+    ctx.restore();
+  }
+
+  private renderIndividualItemOutline(ctx: CanvasRenderingContext2D, el: AnchorElement): void {
+    const pad = 3;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(59, 130, 246, 0.45)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    const b = el.bbox;
+    ctx.strokeRect(b.minX - pad, b.minY - pad, b.maxX - b.minX + pad * 2, b.maxY - b.minY + pad * 2);
     ctx.restore();
   }
 

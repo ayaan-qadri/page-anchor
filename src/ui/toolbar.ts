@@ -188,6 +188,20 @@ export class FloatingToolbar {
     // 2. Select tool
     this.toolbar.appendChild(this.createToolButton('select', 'Select & Move', 'tool-select', ICONS.select));
 
+    // 2b. Select All Elements to Move
+    this.toolbar.appendChild(
+      this.createActionButton(
+        'select-all',
+        'Select All to Move (Ctrl+A)',
+        'action-select-all',
+        ICONS.selectAll,
+        () => {
+          this.engine.selectAll();
+          this.updateActiveToolUI();
+        }
+      )
+    );
+
     // 3. Separator
     this.toolbar.appendChild(this.createSeparator());
 
