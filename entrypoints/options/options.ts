@@ -30,13 +30,11 @@ async function initOptions() {
   await renderSavedPages();
   setupBackupRestore();
 
-  // Save changes button in header
   document.getElementById('btn-save')?.addEventListener('click', async () => {
     await saveCurrentSettings();
     showToast('Settings saved successfully!');
   });
 
-  // Reset shortcuts button
   document.getElementById('btn-reset-shortcuts')?.addEventListener('click', () => {
     if (confirm('Reset all shortcuts to factory defaults?')) {
       currentSettings.shortcuts = { ...DEFAULT_SETTINGS.shortcuts };
@@ -149,7 +147,6 @@ function setupDrawingForm() {
   const fontSize = document.getElementById('pref-font-size') as HTMLInputElement;
   const fontSizeVal = document.getElementById('pref-font-size-val') as HTMLElement;
 
-  // Set initial
   penColor.value = currentSettings.defaultStrokeColor;
   penColorText.textContent = currentSettings.defaultStrokeColor;
   penWidth.value = `${currentSettings.defaultStrokeWidth}`;
@@ -163,7 +160,6 @@ function setupDrawingForm() {
   fontSize.value = `${currentSettings.defaultFontSize}`;
   fontSizeVal.textContent = `${currentSettings.defaultFontSize}px`;
 
-  // Listeners
   penColor.addEventListener('input', () => {
     penColorText.textContent = penColor.value;
     currentSettings.defaultStrokeColor = penColor.value;

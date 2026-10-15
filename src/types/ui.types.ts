@@ -1,12 +1,6 @@
 import { TextElement } from './engine.types';
 import { ExtensionSettings } from './storage.types';
 
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * UI COMPONENT CALLBACKS & VIEW STATE TYPE DEFINITIONS
- * ═══════════════════════════════════════════════════════════════════════
- */
-
 export interface ToolbarCallbacks {
   onClear?: () => void;
   onExport?: () => void;

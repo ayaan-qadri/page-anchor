@@ -12,10 +12,8 @@ export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
   main() {
-    // Avoid double injection
     if (document.getElementById('page-anchor-host')) return;
 
-    // Create Host Element for isolated Shadow DOM
     const host = document.createElement('div');
     host.id = 'page-anchor-host';
     host.style.position = 'absolute';
@@ -28,19 +26,16 @@ export default defineContentScript({
 
     const shadowRoot = host.attachShadow({ mode: 'open' });
 
-    // Inject Isolated Styles
     const styleSheet = document.createElement('style');
     styleSheet.textContent = SHADOW_STYLES;
     shadowRoot.appendChild(styleSheet);
 
-    // Mount Container inside Shadow DOM
     const uiContainer = document.createElement('div');
     uiContainer.className = 'page-anchor-ui-root';
     shadowRoot.appendChild(uiContainer);
 
     document.documentElement.appendChild(host);
 
-    // Initialize State & Storage
     let settings: ExtensionSettings;
     let engine: CanvasEngine;
     let history: HistoryManager;
@@ -69,24 +64,20 @@ export default defineContentScript({
       const newUrl = window.location.href;
       if (newUrl === currentLoadedUrl) return;
 
-      // 1. Flush pending changes for previous URL
       if (engine && currentLoadedUrl) {
         await savePageData(currentLoadedUrl, engine.getElements(), document.title);
       }
 
       currentLoadedUrl = newUrl;
 
-      // 2. Load annotations for the new URL
       const saved = await loadPageData(currentLoadedUrl);
       const newElements = saved?.elements || [];
 
-      // 3. Reset history and canvas elements for the new page
       history?.reset(newElements);
       engine?.setElements(newElements);
       toolbar?.updateBadge();
       toolbar?.updateHistoryButtons();
 
-      // 4. Ensure toolbar stays minimized if user had it minimized
       const latestSettings = await loadSettings();
       toolbar?.setDrawingMode(!!latestSettings.isToolbarOpen, false);
     };
@@ -104,7 +95,6 @@ export default defineContentScript({
       handleUrlChange();
     });
 
-    // Intercept SPA navigation (pushState & replaceState)
     const origPush = window.history.pushState;
     window.history.pushState = function (data: any, unused: string, url?: string | URL | null) {
       const res = origPush.call(this, data, unused, url);
@@ -119,21 +109,17 @@ export default defineContentScript({
       return res;
     };
 
-    // Periodic safety check for client-side routers
     setInterval(() => {
       if (window.location.href !== currentLoadedUrl) {
         handleUrlChange();
       }
     }, 500);
 
-    // Boot Extension
     (async () => {
       settings = await loadSettings();
 
-      // Initialize Text Editor Overlay
       textEditor = new TextEditorOverlay(uiContainer);
 
-      // Initialize Canvas Engine
       engine = new CanvasEngine(uiContainer, {
         onElementsChange: (elements) => {
           history.pushState(elements);
@@ -155,13 +141,11 @@ export default defineContentScript({
         },
       });
 
-      // Load Saved Annotations for this page
       const saved = await loadPageData(window.location.href);
       const initialElements = saved?.elements || [];
       history = new HistoryManager(initialElements);
       engine.setElements(initialElements);
 
-      // Initialize Toolbar
       toolbar = new FloatingToolbar(
         uiContainer,
         engine,
@@ -169,9 +153,7 @@ export default defineContentScript({
         textEditor,
         settings,
         {
-          onToggleActive: (active) => {
-            // mode changed
-          },
+          onToggleActive: () => {},
           onClear: () => {
             triggerSave(engine.getElements());
           },
@@ -185,25 +167,21 @@ export default defineContentScript({
         }
       );
 
-      // Initialize Shortcut Manager (with active mode guard so webpage keys are never hijacked when drawing mode is off)
       shortcutManager = new ShortcutManager(settings.shortcuts, () => engine.getActiveMode());
       shortcutManager.addListener((action) => {
         handleShortcutAction(action);
       });
       shortcutManager.attach();
 
-      // Keyboard Delete listener for selected elements
       window.addEventListener('keydown', (e) => {
         if (!engine.getActiveMode()) return;
         if (e.key === 'Delete' || e.key === 'Backspace') {
-          // If not focused in an input/textarea
           const target = e.target as HTMLElement | null;
           if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
           engine.deleteSelected();
         }
       });
 
-      // Listen for messages from background/popup across all browsers
       const runtime = typeof browser !== 'undefined' ? browser.runtime : (typeof chrome !== 'undefined' ? chrome.runtime : null);
       runtime?.onMessage?.addListener((msg: any, _sender: any, sendResponse: (r?: any) => void) => {
         if (msg.type === 'PAGE_ANCHOR_TOGGLE') {

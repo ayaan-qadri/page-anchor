@@ -12,15 +12,15 @@ export { DEFAULT_SHORTCUTS };
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   shortcuts: DEFAULT_SHORTCUTS,
-  defaultStrokeColor: '#ef4444', // vibrant red
+  defaultStrokeColor: '#ef4444',
   defaultStrokeWidth: 4,
-  defaultHighlighterColor: '#facc15', // vibrant yellow
+  defaultHighlighterColor: '#facc15',
   defaultHighlighterWidth: 20,
   defaultFontSize: 18,
   urlMatchMode: 'clean',
   performanceMode: true,
   toolbarPosition: null,
-  isToolbarOpen: false, // Minimized by default so it never intrudes on page load/reload!
+  isToolbarOpen: false,
   showFloatingPill: true,
   areAnnotationsVisible: true,
 };
@@ -57,8 +57,6 @@ export function normalizeUrl(
       return parsed.href;
     }
 
-    // Default 'clean' mode:
-    // Remove query tracking params
     const keysToRemove: string[] = [];
     parsed.searchParams.forEach((_, key) => {
       if (TRACKING_PARAMS.has(key.toLowerCase()) || key.startsWith('utm_')) {
@@ -67,10 +65,7 @@ export function normalizeUrl(
     });
     keysToRemove.forEach((k) => parsed.searchParams.delete(k));
 
-    // Sort remaining search params for canonical key
     parsed.searchParams.sort();
-
-    // Strip in-page scroll anchors (#section-2)
     parsed.hash = '';
 
     return parsed.href;

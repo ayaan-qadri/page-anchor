@@ -1,9 +1,3 @@
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * SHORTCUTS & KEYBINDING TYPE DEFINITIONS
- * ═══════════════════════════════════════════════════════════════════════
- */
-
 export type ShortcutAction =
   | 'toggle-active'
   | 'tool-select'

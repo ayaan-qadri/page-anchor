@@ -12,16 +12,16 @@ import { saveSettings } from '../core/storage';
 export type { ToolbarCallbacks };
 
 const PRESET_COLORS = [
-  '#ef4444', // Red
-  '#f97316', // Orange
-  '#facc15', // Yellow
-  '#22c55e', // Green
-  '#06b6d4', // Cyan
-  '#3b82f6', // Blue
-  '#8b5cf6', // Purple
-  '#ec4899', // Pink
-  '#ffffff', // White
-  '#000000', // Black
+  '#ef4444',
+  '#f97316',
+  '#facc15',
+  '#22c55e',
+  '#06b6d4',
+  '#3b82f6',
+  '#8b5cf6',
+  '#ec4899',
+  '#ffffff',
+  '#000000',
 ];
 
 export class FloatingToolbar {
@@ -59,11 +59,9 @@ export class FloatingToolbar {
     this.settings = settings;
     this.callbacks = callbacks;
 
-    // Create wrapper
     this.wrapper = document.createElement('div');
     this.wrapper.className = 'pa-toolbar-wrapper';
 
-    // Set initial position (top center or saved)
     if (this.settings.toolbarPosition) {
       this.wrapper.style.left = `${this.settings.toolbarPosition.x}px`;
       this.wrapper.style.top = `${this.settings.toolbarPosition.y}px`;
@@ -76,7 +74,6 @@ export class FloatingToolbar {
     this.toolbar = document.createElement('div');
     this.toolbar.className = 'pa-toolbar';
 
-    // Pill mode button (when minimized or inactive)
     this.pillButton = document.createElement('div');
     this.pillButton.className = 'pa-anchor-pill';
     this.pillButton.innerHTML = `
@@ -86,11 +83,9 @@ export class FloatingToolbar {
     `;
     this.container.appendChild(this.pillButton);
 
-    // Color popover
     this.colorPopover = document.createElement('div');
     this.colorPopover.className = 'pa-popover';
 
-    // Stroke slider refs
     this.strokeSlider = document.createElement('input');
     this.strokeSizeLabel = document.createElement('span');
     this.colorPreviewBtn = document.createElement('div');
@@ -106,16 +101,13 @@ export class FloatingToolbar {
     this.updateHistoryButtons();
     this.updateBadge();
 
-    // Respect persisted open/minimized state (default: false/minimized so it never intrudes on page load!)
     const shouldBeOpen = !!this.settings.isToolbarOpen;
     this.setDrawingMode(shouldBeOpen, false);
 
-    // Apply drawing visibility preference
     if (this.settings.areAnnotationsVisible !== undefined) {
       this.engine.setAnnotationsVisible(this.settings.areAnnotationsVisible);
     }
 
-    // Apply pill visibility preference
     if (this.settings.showFloatingPill === false) {
       this.pillButton.style.display = 'none';
     }
@@ -175,17 +167,14 @@ export class FloatingToolbar {
   }
 
   private buildToolbarContent(): void {
-    // 1. Drag Handle
     const dragHandle = document.createElement('div');
     dragHandle.className = 'pa-drag-handle';
     dragHandle.title = 'Drag Toolbar';
     dragHandle.innerHTML = ICONS.dragHandle;
     this.toolbar.appendChild(dragHandle);
 
-    // 2. Select tool
     this.toolbar.appendChild(this.createToolButton('select', 'Select & Move', 'tool-select', ICONS.select));
 
-    // 2b. Select All Elements to Move
     this.toolbar.appendChild(
       this.createActionButton(
         'select-all',
@@ -199,32 +188,22 @@ export class FloatingToolbar {
       )
     );
 
-    // 3. Separator
     this.toolbar.appendChild(this.createSeparator());
 
-    // 4. Freehand Pen
     this.toolbar.appendChild(this.createToolButton('pen', 'Pen', 'tool-pen', ICONS.pen));
-
-    // 5. Highlighter
     this.toolbar.appendChild(this.createToolButton('highlighter', 'Highlighter', 'tool-highlighter', ICONS.highlighter));
 
-    // 6. Shapes: Rect, Circle, Line, Arrow, Double Arrow
     this.toolbar.appendChild(this.createToolButton('rect', 'Rectangle', 'tool-rect', ICONS.rect));
     this.toolbar.appendChild(this.createToolButton('circle', 'Circle', 'tool-circle', ICONS.circle));
     this.toolbar.appendChild(this.createToolButton('line', 'Line', 'tool-line', ICONS.line));
     this.toolbar.appendChild(this.createToolButton('arrow', 'Arrow', 'tool-arrow', ICONS.arrow));
     this.toolbar.appendChild(this.createToolButton('double-arrow', 'Double Arrow', 'tool-line', ICONS.doubleArrow));
 
-    // 7. Text Tool
     this.toolbar.appendChild(this.createToolButton('text', 'Text Note', 'tool-text', ICONS.text));
-
-    // 8. Eraser Tool
     this.toolbar.appendChild(this.createToolButton('eraser', 'Eraser', 'tool-eraser', ICONS.eraser));
 
-    // 9. Separator
     this.toolbar.appendChild(this.createSeparator());
 
-    // 10. Color & Stroke Style Trigger
     this.colorPreviewBtn.className = 'pa-color-preview-btn';
     this.colorPreviewBtn.style.backgroundColor = this.settings.defaultStrokeColor;
     this.colorPreviewBtn.title = 'Colors & Stroke Size';
@@ -236,17 +215,15 @@ export class FloatingToolbar {
 
     this.buildColorPopover();
 
-    // 11. Separator
     this.toolbar.appendChild(this.createSeparator());
 
-    // 12. Undo & Redo
     const undoBtn = this.createActionButton('undo', 'Undo', 'action-undo', ICONS.undo, () => {
       const prev = this.history.undo();
       if (prev !== null) {
         this.engine.setElements(prev);
         this.updateHistoryButtons();
         this.updateBadge();
-        this.callbacks.onClear?.(); // Triggers auto-save
+        this.callbacks.onClear?.();
       }
     });
     this.toolbar.appendChild(undoBtn);
@@ -262,7 +239,6 @@ export class FloatingToolbar {
     });
     this.toolbar.appendChild(redoBtn);
 
-    // 13. Clear All
     const clearBtn = this.createActionButton('clear', 'Clear Page', 'action-clear', ICONS.trash, () => {
       if (confirm('Clear all drawings on this page?')) {
         this.history.pushState([]);
@@ -274,13 +250,11 @@ export class FloatingToolbar {
     });
     this.toolbar.appendChild(clearBtn);
 
-    // 14. Export PNG
     const exportBtn = this.createActionButton('export', 'Export Snapshot', 'action-export', ICONS.download, () => {
       this.callbacks.onExport?.();
     });
     this.toolbar.appendChild(exportBtn);
 
-    // 15. Settings
     const settingsBtn = this.createActionButton('settings', 'Shortcuts & Settings', 'action-toggle-toolbar', ICONS.settings, () => {
       const modal = new SettingsModal(this.container, this.settings, {
         onSave: (newSettings) => {
@@ -292,7 +266,6 @@ export class FloatingToolbar {
     });
     this.toolbar.appendChild(settingsBtn);
 
-    // 16. Toggle Annotations Visibility (Eye)
     const eyeBtn = this.createActionButton(
       'visibility',
       this.engine.getAnnotationsVisible() ? 'Hide Drawings' : 'Show Drawings',
@@ -308,7 +281,6 @@ export class FloatingToolbar {
     );
     this.toolbar.appendChild(eyeBtn);
 
-    // 17. Minimize to Pill
     const minBtn = this.createActionButton('minimize', 'Minimize (Alt+D to toggle)', 'toggle-active', ICONS.minimize, () => {
       this.setDrawingMode(false, true);
     });
@@ -316,7 +288,6 @@ export class FloatingToolbar {
   }
 
   private buildColorPopover(): void {
-    // Color Swatches Grid
     const grid = document.createElement('div');
     grid.className = 'pa-color-grid';
 
@@ -333,7 +304,6 @@ export class FloatingToolbar {
     });
     this.colorPopover.appendChild(grid);
 
-    // Native Color Picker Input
     const customRow = document.createElement('div');
     customRow.style.display = 'flex';
     customRow.style.alignItems = 'center';
@@ -361,7 +331,6 @@ export class FloatingToolbar {
     customRow.appendChild(colorInput);
     this.colorPopover.appendChild(customRow);
 
-    // Stroke Size Slider
     const sliderGroup = document.createElement('div');
     sliderGroup.className = 'pa-slider-group';
 
@@ -388,7 +357,6 @@ export class FloatingToolbar {
     sliderGroup.appendChild(this.strokeSlider);
     this.colorPopover.appendChild(sliderGroup);
 
-    // Close on outside click
     window.addEventListener('click', (e) => {
       if (!this.wrapper.contains(e.target as Node)) {
         this.colorPopover.classList.remove('open');
@@ -486,7 +454,7 @@ export class FloatingToolbar {
       const rect = this.wrapper.getBoundingClientRect();
       this.dragOffset.x = e.clientX - rect.left;
       this.dragOffset.y = e.clientY - rect.top;
-      this.wrapper.style.transform = 'none'; // Clear center transform
+      this.wrapper.style.transform = 'none';
       dragHandle.setPointerCapture(e.pointerId);
       e.preventDefault();
     });
@@ -502,7 +470,6 @@ export class FloatingToolbar {
     const stopDrag = () => {
       if (this.isDragging) {
         this.isDragging = false;
-        // Remember position
         const rect = this.wrapper.getBoundingClientRect();
         this.settings.toolbarPosition = { x: rect.left, y: rect.top };
         this.callbacks.onSettingsUpdate?.(this.settings);

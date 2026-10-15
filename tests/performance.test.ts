@@ -9,7 +9,6 @@ import { AnchorElement, BoundingBox, Point, ShapeElement, StrokeElement } from '
 
 describe('Performance Benchmarks: Zero-Lag Low-End Device Validation', () => {
   it('BENCHMARK: Viewport Frustum Culling across 10,000 elements executes in under 5ms', () => {
-    // Generate 10,000 shapes across a massive 10,000px by 50,000px web page
     const elements: ShapeElement[] = [];
     for (let i = 0; i < 10000; i++) {
       const startX = (i * 37) % 10000;
@@ -38,7 +37,6 @@ describe('Performance Benchmarks: Zero-Lag Low-End Device Validation', () => {
 
     const start = performance.now();
 
-    // Perform frustum culling
     let visibleCount = 0;
     for (let i = 0; i < elements.length; i++) {
       if (intersectsBoundingBox(elements[i].bbox, viewportBox)) {
@@ -53,13 +51,11 @@ describe('Performance Benchmarks: Zero-Lag Low-End Device Validation', () => {
     console.log(`     Visible culled: ${visibleCount} elements`);
     console.log(`     Elapsed Time: ${elapsed.toFixed(3)} ms`);
 
-    // Verify it easily passes under 5ms (usually ~0.2ms)
     expect(elapsed).toBeLessThan(5.0);
     expect(visibleCount).toBeGreaterThan(0);
   });
 
   it('BENCHMARK: RDP Point Reduction on 5,000 points executes in under 5ms with >50% compression', () => {
-    // Generate 5,000 points representing a long, detailed freehand stroke with natural jitter
     const rawPoints: Point[] = [];
     for (let i = 0; i < 5000; i++) {
       const base = i * 2;
@@ -108,7 +104,6 @@ describe('Performance Benchmarks: Zero-Lag Low-End Device Validation', () => {
   });
 
   it('BENCHMARK: Spatial Eraser Collision across 1,000 elements executes in under 2ms', () => {
-    // Generate 1,000 shapes
     const elements: AnchorElement[] = [];
     for (let i = 0; i < 1000; i++) {
       const x = (i * 17) % 5000;
@@ -132,7 +127,6 @@ describe('Performance Benchmarks: Zero-Lag Low-End Device Validation', () => {
 
     const start = performance.now();
 
-    // Test eraser hit across all 1,000 elements
     let hits = 0;
     for (let i = 0; i < elements.length; i++) {
       if (isPointNearElement(testPoint, elements[i], 12)) {

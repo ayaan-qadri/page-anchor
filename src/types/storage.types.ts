@@ -1,12 +1,6 @@
 import { AnchorElement } from './engine.types';
 import { ShortcutAction } from './shortcuts.types';
 
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * STORAGE & USER SETTINGS TYPE DEFINITIONS
- * ═══════════════════════════════════════════════════════════════════════
- */
-
 export type UrlMatchMode = 'clean' | 'exact' | 'domain';
 
 export interface PageAnchorData {
@@ -33,9 +27,9 @@ export interface ExtensionSettings {
   defaultHighlighterWidth: number;
   defaultFontSize: number;
   urlMatchMode: UrlMatchMode;
-  performanceMode: boolean; // Enables spatial indexing & viewport clipping
+  performanceMode: boolean;
   toolbarPosition: { x: number; y: number } | null;
-  isToolbarOpen: boolean; // Whether toolbar is open or minimized (persists across reloads)
-  showFloatingPill: boolean; // Whether floating anchor pill is shown
-  areAnnotationsVisible: boolean; // Whether drawings on page are visible
+  isToolbarOpen: boolean;
+  showFloatingPill: boolean;
+  areAnnotationsVisible: boolean;
 }

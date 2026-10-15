@@ -14,7 +14,6 @@ export const SHADOW_STYLES = `
   padding: 0;
 }
 
-/* Floating Toolbar Container */
 .pa-toolbar-wrapper {
   position: fixed;
   z-index: 2147483645;
@@ -36,7 +35,6 @@ export const SHADOW_STYLES = `
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
-/* Drag Handle */
 .pa-drag-handle {
   display: flex;
   align-items: center;
@@ -56,7 +54,6 @@ export const SHADOW_STYLES = `
   cursor: grabbing;
 }
 
-/* Separators */
 .pa-separator {
   width: 1px;
   height: 22px;
@@ -64,7 +61,6 @@ export const SHADOW_STYLES = `
   margin: 0 2px;
 }
 
-/* Tool Buttons */
 .pa-btn {
   display: flex;
   align-items: center;
@@ -108,7 +104,6 @@ export const SHADOW_STYLES = `
   pointer-events: none;
 }
 
-/* Tooltips */
 .pa-tooltip {
   position: absolute;
   bottom: calc(100% + 8px);
@@ -144,7 +139,6 @@ export const SHADOW_STYLES = `
   transform: translateX(-50%) translateY(0);
 }
 
-/* Color Swatches and Quick Popover */
 .pa-color-preview-btn {
   width: 24px;
   height: 24px;
@@ -241,7 +235,6 @@ export const SHADOW_STYLES = `
   box-shadow: 0 0 6px rgba(59, 130, 246, 0.6);
 }
 
-/* Floating Anchor Button (Pill Mode) */
 .pa-anchor-pill {
   position: fixed;
   bottom: 24px;
@@ -284,7 +277,6 @@ export const SHADOW_STYLES = `
   box-shadow: 0 8px 24px rgba(59, 130, 246, 0.5);
 }
 
-/* In-Page Text Input Floating Element */
 .pa-text-input-wrapper {
   position: absolute;
   z-index: 2147483644;
@@ -307,7 +299,6 @@ export const SHADOW_STYLES = `
   min-height: 40px;
 }
 
-/* Settings Modal */
 .pa-modal-backdrop {
   position: fixed;
   inset: 0;

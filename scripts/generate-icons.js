@@ -3,25 +3,21 @@ import path from 'path';
 import zlib from 'zlib';
 
 function createPng(size, r, g, b, a = 255) {
-  // A simple uncompressed / deflate-compressed truecolor PNG generator
   const width = size;
   const height = size;
   
-  // Signature
   const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
-  // IHDR chunk
   const ihdrData = Buffer.alloc(13);
   ihdrData.writeUInt32BE(width, 0);
   ihdrData.writeUInt32BE(height, 4);
-  ihdrData[8] = 8; // bit depth
-  ihdrData[9] = 6; // color type: RGBA
-  ihdrData[10] = 0; // compression
-  ihdrData[11] = 0; // filter
-  ihdrData[12] = 0; // interlace
+  ihdrData[8] = 8;
+  ihdrData[9] = 6;
+  ihdrData[10] = 0;
+  ihdrData[11] = 0;
+  ihdrData[12] = 0;
   const ihdr = makeChunk('IHDR', ihdrData);
 
-  // Raw image data: filter byte (0) + 4 bytes per pixel for each scanline
   const scanlineLength = 1 + width * 4;
   const rawData = Buffer.alloc(height * scanlineLength);
 
@@ -31,37 +27,31 @@ function createPng(size, r, g, b, a = 255) {
 
   for (let y = 0; y < height; y++) {
     const rowOffset = y * scanlineLength;
-    rawData[rowOffset] = 0; // None filter
+    rawData[rowOffset] = 0;
     for (let x = 0; x < width; x++) {
       const pxOffset = rowOffset + 1 + x * 4;
       const dx = x - cx;
       const dy = y - cy;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      // Draw a rounded anchor icon style: indigo background with cyan anchor/pen dot
       if (dist <= radius) {
-        // Gradient background (indigo #4f46e5 to cyan #06b6d4)
         const t = (x + y) / (width * 2);
         const red = Math.round(79 * (1 - t) + 6 * t);
         const green = Math.round(70 * (1 - t) + 182 * t);
         const blue = Math.round(229 * (1 - t) + 212 * t);
 
-        // Draw inner anchor/pen shape: center circle or ring
         const innerDist = Math.sqrt(dx * dx + (dy - height * 0.05) ** 2);
         if (innerDist <= width * 0.16) {
-          // White center symbol
           rawData[pxOffset] = 255;
           rawData[pxOffset + 1] = 255;
           rawData[pxOffset + 2] = 255;
           rawData[pxOffset + 3] = 255;
         } else if (Math.abs(dx) <= width * 0.08 && dy >= -height * 0.15 && dy <= height * 0.25) {
-          // Vertical stem
           rawData[pxOffset] = 255;
           rawData[pxOffset + 1] = 255;
           rawData[pxOffset + 2] = 255;
           rawData[pxOffset + 3] = 255;
         } else if (dist >= width * 0.26 && dist <= width * 0.36 && dy >= 0 && dy <= height * 0.3) {
-          // Anchor arc
           rawData[pxOffset] = 255;
           rawData[pxOffset + 1] = 255;
           rawData[pxOffset + 2] = 255;
@@ -73,7 +63,6 @@ function createPng(size, r, g, b, a = 255) {
           rawData[pxOffset + 3] = 255;
         }
       } else {
-        // Transparent
         rawData[pxOffset] = 0;
         rawData[pxOffset + 1] = 0;
         rawData[pxOffset + 2] = 0;
@@ -102,7 +91,6 @@ function makeChunk(type, data) {
   return Buffer.concat([lenBuf, typeBuf, data, crcBuf]);
 }
 
-// Standard CRC32 table
 const crcTable = [];
 for (let n = 0; n < 256; n++) {
   let c = n;

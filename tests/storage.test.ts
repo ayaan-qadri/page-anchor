@@ -40,7 +40,6 @@ describe('Storage Engine: Persistence with Mocked Chrome Storage', () => {
   beforeEach(() => {
     mockStore = {};
 
-    // Mock chrome.storage.local
     (globalThis as any).chrome = {
       runtime: {
         lastError: null,
@@ -124,12 +123,10 @@ describe('Storage Engine: Persistence with Mocked Chrome Storage', () => {
     const backupJson = await exportAllDataAsJson();
     expect(backupJson).toContain('page_anchor_settings');
 
-    // Wipe store
     mockStore = {};
     const beforeRestore = await loadSettings();
-    expect(beforeRestore.defaultStrokeWidth).toBe(4); // Default
+    expect(beforeRestore.defaultStrokeWidth).toBe(4);
 
-    // Restore from JSON
     const restoredOk = await importDataFromJson(backupJson);
     expect(restoredOk).toBe(true);
 

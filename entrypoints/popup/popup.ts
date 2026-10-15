@@ -14,14 +14,12 @@ async function initPopup() {
   const ext = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null);
   if (!ext) return;
 
-  // Load user settings for shortcut hint
   const settings = await loadSettings();
   const toggleKey = settings.shortcuts['toggle-active'] || 'Alt+Shift+D';
   if (hintEl) {
     hintEl.textContent = formatShortcutForDisplay(toggleKey);
   }
 
-  // Open Options page
   optionsBtn?.addEventListener('click', () => {
     if (ext.runtime?.openOptionsPage) {
       ext.runtime.openOptionsPage();
@@ -30,7 +28,6 @@ async function initPopup() {
     }
   });
 
-  // Query active tab
   const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
   if (!tab || tab.id === undefined) {
     pageTitleEl.textContent = 'No active webpage';
@@ -41,7 +38,6 @@ async function initPopup() {
   const tabId = tab.id;
   pageTitleEl.textContent = tab.title || tab.url || 'Webpage';
 
-  // Request status from content script
   try {
     const res = await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_GET_STATUS' }) as any;
     if (res) {
@@ -52,7 +48,6 @@ async function initPopup() {
     countEl.textContent = 'Anchor ready to activate';
   }
 
-  // Handle draw mode switch
   toggleSwitch.addEventListener('change', async () => {
     try {
       const res = await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_TOGGLE' }) as any;
@@ -61,12 +56,10 @@ async function initPopup() {
         countEl.textContent = `${res.count} annotation${res.count === 1 ? '' : 's'} on page`;
       }
     } catch {
-      // Content script might need refresh
       countEl.textContent = 'Please refresh the webpage';
     }
   });
 
-  // Handle Export
   exportBtn.addEventListener('click', async () => {
     try {
       await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_EXPORT' });
@@ -76,7 +69,6 @@ async function initPopup() {
     }
   });
 
-  // Handle Clear
   clearBtn.addEventListener('click', async () => {
     if (confirm('Are you sure you want to clear all annotations on this page?')) {
       try {

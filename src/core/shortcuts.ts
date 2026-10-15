@@ -7,25 +7,9 @@ import {
 
 export type { BrowserConflictInfo, ShortcutAction, ShortcutDefinition, ShortcutHandler };
 
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * PAGE ANCHOR — CENTRAL SHORTCUTS REGISTRY
- * 
- * Single source of truth for:
- * 1. Default shortcut keybindings (all conflict-free across all browsers)
- * 2. Human-readable shortcut definitions & metadata
- * 3. Keystroke normalization & platform-aware formatting
- * 4. Multi-browser reserved shortcut conflict database (Chrome, Firefox, Safari, Edge)
- * 5. ShortcutManager event dispatcher with active-mode guarding
- * ═══════════════════════════════════════════════════════════════════════
- */
-
 export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
-  // Global & Toolbar Toggles (Use Alt+Shift modifier to avoid browser collisions)
   'toggle-active': 'Alt+Shift+D',
   'action-toggle-toolbar': 'Alt+Shift+T',
-
-  // Single-letter Tool Selectors (Strictly guarded: active ONLY when drawing mode is ON)
   'tool-select': 'v',
   'tool-pen': 'p',
   'tool-highlighter': 'h',
@@ -35,8 +19,6 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
   'tool-arrow': 'a',
   'tool-text': 't',
   'tool-eraser': 'e',
-
-  // Actions (Standard non-conflicting modifiers)
   'action-undo': 'Ctrl+z',
   'action-redo': 'Ctrl+y',
   'action-clear': 'Alt+Shift+X',
@@ -158,13 +140,10 @@ export function normalizeKeyEvent(e: KeyboardEvent): string {
   if (e.shiftKey) parts.push('Shift');
 
   let key = e.key;
-
-  // Ignore bare modifier presses
   if (['Control', 'Shift', 'Alt', 'Meta'].includes(key)) {
     return '';
   }
 
-  // Canonicalize special keys
   if (key === ' ') key = 'Space';
   else if (key === 'Escape') key = 'Esc';
   else if (key.length === 1) key = key.toLowerCase();
@@ -190,7 +169,6 @@ export function formatShortcutForDisplay(keyCombo: string): string {
  * Covers Chrome, Firefox, Safari, Edge, Opera, and OS-level system shortcuts.
  */
 export const BROWSER_RESERVED_CONFLICTS: Record<string, BrowserConflictInfo> = {
-  // ── Universal Browser Navigation ──
   'ctrl+t': { browser: 'All Browsers', action: 'Open new tab' },
   'cmd+t': { browser: 'All Browsers (macOS)', action: 'Open new tab' },
   'ctrl+w': { browser: 'All Browsers', action: 'Close active tab' },
@@ -234,8 +212,6 @@ export const BROWSER_RESERVED_CONFLICTS: Record<string, BrowserConflictInfo> = {
   'alt+home': { browser: 'All Browsers', action: 'Navigate to home page' },
   'alt+left': { browser: 'All Browsers', action: 'Back history navigation' },
   'alt+right': { browser: 'All Browsers', action: 'Forward history navigation' },
-
-  // ── Chrome & Chromium Specific ──
   'alt+d': { browser: 'Chrome / Edge', action: 'Focus address bar (omnibox)' },
   'ctrl+shift+n': { browser: 'Chrome / Edge / Opera', action: 'Open Incognito / InPrivate window' },
   'cmd+shift+n': { browser: 'Chrome / Safari (macOS)', action: 'Open Incognito / Private window' },
@@ -244,8 +220,6 @@ export const BROWSER_RESERVED_CONFLICTS: Record<string, BrowserConflictInfo> = {
   'ctrl+shift+j': { browser: 'Chrome / Edge', action: 'Open JavaScript Console' },
   'alt+f': { browser: 'Chrome / Edge', action: 'Open main browser menu / Settings' },
   'alt+e': { browser: 'Chrome / Edge', action: 'Open browser options menu' },
-
-  // ── Mozilla Firefox Specific ──
   'ctrl+shift+p': { browser: 'Firefox', action: 'Open Private Browsing window' },
   'ctrl+k': { browser: 'Firefox', action: 'Focus search bar in address area' },
   'ctrl+e': { browser: 'Firefox', action: 'Focus Web Search bar' },
@@ -262,12 +236,8 @@ export const BROWSER_RESERVED_CONFLICTS: Record<string, BrowserConflictInfo> = {
   'alt+s': { browser: 'Firefox', action: 'Open History menu bar' },
   'alt+b': { browser: 'Firefox', action: 'Open Bookmarks menu bar' },
   'alt+h': { browser: 'Firefox', action: 'Open Help menu bar' },
-
-  // ── Microsoft Edge Specific ──
   'ctrl+shift+s': { browser: 'Edge / Firefox', action: 'Web Capture / Screenshot tool' },
   'ctrl+shift+u': { browser: 'Edge', action: 'Start Read Aloud' },
-
-  // ── Apple Safari (macOS) Specific ──
   'cmd+alt+i': { browser: 'Safari / Chrome (macOS)', action: 'Open Web Inspector' },
   'cmd+alt+c': { browser: 'Safari / Chrome (macOS)', action: 'Open JavaScript Console' },
   'cmd+alt+e': { browser: 'Safari', action: 'Empty Developer Caches' },
@@ -277,8 +247,6 @@ export const BROWSER_RESERVED_CONFLICTS: Record<string, BrowserConflictInfo> = {
   'cmd+alt+a': { browser: 'Safari', action: 'Show All Tabs Overview' },
   'cmd+y': { browser: 'Safari', action: 'Show History' },
   'cmd+ctrl+f': { browser: 'Safari (macOS)', action: 'Toggle Full Screen' },
-
-  // ── Developer Tools & System ──
   'f12': { browser: 'All Browsers', action: 'Open Developer Tools' },
   'ctrl+shift+i': { browser: 'All Browsers', action: 'Open Developer Tools' },
   'ctrl+shift+c': { browser: 'All Browsers', action: 'Inspect Element' },
@@ -363,7 +331,6 @@ export class ShortcutManager {
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
-    // If user is currently typing in an input, textarea, contenteditable, don't hijack unless it's Escape
     const target = e.target as HTMLElement | null;
     if (target && typeof target.getAttribute === 'function') {
       const tagName = target.tagName?.toLowerCase();
@@ -383,12 +350,10 @@ export class ShortcutManager {
 
     const isDrawingActive = this.activeModeGetter ? this.activeModeGetter() : true;
 
-    // Check matches
     for (const [actionId, shortcutKey] of Object.entries(this.activeShortcuts)) {
       if (this.isMatch(pressedKey, shortcutKey)) {
         const isGlobalToggle = actionId === 'toggle-active' || actionId === 'action-toggle-toolbar';
 
-        // When drawing mode is inactive, NEVER intercept single-letter tool keys or page keys!
         if (!isDrawingActive && !isGlobalToggle) {
           continue;
         }

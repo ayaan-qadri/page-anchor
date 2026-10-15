@@ -43,7 +43,6 @@ export class TextEditorOverlay {
     this.container.appendChild(wrapper);
     this.currentWrapper = wrapper;
 
-    // Auto-focus
     setTimeout(() => {
       textarea.focus();
     }, 10);
@@ -85,7 +84,6 @@ export class TextEditorOverlay {
       }
     });
 
-    // Blur commits
     textarea.addEventListener('blur', () => {
       commit();
     });

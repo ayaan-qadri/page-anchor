@@ -34,7 +34,6 @@ export class CanvasEngine {
   private marqueeStartPoint: Point | null = null;
   private currentMarqueeBBox: BoundingBox | null = null;
 
-  // Active tool state
   private activeTool: ToolType = 'pen';
   private strokeColor = '#ef4444';
   private strokeWidth = 4;
@@ -43,14 +42,12 @@ export class CanvasEngine {
   private fontSize = 18;
   private isActiveMode = false;
 
-  // Real-time drawing state
   private isPointerDown = false;
   private pointerId: number | null = null;
   private currentStrokePoints: Point[] = [];
   private shapeStartPoint: Point | null = null;
   private currentShape: ShapeElement | null = null;
 
-  // Rendering optimization
   private rafId: number | null = null;
   private scrollRafId: number | null = null;
   private dpr = 1;
@@ -60,7 +57,6 @@ export class CanvasEngine {
     this.container = container;
     this.callbacks = callbacks;
 
-    // Create Base Canvas
     this.baseCanvas = document.createElement('canvas');
     this.baseCanvas.className = 'page-anchor-base-canvas';
     this.baseCanvas.style.position = 'fixed';
@@ -71,7 +67,6 @@ export class CanvasEngine {
     this.baseCanvas.style.pointerEvents = 'none';
     this.baseCanvas.style.zIndex = '2147483640';
 
-    // Create Active Canvas
     this.activeCanvas = document.createElement('canvas');
     this.activeCanvas.className = 'page-anchor-active-canvas';
     this.activeCanvas.style.position = 'fixed';
@@ -269,7 +264,6 @@ export class CanvasEngine {
   }
 
   private updateDprAndSize(): void {
-    // Clamp DPR to max 2.5 to avoid GPU memory starvation on cheap 4K laptops
     this.dpr = Math.min(window.devicePixelRatio || 1, 2.5);
 
     const w = window.innerWidth;
@@ -291,7 +285,6 @@ export class CanvasEngine {
     };
     window.addEventListener('resize', handleResize, { passive: true });
 
-    // Smooth passive scroll listener
     const handleScroll = () => {
       if (this.scrollRafId) return;
       this.scrollRafId = requestAnimationFrame(() => {
@@ -301,7 +294,6 @@ export class CanvasEngine {
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
 
-    // Pointer events on active canvas
     this.activeCanvas.addEventListener('pointerdown', this.onPointerDown.bind(this));
     window.addEventListener('pointermove', this.onPointerMove.bind(this));
     window.addEventListener('pointerup', this.onPointerUp.bind(this));
@@ -320,7 +312,7 @@ export class CanvasEngine {
 
   private onPointerDown(e: PointerEvent): void {
     if (!this.isActiveMode) return;
-    if (e.button !== 0) return; // Only primary button
+    if (e.button !== 0) return;
 
     this.isPointerDown = true;
     this.pointerId = e.pointerId;
@@ -338,9 +330,7 @@ export class CanvasEngine {
           } else {
             this.selectedElements.push(hit);
           }
-        } else if (this.selectedElements.some((el) => el.id === hit.id)) {
-          // Keep current selection so drag moves all of them
-        } else {
+        } else if (!this.selectedElements.some((el) => el.id === hit.id)) {
           this.selectedElements = [hit];
         }
 
@@ -351,14 +341,12 @@ export class CanvasEngine {
         return;
       }
 
-      // If clicked inside union bbox of selected elements, allow dragging the whole group
       if (this.selectedElements.length > 1 && this.isPointInsideUnionBBox(docPt)) {
         this.isDraggingSelected = true;
         this.dragStartPoint = docPt;
         return;
       }
 
-      // Clicked empty space: clear selection and start marquee
       this.selectedElements = [];
       this.isMarqueeSelecting = true;
       this.marqueeStartPoint = docPt;
@@ -369,7 +357,6 @@ export class CanvasEngine {
     }
 
     if (this.activeTool === 'text') {
-      // Trigger text placement
       this.callbacks.onTextCreateRequested?.(docPt);
       return;
     }
@@ -414,7 +401,6 @@ export class CanvasEngine {
     if (!this.isPointerDown || !this.isActiveMode) return;
     if (this.pointerId !== null && e.pointerId !== this.pointerId) return;
 
-    // Use coalesced events if available for high-fidelity pen input
     const events = (e.getCoalescedEvents ? e.getCoalescedEvents() : [e]) as PointerEvent[];
 
     if (this.activeTool === 'eraser') {
@@ -459,7 +445,6 @@ export class CanvasEngine {
 
     if (this.shapeStartPoint && this.currentShape) {
       const docPt = this.clientToDoc(e.clientX, e.clientY);
-      // Support Shift key to constrain proportions / snap angles
       if (e.shiftKey) {
         const dx = docPt.x - this.shapeStartPoint.x;
         const dy = docPt.y - this.shapeStartPoint.y;
@@ -468,7 +453,6 @@ export class CanvasEngine {
           docPt.x = this.shapeStartPoint.x + Math.sign(dx || 1) * maxDim;
           docPt.y = this.shapeStartPoint.y + Math.sign(dy || 1) * maxDim;
         } else if (this.currentShape.type === 'line' || this.currentShape.type === 'arrow' || this.currentShape.type === 'double-arrow') {
-          // Snap to 0, 45, 90 deg
           const angle = Math.atan2(dy, dx);
           const snap = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
           const len = Math.hypot(dx, dy);
@@ -516,7 +500,6 @@ export class CanvasEngine {
     if (this.activeTool === 'pen' || this.activeTool === 'highlighter') {
       if (this.currentStrokePoints.length > 0) {
         const isHighlighter = this.activeTool === 'highlighter';
-        // Apply RDP decimation for high performance and compact storage
         const simplified = simplifyPointsRDP(this.currentStrokePoints, 1.2);
 
         const strokeElem: StrokeElement = {
@@ -541,7 +524,6 @@ export class CanvasEngine {
     }
 
     if (this.currentShape) {
-      // Don't add accidental zero-pixel clicks
       const dist = Math.hypot(
         this.currentShape.endX - this.currentShape.startX,
         this.currentShape.endY - this.currentShape.startY
@@ -568,7 +550,6 @@ export class CanvasEngine {
   }
 
   private hitTest(pt: Point): AnchorElement | null {
-    // Reverse order: check top-most elements first
     for (let i = this.elements.length - 1; i >= 0; i--) {
       if (isPointNearElement(pt, this.elements[i], 8)) {
         return this.elements[i];
@@ -662,7 +643,6 @@ export class CanvasEngine {
     ctx.scale(this.dpr, this.dpr);
     ctx.translate(-window.scrollX, -window.scrollY);
 
-    // Compute Viewport Bounding Box in document coordinates
     const scrollX = window.scrollX;
     const scrollY = window.scrollY;
     const viewportBox: BoundingBox = {
@@ -672,7 +652,6 @@ export class CanvasEngine {
       maxY: scrollY + window.innerHeight + 20,
     };
 
-    // Render only visible elements (Zero-Lag Frustum Culling)
     for (let i = 0; i < this.elements.length; i++) {
       const el = this.elements[i];
       if (intersectsBoundingBox(el.bbox, viewportBox)) {
@@ -680,7 +659,6 @@ export class CanvasEngine {
       }
     }
 
-    // Highlight selected elements if any
     if (this.selectedElements.length > 0) {
       this.renderSelection(ctx);
     }
@@ -797,12 +775,10 @@ export class CanvasEngine {
     const boxW = Math.max(maxWidth + padding * 2, el.width || 60);
     const boxH = Math.max(lines.length * lineHeight + padding * 2, el.height || 30);
 
-    // Save calculated width/height back to element
     el.width = boxW;
     el.height = boxH;
     el.bbox = computeBoundingBox(el);
 
-    // Background pill/card for legibility
     ctx.save();
     ctx.fillStyle = el.bgColor || 'rgba(15, 23, 42, 0.85)';
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
@@ -812,7 +788,6 @@ export class CanvasEngine {
     ctx.stroke();
     ctx.restore();
 
-    // Render text lines
     ctx.fillStyle = el.fontColor || '#ffffff';
     for (let i = 0; i < lines.length; i++) {
       ctx.fillText(lines[i], el.x + padding, el.y + padding + i * lineHeight);
@@ -861,7 +836,6 @@ export class CanvasEngine {
       return;
     }
 
-    // Multi-selection: Compute union bounding box
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const el of this.selectedElements) {
       minX = Math.min(minX, el.bbox.minX);
@@ -869,7 +843,6 @@ export class CanvasEngine {
       maxX = Math.max(maxX, el.bbox.maxX);
       maxY = Math.max(maxY, el.bbox.maxY);
 
-      // Draw subtle dashed outline around individual element
       this.renderIndividualItemOutline(ctx, el);
     }
 
@@ -890,7 +863,6 @@ export class CanvasEngine {
     const h = unionBBox.maxY - unionBBox.minY;
     ctx.strokeRect(unionBBox.minX, unionBBox.minY, w, h);
 
-    // Draw corner anchor handles
     ctx.fillStyle = '#ffffff';
     ctx.strokeStyle = '#3b82f6';
     ctx.lineWidth = 1.5;
@@ -906,7 +878,6 @@ export class CanvasEngine {
       ctx.strokeRect(c.x - 4, c.y - 4, 8, 8);
     }
 
-    // Render multi-select badge: "✓ X elements selected (drag to move all)"
     const badgeText = `${this.selectedElements.length} elements selected (drag to move all)`;
     ctx.font = '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     const textWidth = ctx.measureText(badgeText).width;
@@ -941,7 +912,6 @@ export class CanvasEngine {
       bbox.maxY - bbox.minY + pad * 2
     );
 
-    // Draw corner handles
     ctx.fillStyle = '#ffffff';
     ctx.strokeStyle = '#3b82f6';
     ctx.lineWidth = 1.5;
@@ -991,13 +961,11 @@ export class CanvasEngine {
    * Exports an annotated snapshot image (Data URL).
    */
   public exportAsDataUrl(): string {
-    // Generate a temporary merged canvas
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = this.baseCanvas.width;
     tempCanvas.height = this.baseCanvas.height;
     const tempCtx = tempCanvas.getContext('2d')!;
 
-    // Copy base annotations
     tempCtx.drawImage(this.baseCanvas, 0, 0);
     return tempCanvas.toDataURL('image/png');
   }

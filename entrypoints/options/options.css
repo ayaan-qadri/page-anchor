@@ -18,7 +18,6 @@ body {
   padding: 32px 20px;
 }
 
-/* Header */
 .pa-options-header {
   display: flex;
   align-items: center;
@@ -57,7 +56,6 @@ body {
   color: #94a3b8;
 }
 
-/* Tabs */
 .pa-tabs {
   display: flex;
   gap: 8px;
@@ -90,7 +88,6 @@ body {
   box-shadow: 0 0 1px #38bdf8;
 }
 
-/* Tab Panes */
 .pa-tab-pane {
   display: none;
   animation: fadeIn 0.15s ease-out;
@@ -111,7 +108,6 @@ body {
   margin-bottom: 18px;
 }
 
-/* Shortcuts Table */
 .pa-shortcuts-list {
   display: flex;
   flex-direction: column;
@@ -182,7 +178,6 @@ body {
   50% { opacity: 0.6; }
 }
 
-/* Forms */
 .pa-form-group {
   margin-bottom: 22px;
   display: flex;
@@ -256,7 +251,6 @@ body {
   cursor: pointer;
 }
 
-/* Card Box */
 .pa-card-box {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -278,7 +272,6 @@ body {
   margin-bottom: 14px;
 }
 
-/* Buttons */
 .pa-btn-primary {
   background: #3b82f6;
   color: #ffffff;
@@ -329,7 +322,6 @@ body {
   color: #ffffff;
 }
 
-/* Saved Pages List */
 .pa-saved-list {
   display: flex;
   flex-direction: column;

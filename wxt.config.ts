@@ -1,6 +1,5 @@
 import { defineConfig } from 'wxt';
 
-// See https://wxt.dev/api/config.html
 export default defineConfig({
   manifest: ({ browser }) => ({
     name: 'Page Anchor - Web Annotation & Drawing',

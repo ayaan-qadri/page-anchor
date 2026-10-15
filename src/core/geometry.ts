@@ -143,7 +143,6 @@ export function simplifyPointsRDP(points: Point[], epsilon = 1.2): Point[] {
  * Checks whether a test point touches or is near an element (for eraser or selection).
  */
 export function isPointNearElement(pt: Point, element: AnchorElement, threshold = 8): boolean {
-  // Quick AABB rejection
   if (!isPointInBoundingBox(pt, element.bbox, threshold)) {
     return false;
   }
@@ -181,7 +180,6 @@ export function isPointNearElement(pt: Point, element: AnchorElement, threshold 
       return pt.x >= minX && pt.x <= maxX && pt.y >= minY && pt.y <= maxY;
     }
 
-    // Check 4 edges
     const top = distToSegmentSquared(pt, { x: minX, y: minY }, { x: maxX, y: minY });
     const bottom = distToSegmentSquared(pt, { x: minX, y: maxY }, { x: maxX, y: maxY });
     const left = distToSegmentSquared(pt, { x: minX, y: minY }, { x: minX, y: maxY });
@@ -198,14 +196,10 @@ export function isPointNearElement(pt: Point, element: AnchorElement, threshold 
 
     if (rx === 0 || ry === 0) return false;
 
-    // Normalized ellipse distance
     const normDist = ((pt.x - cx) / rx) ** 2 + ((pt.y - cy) / ry) ** 2;
     if (element.fillColor) {
       return normDist <= 1.05;
     }
-    const outer = normDist;
-    const inner = normDist;
-    // Approximating boundary ring
     const avgR = (rx + ry) / 2;
     const distToCenter = Math.sqrt((pt.x - cx) ** 2 + (pt.y - cy) ** 2);
     return Math.abs(distToCenter - avgR) <= effThreshold;
@@ -269,7 +263,7 @@ export function renderArrowHead(
   angle: number,
   size: number
 ): void {
-  const headAngle = Math.PI / 6; // 30 degrees
+  const headAngle = Math.PI / 6;
   const x1 = x - size * Math.cos(angle - headAngle);
   const y1 = y - size * Math.sin(angle - headAngle);
   const x2 = x - size * Math.cos(angle + headAngle);

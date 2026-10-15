@@ -14,7 +14,6 @@ export class HistoryManager {
     if (this.undoStack.length > this.maxDepth) {
       this.undoStack.shift();
     }
-    // Any new action clears redo stack
     this.redoStack = [];
   }
 
@@ -50,7 +49,6 @@ export class HistoryManager {
   }
 
   private clone(elements: AnchorElement[]): AnchorElement[] {
-    // Fast deep clone of plain data objects
     return JSON.parse(JSON.stringify(elements));
   }
 }

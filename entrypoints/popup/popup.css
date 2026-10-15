@@ -20,7 +20,6 @@ body {
   gap: 14px;
 }
 
-/* Header */
 .pa-popup-header {
   display: flex;
   align-items: center;
@@ -75,7 +74,6 @@ body {
   color: #ffffff;
 }
 
-/* Card */
 .pa-card {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -119,7 +117,6 @@ body {
   font-weight: 600;
 }
 
-/* Toggle Switch */
 .pa-switch {
   position: relative;
   display: inline-block;
@@ -163,7 +160,6 @@ input:checked + .pa-slider-round:before {
   transform: translateX(20px);
 }
 
-/* Actions Grid */
 .pa-actions-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -205,7 +201,6 @@ input:checked + .pa-slider-round:before {
   color: #64748b;
 }
 
-/* Hint Box */
 .pa-hint-box {
   display: flex;
   align-items: center;

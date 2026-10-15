@@ -80,20 +80,17 @@ describe('Selection & Move All Engine: Multi-Select and Batch Manipulation', () 
     const rect = elements.find((el) => el.id === 'shape-rect-1') as ShapeElement;
     const text = elements.find((el) => el.id === 'text-1') as TextElement;
 
-    // Stroke points shifted
     expect(stroke.points[0]).toEqual({ x: 35, y: 50 });
     expect(stroke.points[2]).toEqual({ x: 55, y: 70 });
     expect(stroke.bbox.minX).toBeLessThan(35);
     expect(stroke.bbox.maxX).toBeGreaterThan(55);
 
-    // Rect shifted
     expect(rect.startX).toBe(75);
     expect(rect.startY).toBe(90);
     expect(rect.endX).toBe(125);
     expect(rect.endY).toBe(120);
     expect(rect.bbox.minX).toBe(70);
 
-    // Text shifted
     expect(text.x).toBe(225);
     expect(text.y).toBe(240);
 
@@ -104,17 +101,13 @@ describe('Selection & Move All Engine: Multi-Select and Batch Manipulation', () 
     engine.selectAll();
     expect(engine.getSelectedElements()).toHaveLength(3);
 
-    // Simulate pointer down on the selected group
     const canvas = container.querySelector('canvas:last-child') as HTMLCanvasElement;
     expect(canvas).not.toBeNull();
 
-    // Move all selected by simulating a pointer drag
-    // Call moveElement directly on all selected
     const selected = engine.getSelectedElements();
     const dx = 50;
     const dy = -20;
 
-    // Direct drag simulation
     (engine as any).selectedElements.forEach((el: AnchorElement) => {
       (engine as any).moveElement(el, dx, dy);
     });

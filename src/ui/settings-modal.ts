@@ -40,7 +40,6 @@ export class SettingsModal {
     const modal = document.createElement('div');
     modal.className = 'pa-modal';
 
-    // Header
     const header = document.createElement('div');
     header.className = 'pa-modal-header';
     header.innerHTML = `
@@ -51,11 +50,9 @@ export class SettingsModal {
       <button class="pa-modal-close" title="Close">${ICONS.close}</button>
     `;
 
-    // Body
     const body = document.createElement('div');
     body.className = 'pa-modal-body';
 
-    // Shortcuts Section
     const shortcutSection = document.createElement('div');
     shortcutSection.innerHTML = `<div class="pa-section-title">Keyboard Shortcuts (Click to Rebind)</div>`;
 
@@ -94,7 +91,6 @@ export class SettingsModal {
     shortcutSection.appendChild(shortcutsList);
     body.appendChild(shortcutSection);
 
-    // Persistence Section
     const persistSection = document.createElement('div');
     persistSection.innerHTML = `<div class="pa-section-title">Persistence & URL Matching</div>`;
 
@@ -129,7 +125,6 @@ export class SettingsModal {
     persistSection.appendChild(urlMatchRow);
     body.appendChild(persistSection);
 
-    // Performance Section
     const perfSection = document.createElement('div');
     perfSection.innerHTML = `<div class="pa-section-title">Optimization</div>`;
 
@@ -156,7 +151,6 @@ export class SettingsModal {
     perfSection.appendChild(perfRow);
     body.appendChild(perfSection);
 
-    // Footer
     const footer = document.createElement('div');
     footer.className = 'pa-modal-footer';
 
@@ -165,7 +159,7 @@ export class SettingsModal {
     resetBtn.textContent = 'Reset to Defaults';
     resetBtn.addEventListener('click', () => {
       this.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
-      this.open(); // Re-render
+      this.open();
     });
 
     const cancelBtn = document.createElement('button');
@@ -217,7 +211,7 @@ export class SettingsModal {
       e.stopPropagation();
 
       const combo = normalizeKeyEvent(e);
-      if (!combo) return; // Wait for non-modifier key
+      if (!combo) return;
 
       this.settings.shortcuts[actionId] = combo;
       btn.textContent = formatShortcutForDisplay(combo);
