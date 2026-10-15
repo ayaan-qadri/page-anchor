@@ -1,13 +1,17 @@
 import { defineBackground } from 'wxt/utils/define-background';
+import { browser } from 'wxt/browser';
 
 export default defineBackground(() => {
-  // Listen for extension commands (e.g. keyboard shortcuts like Alt+D defined in manifest)
-  chrome.commands?.onCommand?.addListener(async (command) => {
+  const ext = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null);
+  if (!ext) return;
+
+  // Listen for extension commands (e.g. keyboard shortcuts like Alt+Shift+D defined in manifest)
+  ext.commands?.onCommand?.addListener(async (command: string) => {
     if (command === 'toggle-drawing-mode') {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
       if (tab?.id) {
         try {
-          await chrome.tabs.sendMessage(tab.id, { type: 'PAGE_ANCHOR_TOGGLE' });
+          await ext.tabs.sendMessage(tab.id, { type: 'PAGE_ANCHOR_TOGGLE' });
         } catch {
           // If content script was not ready, inject or ignore
         }
@@ -15,11 +19,12 @@ export default defineBackground(() => {
     }
   });
 
-  // Handle extension icon click (if popup not opened or triggered via background)
-  chrome.action?.onClicked?.addListener(async (tab) => {
+  // Handle extension icon click (supports MV3 action and MV2 browserAction across Chrome/Firefox/Safari)
+  const actionApi = ext.action || (ext as any).browserAction;
+  actionApi?.onClicked?.addListener(async (tab: any) => {
     if (tab?.id) {
       try {
-        await chrome.tabs.sendMessage(tab.id, { type: 'PAGE_ANCHOR_TOGGLE' });
+        await ext.tabs.sendMessage(tab.id, { type: 'PAGE_ANCHOR_TOGGLE' });
       } catch {
         // Tab does not permit scripting or needs refresh
       }
@@ -27,9 +32,9 @@ export default defineBackground(() => {
   });
 
   // Track URL updates in tabs for SPA routing
-  chrome.tabs?.onUpdated?.addListener((tabId, changeInfo) => {
+  ext.tabs?.onUpdated?.addListener((tabId: number, changeInfo: any) => {
     if (changeInfo.url) {
-      chrome.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_URL_CHANGED', url: changeInfo.url }).catch(() => {});
+      ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_URL_CHANGED', url: changeInfo.url }).catch(() => {});
     }
   });
 });

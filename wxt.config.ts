@@ -2,11 +2,21 @@ import { defineConfig } from 'wxt';
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
-  manifest: {
+  manifest: ({ browser }) => ({
     name: 'Page Anchor - Web Annotation & Drawing',
     description: 'High-performance freehand drawing, shapes, and text annotations directly on web pages with persistent storage and customizable shortcuts.',
     version: '1.0.0',
     permissions: ['storage', 'activeTab'],
+    ...(browser === 'firefox'
+      ? {
+          browser_specific_settings: {
+            gecko: {
+              id: 'page-anchor@extension.local',
+              strict_min_version: '109.0',
+            },
+          },
+        }
+      : {}),
     icons: {
       16: '/icon-16.png',
       32: '/icon-32.png',
@@ -31,5 +41,5 @@ export default defineConfig({
         description: 'Toggle Page Anchor drawing toolbar',
       },
     },
-  },
+  }),
 });

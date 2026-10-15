@@ -167,6 +167,7 @@ export const SHADOW_STYLES = `
   transform: translateX(-50%);
   background: rgba(15, 23, 42, 0.95);
   backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 12px;
   padding: 12px;
@@ -253,6 +254,7 @@ export const SHADOW_STYLES = `
   border-radius: 30px;
   background: rgba(15, 23, 42, 0.9);
   backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #f1f5f9;
   cursor: pointer;
@@ -311,6 +313,7 @@ export const SHADOW_STYLES = `
   inset: 0;
   background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   z-index: 2147483647;
   display: flex;
   align-items: center;

@@ -1,3 +1,4 @@
+import { browser } from 'wxt/browser';
 import { loadSettings } from '../../src/core/storage';
 import { formatShortcutForDisplay } from '../../src/core/shortcuts';
 
@@ -10,6 +11,9 @@ async function initPopup() {
   const optionsBtn = document.getElementById('btn-options') as HTMLButtonElement;
   const hintEl = document.getElementById('quick-shortcut-hint') as HTMLElement;
 
+  const ext = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null);
+  if (!ext) return;
+
   // Load user settings for shortcut hint
   const settings = await loadSettings();
   const toggleKey = settings.shortcuts['toggle-active'] || 'Alt+Shift+D';
@@ -19,15 +23,15 @@ async function initPopup() {
 
   // Open Options page
   optionsBtn?.addEventListener('click', () => {
-    if (chrome.runtime.openOptionsPage) {
-      chrome.runtime.openOptionsPage();
-    } else {
-      window.open(chrome.runtime.getURL('options.html'));
+    if (ext.runtime?.openOptionsPage) {
+      ext.runtime.openOptionsPage();
+    } else if ((ext.runtime as any)?.getURL) {
+      window.open((ext.runtime as any).getURL('options.html'));
     }
   });
 
   // Query active tab
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
   if (!tab || tab.id === undefined) {
     pageTitleEl.textContent = 'No active webpage';
     toggleSwitch.disabled = true;
@@ -39,7 +43,7 @@ async function initPopup() {
 
   // Request status from content script
   try {
-    const res = await chrome.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_GET_STATUS' });
+    const res = await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_GET_STATUS' }) as any;
     if (res) {
       toggleSwitch.checked = !!res.active;
       countEl.textContent = `${res.count || 0} annotation${res.count === 1 ? '' : 's'} on page`;
@@ -51,7 +55,7 @@ async function initPopup() {
   // Handle draw mode switch
   toggleSwitch.addEventListener('change', async () => {
     try {
-      const res = await chrome.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_TOGGLE' });
+      const res = await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_TOGGLE' }) as any;
       toggleSwitch.checked = !!res?.active;
       if (res?.count !== undefined) {
         countEl.textContent = `${res.count} annotation${res.count === 1 ? '' : 's'} on page`;
@@ -65,7 +69,7 @@ async function initPopup() {
   // Handle Export
   exportBtn.addEventListener('click', async () => {
     try {
-      await chrome.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_EXPORT' });
+      await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_EXPORT' });
       window.close();
     } catch {
       alert('Could not export. Please ensure the page allows extension scripts.');
@@ -76,7 +80,7 @@ async function initPopup() {
   clearBtn.addEventListener('click', async () => {
     if (confirm('Are you sure you want to clear all annotations on this page?')) {
       try {
-        await chrome.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_CLEAR' });
+        await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_CLEAR' });
         countEl.textContent = '0 annotations on page';
       } catch {
         alert('Could not clear annotations.');

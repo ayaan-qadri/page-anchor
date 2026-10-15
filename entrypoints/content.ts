@@ -203,8 +203,9 @@ export default defineContentScript({
         }
       });
 
-      // Listen for messages from background/popup
-      chrome.runtime?.onMessage?.addListener((msg, _sender, sendResponse) => {
+      // Listen for messages from background/popup across all browsers
+      const runtime = typeof browser !== 'undefined' ? browser.runtime : (typeof chrome !== 'undefined' ? chrome.runtime : null);
+      runtime?.onMessage?.addListener((msg: any, _sender: any, sendResponse: (r?: any) => void) => {
         if (msg.type === 'PAGE_ANCHOR_TOGGLE') {
           toolbar.toggleDrawingMode(true);
           sendResponse({ active: engine.getActiveMode(), count: engine.getElements().length });

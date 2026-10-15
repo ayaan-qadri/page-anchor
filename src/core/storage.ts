@@ -103,71 +103,109 @@ const SETTINGS_KEY = 'page_anchor_settings';
 /**
  * Safely accesses storage across Chrome, Edge, Firefox, and Safari.
  */
-function getStorage(): chrome.storage.StorageArea | null {
-  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    return chrome.storage.local;
-  }
-  if (typeof browser !== 'undefined' && (browser as any).storage && (browser as any).storage.local) {
+function getStorage(): any {
+  if (typeof browser !== 'undefined' && (browser as any)?.storage?.local) {
     return (browser as any).storage.local;
+  }
+  if (typeof chrome !== 'undefined' && chrome?.storage?.local) {
+    return chrome.storage.local;
   }
   return null;
 }
 
-export async function loadSettings(): Promise<ExtensionSettings> {
-  const storage = getStorage();
-  if (!storage) return DEFAULT_SETTINGS;
+function hasRuntimeError(): boolean {
+  if (typeof chrome !== 'undefined' && chrome.runtime?.lastError) return true;
+  if (typeof browser !== 'undefined' && (browser as any)?.runtime?.lastError) return true;
+  return false;
+}
 
+function getRuntimeError(): any {
+  if (typeof chrome !== 'undefined' && chrome.runtime?.lastError) return chrome.runtime.lastError;
+  if (typeof browser !== 'undefined' && (browser as any)?.runtime?.lastError) return (browser as any).runtime.lastError;
+  return null;
+}
+
+async function storageGet(key: string | null): Promise<Record<string, any> | null> {
+  const storage = getStorage();
+  if (!storage) return null;
   return new Promise((resolve) => {
-    storage.get(SETTINGS_KEY, (result: Record<string, any>) => {
-      const stored = result?.[SETTINGS_KEY] as Partial<ExtensionSettings> | undefined;
-      if (chrome.runtime.lastError || !stored) {
-        resolve(DEFAULT_SETTINGS);
-      } else {
-        resolve({
-          ...DEFAULT_SETTINGS,
-          ...stored,
-          shortcuts: {
-            ...DEFAULT_SETTINGS.shortcuts,
-            ...(stored.shortcuts || {}),
-          },
-        });
+    try {
+      const res = storage.get(key as any, (data: any) => {
+        if (hasRuntimeError()) resolve(null);
+        else resolve(data || null);
+      });
+      if (res && typeof (res as any).then === 'function') {
+        (res as Promise<any>).then((data) => resolve(data || null)).catch(() => resolve(null));
       }
-    });
+    } catch {
+      resolve(null);
+    }
   });
+}
+
+async function storageSet(data: Record<string, any>): Promise<void> {
+  const storage = getStorage();
+  if (!storage) return;
+  return new Promise((resolve, reject) => {
+    try {
+      const res = storage.set(data, () => {
+        if (hasRuntimeError()) reject(getRuntimeError());
+        else resolve();
+      });
+      if (res && typeof (res as any).then === 'function') {
+        (res as Promise<any>).then(resolve).catch(reject);
+      }
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+async function storageRemove(key: string): Promise<void> {
+  const storage = getStorage();
+  if (!storage) return;
+  return new Promise((resolve, reject) => {
+    try {
+      const res = storage.remove(key, () => {
+        if (hasRuntimeError()) reject(getRuntimeError());
+        else resolve();
+      });
+      if (res && typeof (res as any).then === 'function') {
+        (res as Promise<any>).then(resolve).catch(reject);
+      }
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+export async function loadSettings(): Promise<ExtensionSettings> {
+  const result = await storageGet(SETTINGS_KEY);
+  const stored = result?.[SETTINGS_KEY] as Partial<ExtensionSettings> | undefined;
+  if (!stored) return DEFAULT_SETTINGS;
+
+  return {
+    ...DEFAULT_SETTINGS,
+    ...stored,
+    shortcuts: {
+      ...DEFAULT_SETTINGS.shortcuts,
+      ...(stored.shortcuts || {}),
+    },
+  };
 }
 
 export async function saveSettings(settings: Partial<ExtensionSettings>): Promise<void> {
-  const storage = getStorage();
-  if (!storage) return;
-
   const current = await loadSettings();
   const merged = { ...current, ...settings };
-
-  return new Promise((resolve, reject) => {
-    storage.set({ [SETTINGS_KEY]: merged }, () => {
-      if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
-      else resolve();
-    });
-  });
+  await storageSet({ [SETTINGS_KEY]: merged });
 }
 
 export async function loadPageData(rawUrl: string): Promise<PageAnchorData | null> {
-  const storage = getStorage();
-  if (!storage) return null;
-
   const settings = await loadSettings();
   const normalized = normalizeUrl(rawUrl, settings.urlMatchMode);
   const key = getStorageKey(normalized);
-
-  return new Promise((resolve) => {
-    storage.get(key, (res) => {
-      if (chrome.runtime.lastError || !res || !res[key]) {
-        resolve(null);
-      } else {
-        resolve(res[key] as PageAnchorData);
-      }
-    });
-  });
+  const res = await storageGet(key);
+  return (res?.[key] as PageAnchorData) || null;
 }
 
 export async function savePageData(
@@ -175,9 +213,6 @@ export async function savePageData(
   elements: AnchorElement[],
   pageTitle: string
 ): Promise<void> {
-  const storage = getStorage();
-  if (!storage) return;
-
   const settings = await loadSettings();
   const normalized = normalizeUrl(rawUrl, settings.urlMatchMode);
   const key = getStorageKey(normalized);
@@ -190,116 +225,64 @@ export async function savePageData(
   const data: PageAnchorData = {
     url: rawUrl,
     normalizedUrl: normalized,
-    pageTitle: pageTitle || document.title || rawUrl,
+    pageTitle: pageTitle || (typeof document !== 'undefined' ? document.title : '') || rawUrl,
     updatedAt: Date.now(),
     elements,
   };
 
-  return new Promise((resolve, reject) => {
-    storage.set({ [key]: data }, async () => {
-      if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
-        return;
-      }
-      // Update global index
-      await updateIndexEntry({
-        normalizedUrl: normalized,
-        url: rawUrl,
-        pageTitle: data.pageTitle,
-        updatedAt: data.updatedAt,
-        elementCount: elements.length,
-      });
-      resolve();
-    });
+  await storageSet({ [key]: data });
+  await updateIndexEntry({
+    normalizedUrl: normalized,
+    url: rawUrl,
+    pageTitle: data.pageTitle,
+    updatedAt: data.updatedAt,
+    elementCount: elements.length,
   });
 }
 
 export async function clearPageData(rawUrl: string): Promise<void> {
-  const storage = getStorage();
-  if (!storage) return;
-
   const settings = await loadSettings();
   const normalized = normalizeUrl(rawUrl, settings.urlMatchMode);
   const key = getStorageKey(normalized);
 
-  return new Promise((resolve, reject) => {
-    storage.remove(key, async () => {
-      if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
-        return;
-      }
-      await removeIndexEntry(normalized);
-      resolve();
-    });
-  });
+  await storageRemove(key);
+  await removeIndexEntry(normalized);
 }
 
 async function updateIndexEntry(entry: PageMetadataSummary): Promise<void> {
-  const storage = getStorage();
-  if (!storage) return;
-
-  return new Promise((resolve) => {
-    storage.get(INDEX_KEY, (res: Record<string, any>) => {
-      const index = (res?.[INDEX_KEY] || {}) as Record<string, PageMetadataSummary>;
-      index[entry.normalizedUrl] = entry;
-      storage.set({ [INDEX_KEY]: index }, () => resolve());
-    });
-  });
+  const res = await storageGet(INDEX_KEY);
+  const index = (res?.[INDEX_KEY] || {}) as Record<string, PageMetadataSummary>;
+  index[entry.normalizedUrl] = entry;
+  await storageSet({ [INDEX_KEY]: index });
 }
 
 async function removeIndexEntry(normalizedUrl: string): Promise<void> {
-  const storage = getStorage();
-  if (!storage) return;
-
-  return new Promise((resolve) => {
-    storage.get(INDEX_KEY, (res: Record<string, any>) => {
-      const index = (res?.[INDEX_KEY] || {}) as Record<string, PageMetadataSummary>;
-      if (index[normalizedUrl]) {
-        delete index[normalizedUrl];
-        storage.set({ [INDEX_KEY]: index }, () => resolve());
-      } else {
-        resolve();
-      }
-    });
-  });
+  const res = await storageGet(INDEX_KEY);
+  const index = (res?.[INDEX_KEY] || {}) as Record<string, PageMetadataSummary>;
+  if (index[normalizedUrl]) {
+    delete index[normalizedUrl];
+    await storageSet({ [INDEX_KEY]: index });
+  }
 }
 
 export async function getAllSavedPagesSummary(): Promise<PageMetadataSummary[]> {
-  const storage = getStorage();
-  if (!storage) return [];
-
-  return new Promise((resolve) => {
-    storage.get(INDEX_KEY, (res: Record<string, any>) => {
-      const index = (res?.[INDEX_KEY] || {}) as Record<string, PageMetadataSummary>;
-      const list = Object.values(index);
-      list.sort((a, b) => b.updatedAt - a.updatedAt);
-      resolve(list);
-    });
-  });
+  const res = await storageGet(INDEX_KEY);
+  const index = (res?.[INDEX_KEY] || {}) as Record<string, PageMetadataSummary>;
+  const list = Object.values(index);
+  list.sort((a, b) => b.updatedAt - a.updatedAt);
+  return list;
 }
 
 export async function exportAllDataAsJson(): Promise<string> {
-  const storage = getStorage();
-  if (!storage) return '{}';
-
-  return new Promise((resolve) => {
-    storage.get(null, (allData: Record<string, any>) => {
-      resolve(JSON.stringify(allData, null, 2));
-    });
-  });
+  const allData = await storageGet(null);
+  return JSON.stringify(allData || {}, null, 2);
 }
 
 export async function importDataFromJson(jsonStr: string): Promise<boolean> {
-  const storage = getStorage();
-  if (!storage) return false;
-
   try {
     const parsed = JSON.parse(jsonStr);
-    return new Promise((resolve) => {
-      storage.set(parsed, () => {
-        resolve(!chrome.runtime.lastError);
-      });
-    });
+    await storageSet(parsed);
+    return true;
   } catch {
     return false;
   }
