@@ -11,7 +11,7 @@ async function initPopup() {
   const optionsBtn = document.getElementById('btn-options') as HTMLButtonElement;
   const hintEl = document.getElementById('quick-shortcut-hint') as HTMLElement;
 
-  const ext = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null);
+  const ext: any = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null);
   if (!ext) return;
 
   const settings = await loadSettings();
@@ -48,6 +48,29 @@ async function initPopup() {
     }
   };
 
+  async function injectContentScript(): Promise<boolean> {
+    try {
+      if (ext.scripting?.executeScript) {
+        await ext.scripting.executeScript({
+          target: { tabId },
+          files: ['content-scripts/content.js'],
+        });
+        return true;
+      } else if (ext.tabs?.executeScript) {
+        await new Promise<void>((resolve, reject) => {
+          ext.tabs.executeScript(tabId, { file: 'content-scripts/content.js' }, () => {
+            if (ext.runtime?.lastError) reject(ext.runtime.lastError);
+            else resolve();
+          });
+        });
+        return true;
+      }
+    } catch {
+      return false;
+    }
+    return false;
+  }
+
   try {
     const res = await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_GET_STATUS' }) as any;
     if (res) {
@@ -55,7 +78,22 @@ async function initPopup() {
       countEl.textContent = `${res.count || 0} annotation${res.count === 1 ? '' : 's'} on page`;
     }
   } catch {
-    countEl.textContent = 'Anchor ready to activate';
+    const injected = await injectContentScript();
+    if (injected) {
+      setTimeout(async () => {
+        try {
+          const res = await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_GET_STATUS' }) as any;
+          if (res) {
+            toggleSwitch.checked = !!res.active;
+            countEl.textContent = `${res.count || 0} annotation${res.count === 1 ? '' : 's'} on page`;
+          }
+        } catch {
+          countEl.textContent = 'Anchor ready to activate';
+        }
+      }, 120);
+    } else {
+      countEl.textContent = 'Anchor ready to activate';
+    }
   }
 
   toggleSwitch.addEventListener('change', async () => {
@@ -67,8 +105,25 @@ async function initPopup() {
       }
       announce(res?.active ? 'Drawing toolbar enabled' : 'Drawing toolbar disabled');
     } catch {
-      countEl.textContent = 'Please refresh the webpage';
-      announce('Could not connect to webpage. Please refresh.');
+      const injected = await injectContentScript();
+      if (injected) {
+        setTimeout(async () => {
+          try {
+            const res = await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_TOGGLE' }) as any;
+            toggleSwitch.checked = !!res?.active;
+            if (res?.count !== undefined) {
+              countEl.textContent = `${res.count} annotation${res.count === 1 ? '' : 's'} on page`;
+            }
+            announce(res?.active ? 'Drawing toolbar enabled' : 'Drawing toolbar disabled');
+          } catch {
+            countEl.textContent = 'Please refresh the webpage';
+            announce('Could not connect to webpage. Please refresh.');
+          }
+        }, 120);
+      } else {
+        countEl.textContent = 'Please refresh the webpage';
+        announce('Could not connect to webpage. Please refresh.');
+      }
     }
   });
 

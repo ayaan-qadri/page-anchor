@@ -5,7 +5,11 @@ export default defineConfig({
     name: 'Page Anchor - Web Annotation & Drawing',
     description: 'High-performance freehand drawing, shapes, and text annotations directly on web pages with persistent storage and customizable shortcuts.',
     version: '1.0.0',
-    permissions: ['storage', 'activeTab'],
+    permissions: [
+      'storage',
+      'activeTab',
+      ...(browser === 'firefox' || browser === 'safari' ? [] : ['scripting']),
+    ],
     ...(browser === 'firefox'
       ? {
           browser_specific_settings: {

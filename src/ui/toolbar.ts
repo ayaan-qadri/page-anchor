@@ -122,6 +122,12 @@ export class FloatingToolbar {
     if (this.settings.showFloatingPill === false) {
       this.pillButton.style.display = 'none';
     }
+
+    window.addEventListener('resize', () => {
+      if (this.wrapper.style.display !== 'none') {
+        this.ensureVisibleInViewport();
+      }
+    }, { passive: true });
   }
 
   public setSettings(settings: ExtensionSettings): void {
@@ -169,6 +175,7 @@ export class FloatingToolbar {
       this.wrapper.style.display = 'block';
       this.pillButton.classList.add('active');
       this.pillButton.setAttribute('aria-expanded', 'true');
+      this.ensureVisibleInViewport();
     } else {
       this.wrapper.style.display = 'none';
       this.pillButton.classList.remove('active');
@@ -181,6 +188,32 @@ export class FloatingToolbar {
       saveSettings({ isToolbarOpen: active }).catch(() => {});
     }
     this.callbacks.onToggleActive?.(active);
+  }
+
+  public ensureVisibleInViewport(): void {
+    if (!this.wrapper || this.wrapper.style.display === 'none') return;
+    if (!this.settings.toolbarPosition) return;
+
+    const rect = this.wrapper.getBoundingClientRect();
+    const w = rect.width || 440;
+    const h = rect.height || 50;
+    const padding = 10;
+
+    const maxX = Math.max(padding, window.innerWidth - w - padding);
+    const maxY = Math.max(padding, window.innerHeight - h - padding);
+
+    const curLeft = parseFloat(this.wrapper.style.left) || rect.left;
+    const curTop = parseFloat(this.wrapper.style.top) || rect.top;
+
+    const clampX = Math.max(padding, Math.min(maxX, curLeft));
+    const clampY = Math.max(padding, Math.min(maxY, curTop));
+
+    if (curLeft !== clampX || curTop !== clampY) {
+      this.wrapper.style.transform = 'none';
+      this.wrapper.style.left = `${clampX}px`;
+      this.wrapper.style.top = `${clampY}px`;
+      this.settings.toolbarPosition = { x: clampX, y: clampY };
+    }
   }
 
   public toggleDrawingMode(persist = true): void {

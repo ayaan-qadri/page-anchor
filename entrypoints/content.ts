@@ -2,7 +2,7 @@ import { defineContentScript } from 'wxt/utils/define-content-script';
 import { CanvasEngine } from '../src/core/engine';
 import { HistoryManager } from '../src/core/history';
 import { ShortcutManager } from '../src/core/shortcuts';
-import { clearPageData, loadPageData, loadSettings, savePageData } from '../src/core/storage';
+import { clearPageData, loadPageData, loadSettings, savePageData, DEFAULT_SETTINGS } from '../src/core/storage';
 import { AnchorElement, ExtensionSettings } from '../src/core/types';
 import { SHADOW_STYLES } from '../src/ui/styles';
 import { TextEditorOverlay } from '../src/ui/text-editor';
@@ -10,9 +10,10 @@ import { FloatingToolbar } from '../src/ui/toolbar';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
-  runAt: 'document_idle',
+  runAt: 'document_end',
   main() {
-    if (document.getElementById('page-anchor-host')) return;
+    const existing = document.getElementById('page-anchor-host');
+    if (existing && existing.shadowRoot) return;
 
     const host = document.createElement('div');
     host.id = 'page-anchor-host';
@@ -22,7 +23,7 @@ export default defineContentScript({
     host.style.width = '0';
     host.style.height = '0';
     host.style.overflow = 'visible';
-    host.style.zIndex = '2147483640';
+    host.style.zIndex = '2147483647';
 
     const shadowRoot = host.attachShadow({ mode: 'open' });
 
@@ -34,52 +35,132 @@ export default defineContentScript({
     uiContainer.className = 'page-anchor-ui-root';
     shadowRoot.appendChild(uiContainer);
 
-    document.documentElement.appendChild(host);
+    const ensureHostAttached = () => {
+      if (!host.isConnected) {
+        const root = document.documentElement || document.body;
+        if (root) root.appendChild(host);
+      }
+    };
 
-    let settings: ExtensionSettings;
-    let engine: CanvasEngine;
-    let history: HistoryManager;
-    let textEditor: TextEditorOverlay;
-    let toolbar: FloatingToolbar;
-    let shortcutManager: ShortcutManager;
+    ensureHostAttached();
 
+    if (typeof MutationObserver !== 'undefined' && document.documentElement) {
+      const observer = new MutationObserver(() => {
+        if (!host.isConnected) {
+          ensureHostAttached();
+        }
+      });
+      observer.observe(document.documentElement, { childList: true });
+    }
+
+    let settings: ExtensionSettings = { ...DEFAULT_SETTINGS };
     let currentLoadedUrl = window.location.href;
     let saveTimeout: number | null = null;
 
     const triggerSave = (elements: AnchorElement[]) => {
       if (saveTimeout) clearTimeout(saveTimeout);
       saveTimeout = window.setTimeout(async () => {
-        await savePageData(currentLoadedUrl, elements, document.title);
-        toolbar?.updateBadge();
+        try {
+          await savePageData(currentLoadedUrl, elements, document.title);
+          toolbar?.updateBadge();
+        } catch {}
       }, 250);
     };
 
     const flushSave = async () => {
       if (engine && currentLoadedUrl) {
-        await savePageData(currentLoadedUrl, engine.getElements(), document.title);
+        try {
+          await savePageData(currentLoadedUrl, engine.getElements(), document.title);
+        } catch {}
       }
     };
+
+    const history = new HistoryManager([]);
+    const textEditor = new TextEditorOverlay(uiContainer);
+
+    const engine = new CanvasEngine(uiContainer, {
+      onElementsChange: (elements) => {
+        history.pushState(elements);
+        toolbar.updateHistoryButtons();
+        toolbar.updateBadge();
+        triggerSave(elements);
+      },
+      onTextCreateRequested: (pt) => {
+        textEditor.open(
+          pt,
+          {
+            fontSize: settings.defaultFontSize,
+            fontColor: settings.defaultStrokeColor,
+          },
+          (textEl) => {
+            engine.addElement(textEl);
+          }
+        );
+      },
+    });
+
+    const toolbar = new FloatingToolbar(
+      uiContainer,
+      engine,
+      history,
+      textEditor,
+      settings,
+      {
+        onToggleActive: () => {
+          ensureHostAttached();
+        },
+        onClear: () => {
+          triggerSave(engine.getElements());
+        },
+        onExport: () => {
+          exportSnapshot();
+        },
+        onSettingsUpdate: (newSettings) => {
+          settings = newSettings;
+          shortcutManager.setShortcuts(settings.shortcuts);
+        },
+      }
+    );
+
+    const shortcutManager = new ShortcutManager(settings.shortcuts, () => engine.getActiveMode());
+    shortcutManager.addListener((action) => {
+      ensureHostAttached();
+      handleShortcutAction(action);
+    });
+    shortcutManager.attach();
+
+    window.addEventListener('keydown', (e) => {
+      if (!engine.getActiveMode()) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const target = e.target as HTMLElement | null;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+        engine.deleteSelected();
+      }
+    });
 
     const handleUrlChange = async () => {
       const newUrl = window.location.href;
       if (newUrl === currentLoadedUrl) return;
 
+      ensureHostAttached();
+
       if (engine && currentLoadedUrl) {
-        await savePageData(currentLoadedUrl, engine.getElements(), document.title);
+        try {
+          await savePageData(currentLoadedUrl, engine.getElements(), document.title);
+        } catch {}
       }
 
       currentLoadedUrl = newUrl;
 
-      const saved = await loadPageData(currentLoadedUrl);
-      const newElements = saved?.elements || [];
+      try {
+        const saved = await loadPageData(currentLoadedUrl);
+        const newElements = saved?.elements || [];
 
-      history?.reset(newElements);
-      engine?.setElements(newElements);
-      toolbar?.updateBadge();
-      toolbar?.updateHistoryButtons();
-
-      const latestSettings = await loadSettings();
-      toolbar?.setDrawingMode(!!latestSettings.isToolbarOpen, false);
+        history.reset(newElements);
+        engine.setElements(newElements);
+        toolbar.updateBadge();
+        toolbar.updateHistoryButtons();
+      } catch {}
     };
 
     window.addEventListener('beforeunload', () => {
@@ -115,101 +196,57 @@ export default defineContentScript({
       }
     }, 500);
 
+    const runtime = typeof browser !== 'undefined' ? browser.runtime : (typeof chrome !== 'undefined' ? chrome.runtime : null);
+    runtime?.onMessage?.addListener((msg: any, _sender: any, sendResponse: (r?: any) => void) => {
+      ensureHostAttached();
+      if (msg.type === 'PAGE_ANCHOR_TOGGLE') {
+        toolbar.toggleDrawingMode(true);
+        sendResponse({ active: engine.getActiveMode(), count: engine.getElements().length });
+      } else if (msg.type === 'PAGE_ANCHOR_GET_STATUS') {
+        sendResponse({
+          active: engine.getActiveMode(),
+          count: engine.getElements().length,
+          url: currentLoadedUrl,
+          title: document.title,
+        });
+      } else if (msg.type === 'PAGE_ANCHOR_CLEAR') {
+        history.pushState([]);
+        engine.clear();
+        clearPageData(currentLoadedUrl).catch(() => {});
+        toolbar.updateBadge();
+        toolbar.updateHistoryButtons();
+        sendResponse({ success: true });
+      } else if (msg.type === 'PAGE_ANCHOR_EXPORT') {
+        exportSnapshot();
+        sendResponse({ success: true });
+      } else if (msg.type === 'PAGE_ANCHOR_URL_CHANGED') {
+        handleUrlChange();
+        sendResponse({ success: true });
+      }
+      return true;
+    });
+
     (async () => {
-      settings = await loadSettings();
-
-      textEditor = new TextEditorOverlay(uiContainer);
-
-      engine = new CanvasEngine(uiContainer, {
-        onElementsChange: (elements) => {
-          history.pushState(elements);
-          toolbar.updateHistoryButtons();
-          toolbar.updateBadge();
-          triggerSave(elements);
-        },
-        onTextCreateRequested: (pt) => {
-          textEditor.open(
-            pt,
-            {
-              fontSize: settings.defaultFontSize,
-              fontColor: settings.defaultStrokeColor,
-            },
-            (textEl) => {
-              engine.addElement(textEl);
-            }
-          );
-        },
-      });
-
-      const saved = await loadPageData(window.location.href);
-      const initialElements = saved?.elements || [];
-      history = new HistoryManager(initialElements);
-      engine.setElements(initialElements);
-
-      toolbar = new FloatingToolbar(
-        uiContainer,
-        engine,
-        history,
-        textEditor,
-        settings,
-        {
-          onToggleActive: () => {},
-          onClear: () => {
-            triggerSave(engine.getElements());
-          },
-          onExport: () => {
-            exportSnapshot();
-          },
-          onSettingsUpdate: (newSettings) => {
-            settings = newSettings;
-            shortcutManager.setShortcuts(settings.shortcuts);
-          },
+      try {
+        const loadedSettings = await loadSettings();
+        if (loadedSettings) {
+          settings = loadedSettings;
+          toolbar.setSettings(settings);
+          shortcutManager.setShortcuts(settings.shortcuts);
+          if (settings.isToolbarOpen) {
+            toolbar.setDrawingMode(true, false);
+          }
         }
-      );
+      } catch {}
 
-      shortcutManager = new ShortcutManager(settings.shortcuts, () => engine.getActiveMode());
-      shortcutManager.addListener((action) => {
-        handleShortcutAction(action);
-      });
-      shortcutManager.attach();
-
-      window.addEventListener('keydown', (e) => {
-        if (!engine.getActiveMode()) return;
-        if (e.key === 'Delete' || e.key === 'Backspace') {
-          const target = e.target as HTMLElement | null;
-          if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
-          engine.deleteSelected();
-        }
-      });
-
-      const runtime = typeof browser !== 'undefined' ? browser.runtime : (typeof chrome !== 'undefined' ? chrome.runtime : null);
-      runtime?.onMessage?.addListener((msg: any, _sender: any, sendResponse: (r?: any) => void) => {
-        if (msg.type === 'PAGE_ANCHOR_TOGGLE') {
-          toolbar.toggleDrawingMode(true);
-          sendResponse({ active: engine.getActiveMode(), count: engine.getElements().length });
-        } else if (msg.type === 'PAGE_ANCHOR_GET_STATUS') {
-          sendResponse({
-            active: engine.getActiveMode(),
-            count: engine.getElements().length,
-            url: currentLoadedUrl,
-            title: document.title,
-          });
-        } else if (msg.type === 'PAGE_ANCHOR_CLEAR') {
-          history.pushState([]);
-          engine.clear();
-          clearPageData(currentLoadedUrl);
-          toolbar.updateBadge();
-          toolbar.updateHistoryButtons();
-          sendResponse({ success: true });
-        } else if (msg.type === 'PAGE_ANCHOR_EXPORT') {
-          exportSnapshot();
-          sendResponse({ success: true });
-        } else if (msg.type === 'PAGE_ANCHOR_URL_CHANGED') {
-          handleUrlChange();
-          sendResponse({ success: true });
-        }
-        return true;
-      });
+      try {
+        const saved = await loadPageData(window.location.href);
+        const initialElements = saved?.elements || [];
+        history.reset(initialElements);
+        engine.setElements(initialElements);
+        toolbar.updateBadge();
+        toolbar.updateHistoryButtons();
+      } catch {}
     })();
 
     function handleShortcutAction(action: string): void {
