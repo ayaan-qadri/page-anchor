@@ -30,12 +30,16 @@ export class TextEditorOverlay {
 
     const wrapper = document.createElement('div');
     wrapper.className = 'pa-text-input-wrapper';
+    wrapper.setAttribute('role', 'region');
+    wrapper.setAttribute('aria-label', 'Annotation text input editor');
     wrapper.style.left = `${pt.x - window.scrollX}px`;
     wrapper.style.top = `${pt.y - window.scrollY}px`;
 
     const textarea = document.createElement('textarea');
     textarea.className = 'pa-text-textarea';
     textarea.placeholder = 'Type note... (Enter to save, Esc to cancel)';
+    textarea.setAttribute('aria-label', 'Annotation text note');
+    textarea.setAttribute('aria-description', 'Type note. Press Enter to save, Escape to cancel.');
     textarea.style.fontSize = `${options.fontSize}px`;
     textarea.style.color = options.fontColor;
 

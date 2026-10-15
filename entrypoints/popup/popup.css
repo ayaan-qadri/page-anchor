@@ -198,7 +198,7 @@ input:checked + .pa-slider-round:before {
 
 .pa-action-sub {
   font-size: 10px;
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .pa-hint-box {
@@ -221,4 +221,53 @@ input:checked + .pa-slider-round:before {
   font-family: monospace;
   font-weight: 700;
   color: #ffffff;
+}
+
+/* Accessibility: Focus Visible Indicators (WCAG 2.4.7) */
+:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.pa-icon-btn:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+  border-color: #38bdf8;
+}
+
+.pa-action-card:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+  border-color: #38bdf8;
+}
+
+input:focus-visible + .pa-slider-round {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.4);
+}
+
+/* Screen Reader Only Utility (WCAG 1.1.1, 4.1.2) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Respect Reduced Motion Preferences (WCAG 2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

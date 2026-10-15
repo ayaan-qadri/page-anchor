@@ -43,18 +43,69 @@ async function initOptions() {
   });
 }
 
+function announce(msg: string) {
+  const el = document.getElementById('options-announcer');
+  if (el) {
+    el.textContent = '';
+    requestAnimationFrame(() => {
+      el.textContent = msg;
+    });
+  }
+}
+
 function setupTabs() {
-  const tabs = document.querySelectorAll('.pa-tab-btn');
-  const panes = document.querySelectorAll('.pa-tab-pane');
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.pa-tab-btn'));
+  const panes = Array.from(document.querySelectorAll<HTMLElement>('.pa-tab-pane'));
 
-  tabs.forEach((tab) => {
+  function activateTab(tab: HTMLButtonElement, shouldFocus = true) {
+    tabs.forEach((t) => {
+      t.classList.remove('active');
+      t.setAttribute('aria-selected', 'false');
+      t.setAttribute('tabindex', '-1');
+    });
+    panes.forEach((p) => {
+      p.classList.remove('active');
+      p.hidden = true;
+    });
+
+    tab.classList.add('active');
+    tab.setAttribute('aria-selected', 'true');
+    tab.setAttribute('tabindex', '0');
+
+    const targetId = `tab-${tab.getAttribute('data-tab')}`;
+    const targetPane = document.getElementById(targetId);
+    if (targetPane) {
+      targetPane.classList.add('active');
+      targetPane.hidden = false;
+    }
+
+    if (shouldFocus) {
+      tab.focus();
+    }
+  }
+
+  tabs.forEach((tab, index) => {
     tab.addEventListener('click', () => {
-      tabs.forEach((t) => t.classList.remove('active'));
-      panes.forEach((p) => p.classList.remove('active'));
+      activateTab(tab, false);
+    });
 
-      tab.classList.add('active');
-      const targetId = `tab-${tab.getAttribute('data-tab')}`;
-      document.getElementById(targetId)?.classList.add('active');
+    tab.addEventListener('keydown', (e: KeyboardEvent) => {
+      let nextIndex = index;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        nextIndex = (index + 1) % tabs.length;
+        activateTab(tabs[nextIndex], true);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        nextIndex = (index - 1 + tabs.length) % tabs.length;
+        activateTab(tabs[nextIndex], true);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        activateTab(tabs[0], true);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        activateTab(tabs[tabs.length - 1], true);
+      }
     });
   });
 }
@@ -79,7 +130,11 @@ function renderShortcuts() {
     const badge = document.createElement('button');
     badge.className = 'pa-key-badge';
     badge.textContent = formatShortcutForDisplay(keyVal);
-    badge.title = 'Click to record new keystroke';
+    badge.title = 'Click to record new keystroke (Esc to cancel)';
+    badge.setAttribute(
+      'aria-label',
+      `Rebind shortcut for ${def.name}. Current shortcut is ${formatShortcutForDisplay(keyVal)}`
+    );
 
     badge.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -97,13 +152,35 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
     window.removeEventListener('keydown', recordingHandler, true);
   }
 
+  const def = SHORTCUT_DEFINITIONS.find((d) => d.id === actionId);
+  const actionName = def ? def.name : actionId;
+
   recordingAction = actionId;
   btn.classList.add('recording');
   btn.textContent = 'Press keys...';
+  btn.setAttribute('aria-label', `Recording shortcut for ${actionName}. Press keys, or press Escape to cancel.`);
+  announce(`Recording shortcut for ${actionName}. Press your desired key combination, or press Escape to cancel.`);
 
   recordingHandler = (e: KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if (e.key === 'Escape') {
+      const prevKey = currentSettings.shortcuts[actionId] || (def ? def.defaultKey : '');
+      btn.textContent = formatShortcutForDisplay(prevKey);
+      btn.classList.remove('recording');
+      btn.setAttribute(
+        'aria-label',
+        `Rebind shortcut for ${actionName}. Current shortcut is ${formatShortcutForDisplay(prevKey)}`
+      );
+      if (recordingHandler) {
+        window.removeEventListener('keydown', recordingHandler, true);
+        recordingHandler = null;
+      }
+      recordingAction = null;
+      announce(`Shortcut recording for ${actionName} cancelled.`);
+      return;
+    }
 
     const combo = normalizeKeyEvent(e);
     if (!combo) return;
@@ -111,16 +188,22 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
     currentSettings.shortcuts[actionId] = combo;
     btn.textContent = formatShortcutForDisplay(combo);
     btn.classList.remove('recording');
+    btn.setAttribute(
+      'aria-label',
+      `Rebind shortcut for ${actionName}. Current shortcut is ${formatShortcutForDisplay(combo)}`
+    );
 
     const conflict = getBrowserShortcutConflict(combo);
     if (conflict) {
       btn.style.borderColor = '#f59e0b';
       btn.style.color = '#fbbf24';
       btn.title = `Warning: "${combo}" conflicts with ${conflict.browser} (${conflict.action}). Key may be intercepted by the browser.`;
+      announce(`Shortcut set to ${combo}. Warning: conflicts with ${conflict.browser}`);
     } else {
       btn.style.borderColor = '';
       btn.style.color = '';
       btn.title = 'Click to record new keystroke';
+      announce(`Shortcut for ${actionName} updated to ${combo}`);
     }
 
     if (recordingHandler) {
@@ -223,7 +306,7 @@ async function renderSavedPages() {
   if (countBadge) countBadge.textContent = `${pages.length}`;
 
   if (pages.length === 0) {
-    listContainer.innerHTML = `<div style="color: #64748b; font-size: 13px; padding: 10px 0;">No saved annotations yet. Draw on any web page to see it anchored here!</div>`;
+    listContainer.innerHTML = `<div style="color: #94a3b8; font-size: 13px; padding: 10px 0;">No saved annotations yet. Draw on any web page to see it anchored here!</div>`;
     return;
   }
 
@@ -244,7 +327,7 @@ async function renderSavedPages() {
 
     info.innerHTML = `
       <div class="pa-saved-title">${escapeHtml(page.pageTitle || 'Untitled Page')}</div>
-      <a href="${page.url}" target="_blank" class="pa-saved-url">${escapeHtml(page.url)}</a>
+      <a href="${page.url}" target="_blank" class="pa-saved-url" aria-label="Open ${escapeHtml(page.pageTitle || page.url)} in new tab">${escapeHtml(page.url)}</a>
       <div class="pa-saved-meta">${page.elementCount} elements • Last updated ${dateStr}</div>
     `;
 
@@ -254,10 +337,12 @@ async function renderSavedPages() {
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'pa-btn-danger';
     deleteBtn.textContent = 'Delete';
+    deleteBtn.setAttribute('aria-label', `Delete saved drawings for ${page.pageTitle || page.url}`);
     deleteBtn.addEventListener('click', async () => {
       if (confirm(`Remove all drawings for "${page.pageTitle || page.url}"?`)) {
         await clearPageData(page.url);
         await renderSavedPages();
+        announce(`Deleted annotations for ${page.pageTitle || page.url}`);
       }
     });
 
@@ -283,6 +368,7 @@ function setupBackupRestore() {
     a.download = `page-anchor-backup-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    announce('Backup JSON downloaded successfully');
   });
 
   importBtn?.addEventListener('click', () => {
@@ -298,6 +384,7 @@ function setupBackupRestore() {
       const success = await importDataFromJson(text);
       if (success) {
         if (statusSpan) statusSpan.textContent = 'Backup restored successfully!';
+        announce('Backup restored successfully!');
         currentSettings = await loadSettings();
         renderShortcuts();
         setupDrawingForm();
@@ -305,9 +392,11 @@ function setupBackupRestore() {
         await renderSavedPages();
       } else {
         if (statusSpan) statusSpan.textContent = 'Invalid backup format.';
+        announce('Failed to restore backup: Invalid format.');
       }
     } catch {
       if (statusSpan) statusSpan.textContent = 'Failed to read file.';
+      announce('Failed to read backup file.');
     }
   });
 }
@@ -317,7 +406,10 @@ async function saveCurrentSettings() {
 }
 
 function showToast(msg: string) {
+  announce(msg);
   const toast = document.createElement('div');
+  toast.setAttribute('role', 'status');
+  toast.setAttribute('aria-live', 'polite');
   toast.style.position = 'fixed';
   toast.style.bottom = '24px';
   toast.style.right = '24px';

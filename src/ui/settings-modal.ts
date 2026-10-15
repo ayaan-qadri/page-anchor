@@ -20,6 +20,8 @@ export class SettingsModal {
   private callbacks: SettingsModalCallbacks;
   private recordingAction: ShortcutAction | null = null;
   private recordingKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private previousActiveElement: HTMLElement | null = null;
+  private modalKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(
     container: HTMLElement,
@@ -34,20 +36,25 @@ export class SettingsModal {
   public open(): void {
     this.close();
 
+    this.previousActiveElement = document.activeElement as HTMLElement | null;
+
     const backdrop = document.createElement('div');
     backdrop.className = 'pa-modal-backdrop';
 
     const modal = document.createElement('div');
     modal.className = 'pa-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'pa-settings-modal-title');
 
     const header = document.createElement('div');
     header.className = 'pa-modal-header';
     header.innerHTML = `
-      <div class="pa-modal-title">
+      <div id="pa-settings-modal-title" class="pa-modal-title">
         ${ICONS.settings}
         <span>Page Anchor Settings</span>
       </div>
-      <button class="pa-modal-close" title="Close">${ICONS.close}</button>
+      <button class="pa-modal-close" title="Close" aria-label="Close settings">${ICONS.close}</button>
     `;
 
     const body = document.createElement('div');
@@ -74,9 +81,14 @@ export class SettingsModal {
 
       const currentKey = this.settings.shortcuts[def.id] || def.defaultKey;
       const recordBtn = document.createElement('button');
+      recordBtn.type = 'button';
       recordBtn.className = 'pa-shortcut-record-btn';
       recordBtn.textContent = formatShortcutForDisplay(currentKey);
-      recordBtn.title = 'Click to record new shortcut';
+      recordBtn.title = 'Click to record new shortcut (Esc to cancel)';
+      recordBtn.setAttribute(
+        'aria-label',
+        `Rebind shortcut for ${def.name}. Current shortcut is ${formatShortcutForDisplay(currentKey)}`
+      );
 
       recordBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -96,65 +108,74 @@ export class SettingsModal {
 
     const urlMatchRow = document.createElement('div');
     urlMatchRow.className = 'pa-shortcut-row';
-    urlMatchRow.innerHTML = `
-      <div class="pa-shortcut-info">
-        <span class="pa-shortcut-name">URL Matching Mode</span>
-        <span class="pa-shortcut-desc">How drawings are associated with web pages</span>
-      </div>
-    `;
 
-    const select = document.createElement('select');
-    select.style.background = 'rgba(255, 255, 255, 0.08)';
-    select.style.color = '#ffffff';
-    select.style.border = '1px solid rgba(255, 255, 255, 0.15)';
-    select.style.borderRadius = '6px';
-    select.style.padding = '4px 8px';
-    select.style.outline = 'none';
+    const urlMatchSelect = document.createElement('select');
+    urlMatchSelect.id = 'pa-modal-url-match';
+    urlMatchSelect.style.background = 'rgba(255, 255, 255, 0.08)';
+    urlMatchSelect.style.color = '#ffffff';
+    urlMatchSelect.style.border = '1px solid rgba(255, 255, 255, 0.15)';
+    urlMatchSelect.style.borderRadius = '6px';
+    urlMatchSelect.style.padding = '4px 8px';
+    urlMatchSelect.style.outline = 'none';
+    urlMatchSelect.setAttribute('aria-label', 'URL Matching Mode');
 
-    select.innerHTML = `
+    urlMatchSelect.innerHTML = `
       <option value="clean" ${this.settings.urlMatchMode === 'clean' ? 'selected' : ''}>Clean URL (strip tracking params & hashes)</option>
       <option value="exact" ${this.settings.urlMatchMode === 'exact' ? 'selected' : ''}>Exact URL (preserve all params)</option>
       <option value="domain" ${this.settings.urlMatchMode === 'domain' ? 'selected' : ''}>Entire Domain / Hostname</option>
     `;
 
-    select.addEventListener('change', () => {
-      this.settings.urlMatchMode = select.value as 'clean' | 'exact' | 'domain';
+    urlMatchSelect.addEventListener('change', () => {
+      this.settings.urlMatchMode = urlMatchSelect.value as 'clean' | 'exact' | 'domain';
     });
 
-    urlMatchRow.appendChild(select);
+    const urlMatchInfo = document.createElement('label');
+    urlMatchInfo.htmlFor = 'pa-modal-url-match';
+    urlMatchInfo.className = 'pa-shortcut-info';
+    urlMatchInfo.innerHTML = `
+      <span class="pa-shortcut-name">URL Matching Mode</span>
+      <span class="pa-shortcut-desc">How drawings are associated with web pages</span>
+    `;
+
+    urlMatchRow.appendChild(urlMatchInfo);
+    urlMatchRow.appendChild(urlMatchSelect);
     persistSection.appendChild(urlMatchRow);
     body.appendChild(persistSection);
 
     const perfSection = document.createElement('div');
     perfSection.innerHTML = `<div class="pa-section-title">Optimization</div>`;
 
-    const perfRow = document.createElement('div');
-    perfRow.className = 'pa-shortcut-row';
-    perfRow.innerHTML = `
-      <div class="pa-shortcut-info">
-        <span class="pa-shortcut-name">Zero-Lag Performance Mode</span>
-        <span class="pa-shortcut-desc">Enables spatial frustum culling & adaptive point smoothing</span>
-      </div>
-    `;
-
     const perfCheckbox = document.createElement('input');
+    perfCheckbox.id = 'pa-modal-perf-mode';
     perfCheckbox.type = 'checkbox';
     perfCheckbox.checked = this.settings.performanceMode;
     perfCheckbox.style.cursor = 'pointer';
     perfCheckbox.style.width = '18px';
     perfCheckbox.style.height = '18px';
+    perfCheckbox.setAttribute('aria-label', 'Enable Zero-Lag Performance Mode');
     perfCheckbox.addEventListener('change', () => {
       this.settings.performanceMode = perfCheckbox.checked;
     });
 
-    perfRow.appendChild(perfCheckbox);
-    perfSection.appendChild(perfRow);
+    const perfLabel = document.createElement('label');
+    perfLabel.htmlFor = 'pa-modal-perf-mode';
+    perfLabel.className = 'pa-shortcut-row';
+    perfLabel.style.cursor = 'pointer';
+    perfLabel.innerHTML = `
+      <div class="pa-shortcut-info">
+        <span class="pa-shortcut-name">Zero-Lag Performance Mode</span>
+        <span class="pa-shortcut-desc">Enables spatial frustum culling & adaptive point smoothing</span>
+      </div>
+    `;
+    perfLabel.appendChild(perfCheckbox);
+    perfSection.appendChild(perfLabel);
     body.appendChild(perfSection);
 
     const footer = document.createElement('div');
     footer.className = 'pa-modal-footer';
 
     const resetBtn = document.createElement('button');
+    resetBtn.type = 'button';
     resetBtn.className = 'pa-action-btn pa-btn-secondary';
     resetBtn.textContent = 'Reset to Defaults';
     resetBtn.addEventListener('click', () => {
@@ -163,11 +184,13 @@ export class SettingsModal {
     });
 
     const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
     cancelBtn.className = 'pa-action-btn pa-btn-secondary';
     cancelBtn.textContent = 'Cancel';
     cancelBtn.addEventListener('click', () => this.close());
 
     const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
     saveBtn.className = 'pa-action-btn pa-btn-primary';
     saveBtn.textContent = 'Save Settings';
     saveBtn.addEventListener('click', async () => {
@@ -185,7 +208,8 @@ export class SettingsModal {
     modal.appendChild(footer);
     backdrop.appendChild(modal);
 
-    header.querySelector('.pa-modal-close')?.addEventListener('click', () => this.close());
+    const closeBtn = header.querySelector('.pa-modal-close') as HTMLElement;
+    closeBtn?.addEventListener('click', () => this.close());
 
     backdrop.addEventListener('click', (e) => {
       if (e.target === backdrop) {
@@ -193,8 +217,50 @@ export class SettingsModal {
       }
     });
 
+    // Focus Trap & Keyboard Handling (WCAG 2.1.2, 2.4.3)
+    this.modalKeydownHandler = (e: KeyboardEvent) => {
+      if (this.recordingAction) {
+        // While actively recording a shortcut key, let the recording key handler handle it
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.close();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const focusable = Array.from(
+          modal.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        );
+        if (focusable.length === 0) return;
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', this.modalKeydownHandler, true);
+
     this.container.appendChild(backdrop);
     this.currentModal = backdrop;
+
+    // Initial focus on close button or first interactive element
+    setTimeout(() => {
+      closeBtn?.focus();
+    }, 50);
   }
 
   private startRecording(actionId: ShortcutAction, btn: HTMLButtonElement): void {
@@ -202,13 +268,33 @@ export class SettingsModal {
       window.removeEventListener('keydown', this.recordingKeyHandler, true);
     }
 
+    const def = SHORTCUT_DEFINITIONS.find((d) => d.id === actionId);
+    const actionName = def ? def.name : actionId;
+
     this.recordingAction = actionId;
     btn.classList.add('recording');
     btn.textContent = 'Press keys...';
+    btn.setAttribute('aria-label', `Recording shortcut for ${actionName}. Press keys, or press Escape to cancel.`);
 
     this.recordingKeyHandler = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
+
+      if (e.key === 'Escape') {
+        const prevKey = this.settings.shortcuts[actionId] || (def ? def.defaultKey : '');
+        btn.textContent = formatShortcutForDisplay(prevKey);
+        btn.classList.remove('recording');
+        btn.setAttribute(
+          'aria-label',
+          `Rebind shortcut for ${actionName}. Current shortcut is ${formatShortcutForDisplay(prevKey)}`
+        );
+        if (this.recordingKeyHandler) {
+          window.removeEventListener('keydown', this.recordingKeyHandler, true);
+          this.recordingKeyHandler = null;
+        }
+        this.recordingAction = null;
+        return;
+      }
 
       const combo = normalizeKeyEvent(e);
       if (!combo) return;
@@ -216,6 +302,10 @@ export class SettingsModal {
       this.settings.shortcuts[actionId] = combo;
       btn.textContent = formatShortcutForDisplay(combo);
       btn.classList.remove('recording');
+      btn.setAttribute(
+        'aria-label',
+        `Rebind shortcut for ${actionName}. Current shortcut is ${formatShortcutForDisplay(combo)}`
+      );
 
       const conflict = getBrowserShortcutConflict(combo);
       if (conflict) {
@@ -243,10 +333,19 @@ export class SettingsModal {
       window.removeEventListener('keydown', this.recordingKeyHandler, true);
       this.recordingKeyHandler = null;
     }
+    if (this.modalKeydownHandler) {
+      window.removeEventListener('keydown', this.modalKeydownHandler, true);
+      this.modalKeydownHandler = null;
+    }
     if (this.currentModal) {
       this.currentModal.remove();
       this.currentModal = null;
     }
+
+    // Restore focus to previously active element
+    this.previousActiveElement?.focus();
+    this.previousActiveElement = null;
+
     this.callbacks.onClose?.();
   }
 }

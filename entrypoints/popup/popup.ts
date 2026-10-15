@@ -38,6 +38,16 @@ async function initPopup() {
   const tabId = tab.id;
   pageTitleEl.textContent = tab.title || tab.url || 'Webpage';
 
+  const announcer = document.getElementById('popup-announcer');
+  const announce = (msg: string) => {
+    if (announcer) {
+      announcer.textContent = '';
+      requestAnimationFrame(() => {
+        announcer.textContent = msg;
+      });
+    }
+  };
+
   try {
     const res = await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_GET_STATUS' }) as any;
     if (res) {
@@ -55,14 +65,17 @@ async function initPopup() {
       if (res?.count !== undefined) {
         countEl.textContent = `${res.count} annotation${res.count === 1 ? '' : 's'} on page`;
       }
+      announce(res?.active ? 'Drawing toolbar enabled' : 'Drawing toolbar disabled');
     } catch {
       countEl.textContent = 'Please refresh the webpage';
+      announce('Could not connect to webpage. Please refresh.');
     }
   });
 
   exportBtn.addEventListener('click', async () => {
     try {
       await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_EXPORT' });
+      announce('Drawing exported as PNG');
       window.close();
     } catch {
       alert('Could not export. Please ensure the page allows extension scripts.');
@@ -74,6 +87,7 @@ async function initPopup() {
       try {
         await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_CLEAR' });
         countEl.textContent = '0 annotations on page';
+        announce('All annotations cleared');
       } catch {
         alert('Could not clear annotations.');
       }

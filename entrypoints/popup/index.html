@@ -7,49 +7,49 @@
     <link rel="stylesheet" href="./popup.css" />
   </head>
   <body>
-    <div class="pa-popup">
+    <main class="pa-popup">
       <!-- Header -->
-      <div class="pa-popup-header">
+      <header class="pa-popup-header">
         <div class="pa-brand">
-          <div class="pa-brand-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <div class="pa-brand-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
               <circle cx="12" cy="5" r="3"/>
               <line x1="12" y1="22" x2="12" y2="8"/>
               <path d="M5 12H2a10 10 0 0 0 20 0h-3"/>
             </svg>
           </div>
           <div>
-            <div class="pa-brand-title">Page Anchor</div>
-            <div class="pa-brand-subtitle">Web Drawing & Annotations</div>
+            <h1 class="pa-brand-title">Page Anchor</h1>
+            <p class="pa-brand-subtitle">Web Drawing & Annotations</p>
           </div>
         </div>
-        <button id="btn-options" class="pa-icon-btn" title="Open Full Settings">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button id="btn-options" class="pa-icon-btn" title="Open Full Settings" aria-label="Open Full Settings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
             <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
             <circle cx="12" cy="12" r="3"/>
           </svg>
         </button>
-      </div>
+      </header>
 
       <!-- Current Page Card -->
       <div class="pa-card">
         <div class="pa-card-row">
-          <div class="pa-card-label">Drawing Toolbar</div>
-          <label class="pa-switch">
-            <input type="checkbox" id="toggle-draw-mode" />
-            <span class="pa-slider-round"></span>
+          <label for="toggle-draw-mode" class="pa-card-label">Drawing Toolbar</label>
+          <label class="pa-switch" for="toggle-draw-mode">
+            <input type="checkbox" id="toggle-draw-mode" aria-label="Toggle drawing toolbar on current page" />
+            <span class="pa-slider-round" aria-hidden="true"></span>
           </label>
         </div>
         <div class="pa-page-info">
           <div class="pa-page-title" id="page-title">Loading page...</div>
-          <div class="pa-page-count" id="annotation-count">0 annotations</div>
+          <div class="pa-page-count" id="annotation-count" aria-live="polite">0 annotations</div>
         </div>
       </div>
 
       <!-- Actions -->
       <div class="pa-actions-grid">
         <button id="btn-export" class="pa-action-card">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
@@ -61,7 +61,7 @@
         </button>
 
         <button id="btn-clear" class="pa-action-card">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
             <path d="M3 6h18"/>
             <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
             <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
@@ -74,11 +74,14 @@
       </div>
 
       <!-- Shortcut Hint -->
-      <div class="pa-hint-box">
+      <div class="pa-hint-box" role="note">
         <span>Quick Toggle:</span>
         <kbd id="quick-shortcut-hint">Alt + Shift + D</kbd>
       </div>
-    </div>
+
+      <!-- Screen reader announcer -->
+      <div id="popup-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+    </main>
 
     <script type="module" src="./popup.ts"></script>
   </body>

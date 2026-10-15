@@ -61,6 +61,8 @@ export class FloatingToolbar {
 
     this.wrapper = document.createElement('div');
     this.wrapper.className = 'pa-toolbar-wrapper';
+    this.wrapper.setAttribute('role', 'region');
+    this.wrapper.setAttribute('aria-label', 'Page Anchor drawing toolbar');
 
     if (this.settings.toolbarPosition) {
       this.wrapper.style.left = `${this.settings.toolbarPosition.x}px`;
@@ -73,22 +75,32 @@ export class FloatingToolbar {
 
     this.toolbar = document.createElement('div');
     this.toolbar.className = 'pa-toolbar';
+    this.toolbar.setAttribute('role', 'toolbar');
+    this.toolbar.setAttribute('aria-label', 'Drawing tools');
 
-    this.pillButton = document.createElement('div');
+    const shouldBeOpen = !!this.settings.isToolbarOpen;
+
+    this.pillButton = document.createElement('button');
+    (this.pillButton as HTMLButtonElement).type = 'button';
     this.pillButton.className = 'pa-anchor-pill';
+    this.pillButton.setAttribute('aria-label', 'Toggle Page Anchor toolbar');
+    this.pillButton.setAttribute('aria-expanded', shouldBeOpen ? 'true' : 'false');
     this.pillButton.innerHTML = `
       ${ICONS.anchor}
       <span class="pa-pill-label">Page Anchor</span>
-      <span class="pa-pill-badge" style="display: none;">0</span>
+      <span class="pa-pill-badge" style="display: none;" aria-label="Active annotations">0</span>
     `;
     this.container.appendChild(this.pillButton);
 
     this.colorPopover = document.createElement('div');
     this.colorPopover.className = 'pa-popover';
+    this.colorPopover.setAttribute('role', 'dialog');
+    this.colorPopover.setAttribute('aria-label', 'Stroke color and width settings');
 
     this.strokeSlider = document.createElement('input');
     this.strokeSizeLabel = document.createElement('span');
-    this.colorPreviewBtn = document.createElement('div');
+    this.colorPreviewBtn = document.createElement('button');
+    (this.colorPreviewBtn as HTMLButtonElement).type = 'button';
 
     this.buildToolbarContent();
     this.wrapper.appendChild(this.toolbar);
@@ -101,7 +113,6 @@ export class FloatingToolbar {
     this.updateHistoryButtons();
     this.updateBadge();
 
-    const shouldBeOpen = !!this.settings.isToolbarOpen;
     this.setDrawingMode(shouldBeOpen, false);
 
     if (this.settings.areAnnotationsVisible !== undefined) {
@@ -140,8 +151,16 @@ export class FloatingToolbar {
   public updateHistoryButtons(): void {
     const undoBtn = this.toolbar.querySelector('[data-action="undo"]') as HTMLButtonElement;
     const redoBtn = this.toolbar.querySelector('[data-action="redo"]') as HTMLButtonElement;
-    if (undoBtn) undoBtn.disabled = !this.history.canUndo();
-    if (redoBtn) redoBtn.disabled = !this.history.canRedo();
+    if (undoBtn) {
+      const canUndo = this.history.canUndo();
+      undoBtn.disabled = !canUndo;
+      undoBtn.setAttribute('aria-disabled', canUndo ? 'false' : 'true');
+    }
+    if (redoBtn) {
+      const canRedo = this.history.canRedo();
+      redoBtn.disabled = !canRedo;
+      redoBtn.setAttribute('aria-disabled', canRedo ? 'false' : 'true');
+    }
   }
 
   public setDrawingMode(active: boolean, persist = true): void {
@@ -149,10 +168,13 @@ export class FloatingToolbar {
     if (active) {
       this.wrapper.style.display = 'block';
       this.pillButton.classList.add('active');
+      this.pillButton.setAttribute('aria-expanded', 'true');
     } else {
       this.wrapper.style.display = 'none';
       this.pillButton.classList.remove('active');
+      this.pillButton.setAttribute('aria-expanded', 'false');
       this.colorPopover.classList.remove('open');
+      this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
     }
     if (persist) {
       this.settings.isToolbarOpen = active;
@@ -169,7 +191,10 @@ export class FloatingToolbar {
   private buildToolbarContent(): void {
     const dragHandle = document.createElement('div');
     dragHandle.className = 'pa-drag-handle';
-    dragHandle.title = 'Drag Toolbar';
+    dragHandle.setAttribute('role', 'button');
+    dragHandle.setAttribute('tabindex', '0');
+    dragHandle.setAttribute('aria-label', 'Move toolbar position. Drag or use arrow keys.');
+    dragHandle.title = 'Move toolbar position (Arrow keys or drag)';
     dragHandle.innerHTML = ICONS.dragHandle;
     this.toolbar.appendChild(dragHandle);
 
@@ -207,9 +232,13 @@ export class FloatingToolbar {
     this.colorPreviewBtn.className = 'pa-color-preview-btn';
     this.colorPreviewBtn.style.backgroundColor = this.settings.defaultStrokeColor;
     this.colorPreviewBtn.title = 'Colors & Stroke Size';
+    this.colorPreviewBtn.setAttribute('aria-label', 'Stroke color and width settings');
+    this.colorPreviewBtn.setAttribute('aria-haspopup', 'dialog');
+    this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
     this.colorPreviewBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.colorPopover.classList.toggle('open');
+      const isOpen = this.colorPopover.classList.toggle('open');
+      this.colorPreviewBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     });
     this.toolbar.appendChild(this.colorPreviewBtn);
 
@@ -266,19 +295,23 @@ export class FloatingToolbar {
     });
     this.toolbar.appendChild(settingsBtn);
 
+    const isVisible = this.engine.getAnnotationsVisible();
     const eyeBtn = this.createActionButton(
       'visibility',
-      this.engine.getAnnotationsVisible() ? 'Hide Drawings' : 'Show Drawings',
+      isVisible ? 'Hide Drawings' : 'Show Drawings',
       'action-toggle-toolbar',
-      this.engine.getAnnotationsVisible() ? ICONS.eye : ICONS.eyeOff,
+      isVisible ? ICONS.eye : ICONS.eyeOff,
       () => {
         const next = !this.engine.getAnnotationsVisible();
         this.engine.setAnnotationsVisible(next);
         this.settings.areAnnotationsVisible = next;
         saveSettings({ areAnnotationsVisible: next }).catch(() => {});
-        eyeBtn.innerHTML = `${next ? ICONS.eye : ICONS.eyeOff}<span class="pa-tooltip">${next ? 'Hide Drawings' : 'Show Drawings'}</span>`;
+        eyeBtn.setAttribute('aria-pressed', next ? 'true' : 'false');
+        eyeBtn.setAttribute('aria-label', next ? 'Hide Drawings' : 'Show Drawings');
+        eyeBtn.innerHTML = `${next ? ICONS.eye : ICONS.eyeOff}<span class="pa-tooltip" aria-hidden="true">${next ? 'Hide Drawings' : 'Show Drawings'}</span>`;
       }
     );
+    eyeBtn.setAttribute('aria-pressed', isVisible ? 'true' : 'false');
     this.toolbar.appendChild(eyeBtn);
 
     const minBtn = this.createActionButton('minimize', 'Minimize (Alt+D to toggle)', 'toggle-active', ICONS.minimize, () => {
@@ -290,15 +323,25 @@ export class FloatingToolbar {
   private buildColorPopover(): void {
     const grid = document.createElement('div');
     grid.className = 'pa-color-grid';
+    grid.setAttribute('role', 'group');
+    grid.setAttribute('aria-label', 'Preset stroke colors');
 
     PRESET_COLORS.forEach((color) => {
-      const swatch = document.createElement('div');
-      swatch.className = `pa-color-swatch ${color === this.settings.defaultStrokeColor ? 'active' : ''}`;
+      const swatch = document.createElement('button');
+      swatch.type = 'button';
+      const isActive = color === this.settings.defaultStrokeColor;
+      swatch.className = `pa-color-swatch ${isActive ? 'active' : ''}`;
       swatch.style.backgroundColor = color;
+      swatch.setAttribute('aria-label', `Color ${color}`);
+      swatch.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       swatch.addEventListener('click', () => {
         this.applyColor(color);
-        grid.querySelectorAll('.pa-color-swatch').forEach((s) => s.classList.remove('active'));
+        grid.querySelectorAll('.pa-color-swatch').forEach((s) => {
+          s.classList.remove('active');
+          s.setAttribute('aria-pressed', 'false');
+        });
         swatch.classList.add('active');
+        swatch.setAttribute('aria-pressed', 'true');
       });
       grid.appendChild(swatch);
     });
@@ -311,12 +354,15 @@ export class FloatingToolbar {
     customRow.style.fontSize = '12px';
     customRow.style.color = '#94a3b8';
 
-    const customLabel = document.createElement('span');
+    const customLabel = document.createElement('label');
+    customLabel.htmlFor = 'pa-custom-color-picker';
     customLabel.textContent = 'Custom Color';
 
     const colorInput = document.createElement('input');
     colorInput.type = 'color';
+    colorInput.id = 'pa-custom-color-picker';
     colorInput.value = this.settings.defaultStrokeColor;
+    colorInput.setAttribute('aria-label', 'Custom Color Picker');
     colorInput.style.cursor = 'pointer';
     colorInput.style.border = 'none';
     colorInput.style.background = 'none';
@@ -345,10 +391,17 @@ export class FloatingToolbar {
     this.strokeSlider.min = '1';
     this.strokeSlider.max = '36';
     this.strokeSlider.value = `${this.settings.defaultStrokeWidth}`;
+    this.strokeSlider.setAttribute('aria-label', 'Stroke width in pixels');
+    this.strokeSlider.setAttribute('aria-valuemin', '1');
+    this.strokeSlider.setAttribute('aria-valuemax', '36');
+    this.strokeSlider.setAttribute('aria-valuenow', `${this.settings.defaultStrokeWidth}`);
+    this.strokeSlider.setAttribute('aria-valuetext', `${this.settings.defaultStrokeWidth} pixels`);
 
     this.strokeSlider.addEventListener('input', () => {
       const val = parseInt(this.strokeSlider.value, 10);
       this.strokeSizeLabel.textContent = `${val}px`;
+      this.strokeSlider.setAttribute('aria-valuenow', `${val}`);
+      this.strokeSlider.setAttribute('aria-valuetext', `${val} pixels`);
       this.engine.setStrokeWidth(val);
       this.engine.setHighlighterWidth(val * 3);
     });
@@ -360,6 +413,7 @@ export class FloatingToolbar {
     window.addEventListener('click', (e) => {
       if (!this.wrapper.contains(e.target as Node)) {
         this.colorPopover.classList.remove('open');
+        this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
       }
     });
   }
@@ -374,12 +428,17 @@ export class FloatingToolbar {
     name: string,
     shortcutId: string,
     iconSvg: string
-  ): HTMLElement {
+  ): HTMLButtonElement {
     const btn = document.createElement('button');
-    btn.className = `pa-btn ${this.engine.getTool() === tool ? 'active' : ''}`;
+    const isActive = this.engine.getTool() === tool;
+    btn.type = 'button';
+    btn.className = `pa-btn ${isActive ? 'active' : ''}`;
     btn.dataset.tool = tool;
     btn.dataset.shortcut = shortcutId;
-    btn.innerHTML = `${iconSvg}<span class="pa-tooltip">${name} <kbd>${this.getShortcutDisplay(shortcutId)}</kbd></span>`;
+    const shortcutText = this.getShortcutDisplay(shortcutId);
+    btn.setAttribute('aria-label', `${name}${shortcutText ? ` (${shortcutText})` : ''}`);
+    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    btn.innerHTML = `${iconSvg}<span class="pa-tooltip" aria-hidden="true">${name} <kbd>${shortcutText}</kbd></span>`;
 
     btn.addEventListener('click', () => {
       this.engine.setTool(tool);
@@ -397,10 +456,13 @@ export class FloatingToolbar {
     onClick: () => void
   ): HTMLButtonElement {
     const btn = document.createElement('button');
+    btn.type = 'button';
     btn.className = 'pa-btn';
     btn.dataset.action = actionName;
     btn.dataset.shortcut = shortcutId;
-    btn.innerHTML = `${iconSvg}<span class="pa-tooltip">${title} <kbd>${this.getShortcutDisplay(shortcutId)}</kbd></span>`;
+    const shortcutText = this.getShortcutDisplay(shortcutId);
+    btn.setAttribute('aria-label', `${title}${shortcutText ? ` (${shortcutText})` : ''}`);
+    btn.innerHTML = `${iconSvg}<span class="pa-tooltip" aria-hidden="true">${title} <kbd>${shortcutText}</kbd></span>`;
 
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -413,6 +475,7 @@ export class FloatingToolbar {
   private createSeparator(): HTMLElement {
     const sep = document.createElement('div');
     sep.className = 'pa-separator';
+    sep.setAttribute('aria-hidden', 'true');
     return sep;
   }
 
@@ -424,22 +487,28 @@ export class FloatingToolbar {
   public updateActiveToolUI(): void {
     const current = this.engine.getTool();
     this.toolbar.querySelectorAll('[data-tool]').forEach((el) => {
-      const btn = el as HTMLElement;
-      if (btn.dataset.tool === current) {
+      const btn = el as HTMLButtonElement;
+      const isActive = btn.dataset.tool === current;
+      if (isActive) {
         btn.classList.add('active');
+        btn.setAttribute('aria-pressed', 'true');
       } else {
         btn.classList.remove('active');
+        btn.setAttribute('aria-pressed', 'false');
       }
     });
   }
 
   public updateTooltips(): void {
     this.toolbar.querySelectorAll('[data-shortcut]').forEach((el) => {
-      const btn = el as HTMLElement;
+      const btn = el as HTMLButtonElement;
       const shortcutId = btn.dataset.shortcut;
       const kbd = btn.querySelector('kbd');
       if (kbd && shortcutId) {
-        kbd.textContent = this.getShortcutDisplay(shortcutId);
+        const text = this.getShortcutDisplay(shortcutId);
+        kbd.textContent = text;
+        const currentName = btn.dataset.tool || btn.dataset.action || '';
+        btn.setAttribute('aria-label', `${currentName}${text ? ` (${text})` : ''}`);
       }
     });
   }
@@ -478,6 +547,38 @@ export class FloatingToolbar {
 
     dragHandle.addEventListener('pointerup', stopDrag);
     dragHandle.addEventListener('pointercancel', stopDrag);
+
+    // Keyboard navigation alternative for dragging (WCAG 2.5.7)
+    dragHandle.addEventListener('keydown', (e: KeyboardEvent) => {
+      let moved = false;
+      const rect = this.wrapper.getBoundingClientRect();
+      let newX = rect.left;
+      let newY = rect.top;
+      const step = 20;
+
+      if (e.key === 'ArrowUp') {
+        newY = Math.max(10, newY - step);
+        moved = true;
+      } else if (e.key === 'ArrowDown') {
+        newY = Math.min(window.innerHeight - this.wrapper.offsetHeight - 10, newY + step);
+        moved = true;
+      } else if (e.key === 'ArrowLeft') {
+        newX = Math.max(10, newX - step);
+        moved = true;
+      } else if (e.key === 'ArrowRight') {
+        newX = Math.min(window.innerWidth - this.wrapper.offsetWidth - 10, newX + step);
+        moved = true;
+      }
+
+      if (moved) {
+        e.preventDefault();
+        this.wrapper.style.transform = 'none';
+        this.wrapper.style.left = `${newX}px`;
+        this.wrapper.style.top = `${newY}px`;
+        this.settings.toolbarPosition = { x: newX, y: newY };
+        this.callbacks.onSettingsUpdate?.(this.settings);
+      }
+    });
   }
 
   private bindPillEvents(): void {

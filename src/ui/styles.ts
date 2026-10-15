@@ -40,7 +40,7 @@ export const SHADOW_STYLES = `
   align-items: center;
   justify-content: center;
   cursor: grab;
-  color: #64748b;
+  color: #94a3b8;
   padding: 4px;
   border-radius: 6px;
   transition: color 0.15s;
@@ -402,7 +402,7 @@ export const SHADOW_STYLES = `
 
 .pa-shortcut-desc {
   font-size: 11px;
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .pa-shortcut-record-btn {
@@ -472,5 +472,57 @@ export const SHADOW_STYLES = `
 
 .pa-btn-primary:hover {
   background: #2563eb;
+}
+
+/* Accessibility: Focus Visible Indicators (WCAG 2.4.7) */
+:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.pa-btn:focus-visible,
+.pa-drag-handle:focus-visible,
+.pa-color-preview-btn:focus-visible,
+.pa-anchor-pill:focus-visible,
+.pa-modal-close:focus-visible,
+.pa-shortcut-record-btn:focus-visible,
+.pa-action-btn:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.pa-color-swatch:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.pa-slider:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 4px;
+}
+
+/* Screen Reader Only Utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Respect Reduced Motion Preferences (WCAG 2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 `;

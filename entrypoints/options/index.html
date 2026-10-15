@@ -7,12 +7,13 @@
     <link rel="stylesheet" href="./options.css" />
   </head>
   <body>
+    <a href="#main-settings-content" class="pa-skip-link">Skip to settings content</a>
     <div class="pa-options-container">
       <!-- Sidebar / Header -->
       <header class="pa-options-header">
         <div class="pa-options-brand">
-          <div class="pa-brand-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <div class="pa-brand-icon" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
               <circle cx="12" cy="5" r="3"/>
               <line x1="12" y1="22" x2="12" y2="8"/>
               <path d="M5 12H2a10 10 0 0 0 20 0h-3"/>
@@ -30,18 +31,18 @@
       </header>
 
       <!-- Main Layout -->
-      <main class="pa-options-content">
-        <!-- Navigation Tabs -->
-        <nav class="pa-tabs">
-          <button class="pa-tab-btn active" data-tab="shortcuts">Keyboard Shortcuts</button>
-          <button class="pa-tab-btn" data-tab="drawing">Drawing Defaults</button>
-          <button class="pa-tab-btn" data-tab="persistence">Persistence & Matching</button>
-          <button class="pa-tab-btn" data-tab="saved-pages">Saved Pages (<span id="saved-count">0</span>)</button>
-          <button class="pa-tab-btn" data-tab="backup">Backup & Restore</button>
-        </nav>
+      <main id="main-settings-content" class="pa-options-content" tabindex="-1">
+        <!-- Navigation Tabs (WAI-ARIA Tablist Pattern) -->
+        <div class="pa-tabs" role="tablist" aria-label="Settings categories">
+          <button role="tab" id="tab-btn-shortcuts" class="pa-tab-btn active" data-tab="shortcuts" aria-selected="true" aria-controls="tab-shortcuts" tabindex="0">Keyboard Shortcuts</button>
+          <button role="tab" id="tab-btn-drawing" class="pa-tab-btn" data-tab="drawing" aria-selected="false" aria-controls="tab-drawing" tabindex="-1">Drawing Defaults</button>
+          <button role="tab" id="tab-btn-persistence" class="pa-tab-btn" data-tab="persistence" aria-selected="false" aria-controls="tab-persistence" tabindex="-1">Persistence & Matching</button>
+          <button role="tab" id="tab-btn-saved-pages" class="pa-tab-btn" data-tab="saved-pages" aria-selected="false" aria-controls="tab-saved-pages" tabindex="-1">Saved Pages (<span id="saved-count">0</span>)</button>
+          <button role="tab" id="tab-btn-backup" class="pa-tab-btn" data-tab="backup" aria-selected="false" aria-controls="tab-backup" tabindex="-1">Backup & Restore</button>
+        </div>
 
         <!-- Tab 1: Shortcuts -->
-        <section id="tab-shortcuts" class="pa-tab-pane active">
+        <section role="tabpanel" id="tab-shortcuts" class="pa-tab-pane active" aria-labelledby="tab-btn-shortcuts" tabindex="0">
           <div class="pa-section-desc">
             Customize keyboard shortcuts for every tool and action. Click on any key combination box and press your preferred keystroke to rebind.
           </div>
@@ -56,74 +57,74 @@
         </section>
 
         <!-- Tab 2: Drawing Defaults -->
-        <section id="tab-drawing" class="pa-tab-pane">
+        <section role="tabpanel" id="tab-drawing" class="pa-tab-pane" aria-labelledby="tab-btn-drawing" tabindex="0">
           <div class="pa-form-group">
-            <label class="pa-form-label">Default Pen Stroke Color</label>
+            <label for="pref-pen-color" class="pa-form-label">Default Pen Stroke Color</label>
             <div class="pa-color-input-row">
-              <input type="color" id="pref-pen-color" />
+              <input type="color" id="pref-pen-color" aria-label="Default Pen Stroke Color Picker" />
               <span id="pref-pen-color-text" class="pa-hex-code">#ef4444</span>
             </div>
           </div>
 
           <div class="pa-form-group">
-            <label class="pa-form-label">Default Pen Stroke Width (<span id="pref-pen-width-val">4px</span>)</label>
-            <input type="range" id="pref-pen-width" min="1" max="30" value="4" class="pa-range-slider" />
+            <label for="pref-pen-width" class="pa-form-label">Default Pen Stroke Width (<span id="pref-pen-width-val">4px</span>)</label>
+            <input type="range" id="pref-pen-width" min="1" max="30" value="4" class="pa-range-slider" aria-label="Default Pen Stroke Width" />
           </div>
 
           <div class="pa-form-group">
-            <label class="pa-form-label">Default Highlighter Color</label>
+            <label for="pref-highlighter-color" class="pa-form-label">Default Highlighter Color</label>
             <div class="pa-color-input-row">
-              <input type="color" id="pref-highlighter-color" />
+              <input type="color" id="pref-highlighter-color" aria-label="Default Highlighter Color Picker" />
               <span id="pref-highlighter-color-text" class="pa-hex-code">#facc15</span>
             </div>
           </div>
 
           <div class="pa-form-group">
-            <label class="pa-form-label">Default Highlighter Width (<span id="pref-highlighter-width-val">20px</span>)</label>
-            <input type="range" id="pref-highlighter-width" min="8" max="50" value="20" class="pa-range-slider" />
+            <label for="pref-highlighter-width" class="pa-form-label">Default Highlighter Width (<span id="pref-highlighter-width-val">20px</span>)</label>
+            <input type="range" id="pref-highlighter-width" min="8" max="50" value="20" class="pa-range-slider" aria-label="Default Highlighter Width" />
           </div>
 
           <div class="pa-form-group">
-            <label class="pa-form-label">Default Text Note Font Size (<span id="pref-font-size-val">18px</span>)</label>
-            <input type="range" id="pref-font-size" min="12" max="36" value="18" class="pa-range-slider" />
+            <label for="pref-font-size" class="pa-form-label">Default Text Note Font Size (<span id="pref-font-size-val">18px</span>)</label>
+            <input type="range" id="pref-font-size" min="12" max="36" value="18" class="pa-range-slider" aria-label="Default Text Note Font Size" />
           </div>
         </section>
 
         <!-- Tab 3: Persistence & Matching -->
-        <section id="tab-persistence" class="pa-tab-pane">
+        <section role="tabpanel" id="tab-persistence" class="pa-tab-pane" aria-labelledby="tab-btn-persistence" tabindex="0">
           <div class="pa-form-group">
-            <label class="pa-form-label">URL Matching Mode</label>
-            <select id="pref-url-match-mode" class="pa-select">
+            <label for="pref-url-match-mode" class="pa-form-label">URL Matching Mode</label>
+            <select id="pref-url-match-mode" class="pa-select" aria-describedby="pref-url-match-hint">
               <option value="clean">Clean URL (Default - strips tracking params like ?utm_* and #scroll anchors)</option>
               <option value="exact">Exact URL (Preserves all query parameters and hashes)</option>
               <option value="domain">Domain-wide (Applies the same annotations across all pages on the domain)</option>
             </select>
-            <div class="pa-form-hint">
+            <div id="pref-url-match-hint" class="pa-form-hint">
               Clean URL ensures your drawings remain attached even if tracking IDs or campaign parameters change.
             </div>
           </div>
 
           <div class="pa-form-group">
-            <label class="pa-form-label">Toolbar Behavior & Visibility</label>
-            <div class="pa-checkbox-row">
+            <span class="pa-form-label">Toolbar Behavior & Visibility</span>
+            <label class="pa-checkbox-row" for="pref-toolbar-open">
               <input type="checkbox" id="pref-toolbar-open" />
               <span>Keep toolbar open by default on reload and page changes (Default: minimized/closed)</span>
-            </div>
-            <div class="pa-checkbox-row" style="margin-top: 8px;">
+            </label>
+            <label class="pa-checkbox-row" for="pref-show-pill" style="margin-top: 8px;">
               <input type="checkbox" id="pref-show-pill" checked />
               <span>Show floating anchor pill in bottom-right corner for quick access</span>
-            </div>
+            </label>
             <div class="pa-form-hint" style="margin-top: 4px;">
               When minimized, the toolbar stays neatly out of your way until activated with Alt+D or clicking the anchor pill.
             </div>
           </div>
 
           <div class="pa-form-group">
-            <label class="pa-form-label">Zero-Lag Performance Engine</label>
-            <div class="pa-checkbox-row">
+            <span class="pa-form-label">Zero-Lag Performance Engine</span>
+            <label class="pa-checkbox-row" for="pref-performance-mode">
               <input type="checkbox" id="pref-performance-mode" checked />
               <span>Enable Viewport Frustum Culling & RDP point reduction (Recommended for low-end devices)</span>
-            </div>
+            </label>
             <div class="pa-form-hint">
               Restricts canvas rendering strictly to visible elements on screen and optimizes polyline point density.
             </div>
@@ -131,7 +132,7 @@
         </section>
 
         <!-- Tab 4: Saved Pages Manager -->
-        <section id="tab-saved-pages" class="pa-tab-pane">
+        <section role="tabpanel" id="tab-saved-pages" class="pa-tab-pane" aria-labelledby="tab-btn-saved-pages" tabindex="0">
           <div class="pa-section-desc">
             Manage all web pages where you have active drawings and annotations.
           </div>
@@ -141,7 +142,7 @@
         </section>
 
         <!-- Tab 5: Backup & Restore -->
-        <section id="tab-backup" class="pa-tab-pane">
+        <section role="tabpanel" id="tab-backup" class="pa-tab-pane" aria-labelledby="tab-btn-backup" tabindex="0">
           <div class="pa-card-box">
             <h3>Export All Annotations & Settings</h3>
             <p>Download a JSON backup containing all your drawings across all websites and your customized shortcuts.</p>
@@ -151,12 +152,15 @@
           <div class="pa-card-box">
             <h3>Restore From Backup</h3>
             <p>Restore your saved annotations and configuration from a previous Page Anchor JSON export.</p>
-            <input type="file" id="backup-file-input" accept=".json" style="display: none;" />
+            <input type="file" id="backup-file-input" accept=".json" style="display: none;" aria-label="Upload JSON backup file to restore" />
             <button id="btn-import-backup" class="pa-btn-secondary">Choose JSON File to Restore</button>
-            <span id="import-status" style="margin-left: 10px; font-size: 12px; color: #38bdf8;"></span>
+            <span id="import-status" role="status" aria-live="polite" style="margin-left: 10px; font-size: 12px; color: #38bdf8;"></span>
           </div>
         </section>
       </main>
+
+      <!-- Global status announcer for screen readers -->
+      <div id="options-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
     </div>
 
     <script type="module" src="./options.ts"></script>

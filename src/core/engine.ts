@@ -59,6 +59,7 @@ export class CanvasEngine {
 
     this.baseCanvas = document.createElement('canvas');
     this.baseCanvas.className = 'page-anchor-base-canvas';
+    this.baseCanvas.setAttribute('aria-hidden', 'true');
     this.baseCanvas.style.position = 'fixed';
     this.baseCanvas.style.top = '0';
     this.baseCanvas.style.left = '0';
@@ -69,6 +70,7 @@ export class CanvasEngine {
 
     this.activeCanvas = document.createElement('canvas');
     this.activeCanvas.className = 'page-anchor-active-canvas';
+    this.activeCanvas.setAttribute('aria-hidden', 'true');
     this.activeCanvas.style.position = 'fixed';
     this.activeCanvas.style.top = '0';
     this.activeCanvas.style.left = '0';
