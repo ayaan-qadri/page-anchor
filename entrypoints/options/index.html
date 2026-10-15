@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Page Anchor - Settings & Preferences</title>
+    <link rel="stylesheet" href="./options.css" />
+  </head>
+  <body>
+    <div class="pa-options-container">
+      <!-- Sidebar / Header -->
+      <header class="pa-options-header">
+        <div class="pa-options-brand">
+          <div class="pa-brand-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="5" r="3"/>
+              <line x1="12" y1="22" x2="12" y2="8"/>
+              <path d="M5 12H2a10 10 0 0 0 20 0h-3"/>
+            </svg>
+          </div>
+          <div>
+            <h1>Page Anchor</h1>
+            <p>Customizable Web Annotations & Drawing Settings</p>
+          </div>
+        </div>
+
+        <div class="pa-header-actions">
+          <button id="btn-save" class="pa-btn-primary">Save Changes</button>
+        </div>
+      </header>
+
+      <!-- Main Layout -->
+      <main class="pa-options-content">
+        <!-- Navigation Tabs -->
+        <nav class="pa-tabs">
+          <button class="pa-tab-btn active" data-tab="shortcuts">Keyboard Shortcuts</button>
+          <button class="pa-tab-btn" data-tab="drawing">Drawing Defaults</button>
+          <button class="pa-tab-btn" data-tab="persistence">Persistence & Matching</button>
+          <button class="pa-tab-btn" data-tab="saved-pages">Saved Pages (<span id="saved-count">0</span>)</button>
+          <button class="pa-tab-btn" data-tab="backup">Backup & Restore</button>
+        </nav>
+
+        <!-- Tab 1: Shortcuts -->
+        <section id="tab-shortcuts" class="pa-tab-pane active">
+          <div class="pa-section-desc">
+            Customize keyboard shortcuts for every tool and action. Click on any key combination box and press your preferred keystroke to rebind.
+          </div>
+          <div class="pa-shortcuts-table-wrapper">
+            <div id="shortcuts-container" class="pa-shortcuts-list">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+          <div class="pa-pane-footer">
+            <button id="btn-reset-shortcuts" class="pa-btn-secondary">Reset Shortcuts to Default</button>
+          </div>
+        </section>
+
+        <!-- Tab 2: Drawing Defaults -->
+        <section id="tab-drawing" class="pa-tab-pane">
+          <div class="pa-form-group">
+            <label class="pa-form-label">Default Pen Stroke Color</label>
+            <div class="pa-color-input-row">
+              <input type="color" id="pref-pen-color" />
+              <span id="pref-pen-color-text" class="pa-hex-code">#ef4444</span>
+            </div>
+          </div>
+
+          <div class="pa-form-group">
+            <label class="pa-form-label">Default Pen Stroke Width (<span id="pref-pen-width-val">4px</span>)</label>
+            <input type="range" id="pref-pen-width" min="1" max="30" value="4" class="pa-range-slider" />
+          </div>
+
+          <div class="pa-form-group">
+            <label class="pa-form-label">Default Highlighter Color</label>
+            <div class="pa-color-input-row">
+              <input type="color" id="pref-highlighter-color" />
+              <span id="pref-highlighter-color-text" class="pa-hex-code">#facc15</span>
+            </div>
+          </div>
+
+          <div class="pa-form-group">
+            <label class="pa-form-label">Default Highlighter Width (<span id="pref-highlighter-width-val">20px</span>)</label>
+            <input type="range" id="pref-highlighter-width" min="8" max="50" value="20" class="pa-range-slider" />
+          </div>
+
+          <div class="pa-form-group">
+            <label class="pa-form-label">Default Text Note Font Size (<span id="pref-font-size-val">18px</span>)</label>
+            <input type="range" id="pref-font-size" min="12" max="36" value="18" class="pa-range-slider" />
+          </div>
+        </section>
+
+        <!-- Tab 3: Persistence & Matching -->
+        <section id="tab-persistence" class="pa-tab-pane">
+          <div class="pa-form-group">
+            <label class="pa-form-label">URL Matching Mode</label>
+            <select id="pref-url-match-mode" class="pa-select">
+              <option value="clean">Clean URL (Default - strips tracking params like ?utm_* and #scroll anchors)</option>
+              <option value="exact">Exact URL (Preserves all query parameters and hashes)</option>
+              <option value="domain">Domain-wide (Applies the same annotations across all pages on the domain)</option>
+            </select>
+            <div class="pa-form-hint">
+              Clean URL ensures your drawings remain attached even if tracking IDs or campaign parameters change.
+            </div>
+          </div>
+
+          <div class="pa-form-group">
+            <label class="pa-form-label">Zero-Lag Performance Engine</label>
+            <div class="pa-checkbox-row">
+              <input type="checkbox" id="pref-performance-mode" checked />
+              <span>Enable Viewport Frustum Culling & RDP point reduction (Recommended for low-end devices)</span>
+            </div>
+            <div class="pa-form-hint">
+              Restricts canvas rendering strictly to visible elements on screen and optimizes polyline point density.
+            </div>
+          </div>
+        </section>
+
+        <!-- Tab 4: Saved Pages Manager -->
+        <section id="tab-saved-pages" class="pa-tab-pane">
+          <div class="pa-section-desc">
+            Manage all web pages where you have active drawings and annotations.
+          </div>
+          <div id="saved-pages-list" class="pa-saved-list">
+            <!-- Dynamically populated -->
+          </div>
+        </section>
+
+        <!-- Tab 5: Backup & Restore -->
+        <section id="tab-backup" class="pa-tab-pane">
+          <div class="pa-card-box">
+            <h3>Export All Annotations & Settings</h3>
+            <p>Download a JSON backup containing all your drawings across all websites and your customized shortcuts.</p>
+            <button id="btn-export-backup" class="pa-btn-primary">Download Backup (.json)</button>
+          </div>
+
+          <div class="pa-card-box">
+            <h3>Restore From Backup</h3>
+            <p>Restore your saved annotations and configuration from a previous Page Anchor JSON export.</p>
+            <input type="file" id="backup-file-input" accept=".json" style="display: none;" />
+            <button id="btn-import-backup" class="pa-btn-secondary">Choose JSON File to Restore</button>
+            <span id="import-status" style="margin-left: 10px; font-size: 12px; color: #38bdf8;"></span>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./options.ts"></script>
+  </body>
+</html>

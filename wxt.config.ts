@@ -1,0 +1,35 @@
+import { defineConfig } from 'wxt';
+
+// See https://wxt.dev/api/config.html
+export default defineConfig({
+  manifest: {
+    name: 'Page Anchor - Web Annotation & Drawing',
+    description: 'High-performance freehand drawing, shapes, and text annotations directly on web pages with persistent storage and customizable shortcuts.',
+    version: '1.0.0',
+    permissions: ['storage', 'activeTab'],
+    icons: {
+      16: '/icon-16.png',
+      32: '/icon-32.png',
+      48: '/icon-48.png',
+      128: '/icon-128.png',
+    },
+    action: {
+      default_title: 'Page Anchor',
+      default_icon: {
+        16: '/icon-16.png',
+        32: '/icon-32.png',
+        48: '/icon-48.png',
+        128: '/icon-128.png',
+      },
+    },
+    commands: {
+      'toggle-drawing-mode': {
+        suggested_key: {
+          default: 'Alt+D',
+          mac: 'Alt+D',
+        },
+        description: 'Toggle Page Anchor drawing toolbar',
+      },
+    },
+  },
+});
