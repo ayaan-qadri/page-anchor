@@ -3,11 +3,10 @@ import {
   computeBoundingBox,
   distToSegmentSquared,
   intersectsBoundingBox,
-  isPointInBoundingBox,
   isPointNearElement,
   simplifyPointsRDP,
 } from '../src/core/geometry';
-import { AnchorElement, BoundingBox, Point, StrokeElement, ShapeElement, TextElement } from '../src/types/engine.types';
+import { BoundingBox, Point, StrokeElement, ShapeElement, TextElement } from '../src/types/engine.types';
 
 describe('Geometry Engine: Bounding Box & Frustum Culling', () => {
   it('correctly detects intersecting bounding boxes for viewport frustum culling', () => {

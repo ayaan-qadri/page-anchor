@@ -3,13 +3,12 @@ import {
   createDOMAnchor,
   DOMAnchorManager,
   extractTextQuote,
-  findBestAnchorElement,
   generateSelector,
   resolveAnchor,
   safeCssEscape,
 } from '../src/core/anchor';
 import { CanvasEngine } from '../src/core/engine';
-import { AnchorElement, StrokeElement, TextElement } from '../src/types/engine.types';
+import { StrokeElement, TextElement } from '../src/types/engine.types';
 
 describe('DOM Anchoring Engine & Deterministic Positioning', () => {
   let container: HTMLDivElement;

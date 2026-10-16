@@ -1,11 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-  computeBoundingBox,
   intersectsBoundingBox,
   isPointNearElement,
   simplifyPointsRDP,
 } from '../src/core/geometry';
-import { AnchorElement, BoundingBox, Point, ShapeElement, StrokeElement } from '../src/types/engine.types';
+import { AnchorElement, BoundingBox, Point, ShapeElement } from '../src/types/engine.types';
 
 describe('Performance Benchmarks: Zero-Lag Low-End Device Validation', () => {
   it('BENCHMARK: Viewport Frustum Culling across 10,000 elements executes in under 5ms', () => {
@@ -138,6 +137,7 @@ describe('Performance Benchmarks: Zero-Lag Low-End Device Validation', () => {
 
     console.log(`\n  ⚡ Spatial Eraser Hit Testing Benchmark:`);
     console.log(`     Tested: 1,000 elements against pointer coordinate`);
+    console.log(`     Hits: ${hits}`);
     console.log(`     Elapsed Time: ${elapsed.toFixed(3)} ms`);
 
     expect(elapsed).toBeLessThan(10.0);

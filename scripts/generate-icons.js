@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
 
-function createPng(size, r, g, b, a = 255) {
+function createPng(size) {
   const width = size;
   const height = size;
   

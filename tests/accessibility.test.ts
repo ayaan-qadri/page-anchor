@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { FloatingToolbar } from '../src/ui/toolbar';
@@ -230,7 +230,7 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
     it('should mark base and active canvas overlays with aria-hidden="true"', () => {
       const div = document.createElement('div');
       document.body.appendChild(div);
-      const engine = new CanvasEngine(div);
+      new CanvasEngine(div);
 
       const canvases = div.querySelectorAll('canvas');
       expect(canvases.length).toBe(2);

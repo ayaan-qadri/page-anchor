@@ -104,7 +104,6 @@ describe('Selection & Move All Engine: Multi-Select and Batch Manipulation', () 
     const canvas = container.querySelector('canvas:last-child') as HTMLCanvasElement;
     expect(canvas).not.toBeNull();
 
-    const selected = engine.getSelectedElements();
     const dx = 50;
     const dy = -20;
 

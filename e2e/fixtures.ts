@@ -11,7 +11,7 @@ export const test = base.extend<{
   context: BrowserContext;
   extensionId: string;
 }>({
-  context: async ({}, use) => {
+  context: async (_fixtures, use) => {
     const pathToExtension = path.resolve(__dirname, '../.output/chrome-mv3');
     const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'page-anchor-e2e-'));
 
