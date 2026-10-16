@@ -51,7 +51,10 @@ export class TextEditorOverlay {
       textarea.focus();
     }, 10);
 
+    let isClosed = false;
     const commit = () => {
+      if (isClosed) return;
+      isClosed = true;
       const text = textarea.value.trim();
       if (text.length > 0) {
         const textElement: TextElement = {
@@ -83,7 +86,10 @@ export class TextEditorOverlay {
         commit();
       } else if (e.key === 'Escape') {
         e.preventDefault();
-        this.onCancelCallback?.();
+        if (!isClosed) {
+          isClosed = true;
+          this.onCancelCallback?.();
+        }
         this.close();
       }
     });
@@ -94,6 +100,8 @@ export class TextEditorOverlay {
   }
 
   public close(): void {
+    this.onCommitCallback = null;
+    this.onCancelCallback = null;
     if (this.currentWrapper) {
       this.currentWrapper.remove();
       this.currentWrapper = null;

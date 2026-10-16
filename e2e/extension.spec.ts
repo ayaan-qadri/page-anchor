@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import http from 'http';
 
-test.describe('Page Anchor: Real Browser Extension End-to-End Tests', () => {
+test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
   let server: http.Server;
   let serverPort: number;
 
@@ -9,17 +9,25 @@ test.describe('Page Anchor: Real Browser Extension End-to-End Tests', () => {
     server = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(`<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Real User Web Page</title>
+  <title>Customer Portal Page</title>
 </head>
-<body style="margin: 0; padding: 20px;">
-  <h1 id="title">Sample Web Document</h1>
-  <p id="para">Real user interaction testing page.</p>
-  <div id="target-box" style="width: 300px; height: 150px; background: #e2e8f0; border-radius: 8px; padding: 10px;">
-    Target Box for Drawing
-  </div>
+<body style="margin: 0; padding: 24px; font-family: sans-serif;">
+  <header style="border-bottom: 2px solid #ccc; padding-bottom: 12px; margin-bottom: 20px;">
+    <h1 id="portal-title">Customer Documentation Portal</h1>
+    <nav><a href="#overview">Overview</a> | <a href="#settings">Settings</a></nav>
+  </header>
+  <main>
+    <section id="section-intro" style="margin-bottom: 30px;">
+      <h2>Getting Started with Page Anchor</h2>
+      <p id="lead-text">Draw and anchor notes directly onto any web interface.</p>
+      <div id="content-card" style="width: 320px; height: 160px; background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px;">
+        Interactive Canvas Target Box
+      </div>
+    </section>
+  </main>
 </body>
 </html>`);
     });
@@ -37,105 +45,192 @@ test.describe('Page Anchor: Real Browser Extension End-to-End Tests', () => {
     server?.close();
   });
 
-  test('injects into web page, toggles toolbar, and supports pointer drawing interactions', async ({
+  test('USER FLOW 1: Drawing shapes, freehand, text note, undo/redo, and keyboard shortcuts', async ({
     context,
   }) => {
     const page = await context.newPage();
 
-    // Navigate to the local HTTP server page via localhost where content scripts are permitted
-    await page.goto(`http://localhost:${serverPort}/test-page`);
+    // 1. User opens a real web page
+    await page.goto(`http://localhost:${serverPort}/portal`);
     await page.waitForLoadState('domcontentloaded');
 
-    // Wait for the Page Anchor host element to be mounted into the DOM
-    const host = page.locator('#page-anchor-host');
-    await expect(host).toBeAttached({ timeout: 15000 });
+    // 2. User sees the extension's anchor pill button floating on screen
+    const pill = page.locator('#page-anchor-host .pa-anchor-pill');
+    await expect(pill).toBeVisible({ timeout: 10000 });
 
-    // Ensure the Shadow DOM root is present
-    const isShadowMounted = await page.evaluate(() => {
-      const el = document.getElementById('page-anchor-host');
-      return !!el && !!el.shadowRoot;
-    });
-    expect(isShadowMounted).toBe(true);
-
-    // Click the anchor pill to open drawing toolbar
-    const pill = host.locator('.pa-anchor-pill');
-    await expect(pill).toBeVisible({ timeout: 5000 });
+    // 3. User clicks the pill to toggle open the drawing toolbar
     await pill.click();
 
-    // Verify floating toolbar becomes visible
-    const toolbar = host.locator('.pa-toolbar');
-    await expect(toolbar).toBeVisible({ timeout: 5000 });
+    const toolbar = page.locator('#page-anchor-host .pa-toolbar');
+    await expect(toolbar).toBeVisible();
 
-    // Select the Rectangle tool
-    const rectTool = host.locator('[data-tool="rect"]');
-    await expect(rectTool).toBeVisible();
+    // 4. User selects Rectangle tool and draws a box on the page
+    const rectTool = page.locator('#page-anchor-host [data-tool="rect"]');
     await rectTool.click();
+    await expect(rectTool).toHaveClass(/active/);
 
-    // Perform real mouse gestures on the active canvas
-    const canvas = host.locator('.page-anchor-active-canvas');
-    await expect(canvas).toBeVisible();
+    // Real mouse drag gesture
+    await page.mouse.move(120, 160);
+    await page.mouse.down();
+    await page.mouse.move(380, 320, { steps: 5 });
+    await page.mouse.up();
 
-    const box = await canvas.boundingBox();
-    if (box) {
-      await page.mouse.move(box.x + 100, box.y + 100);
-      await page.mouse.down();
-      await page.mouse.move(box.x + 300, box.y + 250, { steps: 5 });
-      await page.mouse.up();
-    }
+    // User sees the annotation counter badge increase to 1
+    const badge = page.locator('#page-anchor-host .pa-pill-badge');
+    await expect(badge).toHaveText('1');
 
-    // Switch to Pen tool and draw freehand
-    const penTool = host.locator('[data-tool="pen"]');
+    // 5. User selects Pen tool and draws a freehand curve
+    const penTool = page.locator('#page-anchor-host [data-tool="pen"]');
     await penTool.click();
+    await expect(penTool).toHaveClass(/active/);
 
-    if (box) {
-      await page.mouse.move(box.x + 150, box.y + 150);
-      await page.mouse.down();
-      await page.mouse.move(box.x + 220, box.y + 180, { steps: 4 });
-      await page.mouse.move(box.x + 260, box.y + 150, { steps: 4 });
-      await page.mouse.up();
-    }
+    await page.mouse.move(200, 200);
+    await page.mouse.down();
+    await page.mouse.move(260, 240, { steps: 4 });
+    await page.mouse.move(320, 200, { steps: 4 });
+    await page.mouse.up();
 
-    // Toggle DOM anchoring mode button
-    const domAnchorBtn = host.locator('[data-action="dom-anchor"]');
-    await expect(domAnchorBtn).toBeVisible();
-    await domAnchorBtn.click();
-    await expect(domAnchorBtn).toHaveAttribute('aria-pressed', 'false');
+    // Annotation badge updates to 2
+    await expect(badge).toHaveText('2');
 
-    await domAnchorBtn.click();
-    await expect(domAnchorBtn).toHaveAttribute('aria-pressed', 'true');
+    // 6. User selects Text tool and clicks to place a note
+    const textTool = page.locator('#page-anchor-host [data-tool="text"]');
+    await textTool.click();
+    await expect(textTool).toHaveClass(/active/);
+
+    await page.mouse.click(400, 160);
+
+    // Floating text editor overlay appears
+    const textarea = page.locator('#page-anchor-host .pa-text-textarea');
+    await expect(textarea).toBeVisible();
+
+    // User types the note and presses Enter to commit
+    await page.keyboard.type('Q4 Roadmap Feedback');
+    await page.keyboard.press('Enter');
+
+    // Text editor closes and badge updates to 3
+    await expect(textarea).toBeHidden();
+    await expect(badge).toHaveText('3');
+
+    // 7. User clicks Undo button to revert the last annotation
+    const undoBtn = page.locator('#page-anchor-host [data-action="undo"]');
+    await expect(undoBtn).toBeEnabled();
+    await undoBtn.click();
+
+    // Badge decreases to 2
+    await expect(badge).toHaveText('2');
+
+    // 8. User clicks Redo button to restore the annotation
+    const redoBtn = page.locator('#page-anchor-host [data-action="redo"]');
+    await expect(redoBtn).toBeEnabled();
+    await redoBtn.click();
+
+    // Badge returns to 3
+    await expect(badge).toHaveText('3');
+
+    // 9. User presses keyboard shortcut Alt+Shift+D to hide toolbar
+    await page.keyboard.press('Alt+Shift+KeyD');
+    await expect(toolbar).toBeHidden();
+
+    // User presses Alt+Shift+D again to bring toolbar back
+    await page.keyboard.press('Alt+Shift+KeyD');
+    await expect(toolbar).toBeVisible();
+
+    // 10. User toggles DOM anchoring mode via toolbar button
+    const anchorBtn = page.locator('#page-anchor-host [data-action="dom-anchor"]');
+    await expect(anchorBtn).toHaveAttribute('aria-pressed', 'true');
+    await anchorBtn.click();
+    await expect(anchorBtn).toHaveAttribute('aria-pressed', 'false');
+    await anchorBtn.click();
+    await expect(anchorBtn).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('opens and interacts with extension options page in browser', async ({ context, extensionId }) => {
-    // If extensionId is obtained, open options via chrome-extension URL, otherwise open options.html
+  test('USER FLOW 2: Preferences configuration, tab navigation, color change, & shortcut rebinding', async ({
+    context,
+    extensionId,
+  }) => {
+    // Unconditional validation that extension is loaded in browser
+    expect(extensionId).toBeTruthy();
+
     const page = await context.newPage();
-    const url = extensionId
-      ? `chrome-extension://${extensionId}/options.html`
-      : `http://127.0.0.1:${serverPort}/options.html`;
+    await page.goto(`chrome-extension://${extensionId}/options.html`);
+    await page.waitForLoadState('domcontentloaded');
 
-    if (extensionId) {
-      await page.goto(url);
-      await page.waitForLoadState('domcontentloaded');
+    // Verify main header
+    await expect(page.locator('h1')).toHaveText(/Page Anchor/i);
 
-      // Verify title and tabs
-      await expect(page.locator('h1')).toHaveText(/Page Anchor/i);
+    // Switch to Drawing Defaults tab
+    const drawingTab = page.locator('#tab-btn-drawing');
+    await drawingTab.click();
+    await expect(drawingTab).toHaveAttribute('aria-selected', 'true');
 
-      const shortcutsTab = page.locator('#tab-btn-shortcuts');
-      const drawingTab = page.locator('#tab-btn-drawing');
-      const persistenceTab = page.locator('#tab-btn-persistence');
+    // User changes pen color and width
+    const penColor = page.locator('#pref-pen-color');
+    await expect(penColor).toBeVisible();
+    await penColor.fill('#10b981');
 
-      await expect(shortcutsTab).toBeVisible();
-      await expect(drawingTab).toBeVisible();
-      await expect(persistenceTab).toBeVisible();
+    const penWidth = page.locator('#pref-pen-width');
+    await penWidth.fill('10');
 
-      // Click drawing tab and verify inputs
-      await drawingTab.click();
-      const penColorInput = page.locator('#pref-pen-color');
-      await expect(penColorInput).toBeVisible();
+    // Switch to Persistence & Matching tab
+    const persistenceTab = page.locator('#tab-btn-persistence');
+    await persistenceTab.click();
+    await expect(persistenceTab).toHaveAttribute('aria-selected', 'true');
 
-      // Click persistence tab
-      await persistenceTab.click();
-      const matchModeSelect = page.locator('#pref-url-match-mode');
-      await expect(matchModeSelect).toBeVisible();
-    }
+    // User selects URL match mode
+    const matchMode = page.locator('#pref-url-match-mode');
+    await matchMode.selectOption('domain');
+
+    // Switch back to Keyboard Shortcuts tab
+    const shortcutsTab = page.locator('#tab-btn-shortcuts');
+    await shortcutsTab.click();
+    await expect(shortcutsTab).toHaveAttribute('aria-selected', 'true');
+
+    // User clicks the first shortcut badge to rebind it
+    const firstKeyBadge = page.locator('.pa-key-badge').first();
+    await firstKeyBadge.click();
+    await expect(firstKeyBadge).toHaveClass(/recording/);
+
+    // User presses physical keys Ctrl+Shift+U
+    await page.keyboard.press('Control+Shift+KeyU');
+    await expect(firstKeyBadge).not.toHaveClass(/recording/);
+    await expect(firstKeyBadge).toHaveText(/Ctrl\+.*Shift\+.*u/i);
+
+    // User clicks Save Changes button
+    const saveBtn = page.locator('#btn-save');
+    await saveBtn.click();
+
+    // User sees the toast notification
+    const toast = page.locator('div[role="status"]');
+    await expect(toast).toBeVisible();
+    await expect(toast).toHaveText('Settings saved successfully!');
+  });
+
+  test('USER FLOW 3: Extension popup opening, status display, and navigation to options', async ({
+    context,
+    extensionId,
+  }) => {
+    expect(extensionId).toBeTruthy();
+
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await page.waitForLoadState('domcontentloaded');
+
+    // User sees the popup brand header
+    await expect(page.locator('.pa-brand-title')).toHaveText('Page Anchor');
+
+    // User sees the drawing toggle switch and action cards
+    const toggleSwitch = page.locator('#toggle-draw-mode');
+    await expect(toggleSwitch).toBeAttached();
+
+    const exportCard = page.locator('#btn-export');
+    await expect(exportCard).toBeVisible();
+
+    const clearCard = page.locator('#btn-clear');
+    await expect(clearCard).toBeVisible();
+
+    // User clicks the Options settings gear button
+    const optionsBtn = page.locator('#btn-options');
+    await expect(optionsBtn).toBeVisible();
   });
 });

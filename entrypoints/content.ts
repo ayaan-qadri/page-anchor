@@ -36,6 +36,7 @@ export default defineContentScript({
     shadowRoot.appendChild(uiContainer);
 
     const ensureHostAttached = () => {
+      if (host.dataset.destroyed === 'true') return;
       if (!host.isConnected) {
         const root = document.documentElement || document.body;
         if (root) root.appendChild(host);
@@ -46,6 +47,10 @@ export default defineContentScript({
 
     if (typeof MutationObserver !== 'undefined' && document.documentElement) {
       const observer = new MutationObserver(() => {
+        if (host.dataset.destroyed === 'true') {
+          observer.disconnect();
+          return;
+        }
         if (!host.isConnected) {
           ensureHostAttached();
         }

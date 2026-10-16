@@ -165,7 +165,12 @@ async function storageRemove(key: string): Promise<void> {
 export async function loadSettings(): Promise<ExtensionSettings> {
   const result = await storageGet(SETTINGS_KEY);
   const stored = result?.[SETTINGS_KEY] as Partial<ExtensionSettings> | undefined;
-  if (!stored) return DEFAULT_SETTINGS;
+  if (!stored) {
+    return {
+      ...DEFAULT_SETTINGS,
+      shortcuts: { ...DEFAULT_SETTINGS.shortcuts },
+    };
+  }
 
   return {
     ...DEFAULT_SETTINGS,

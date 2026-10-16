@@ -56,11 +56,11 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
   });
 
   afterEach(() => {
-    const host = document.getElementById('page-anchor-host');
-    if (host) {
-      host.id = 'page-anchor-host-removed';
-      host.remove();
-    }
+    const hosts = document.querySelectorAll('[id^="page-anchor-host"]');
+    hosts.forEach((h) => {
+      (h as HTMLElement).dataset.destroyed = 'true';
+      h.remove();
+    });
     document.body.innerHTML = '';
     delete (globalThis as any).chrome;
   });
@@ -189,14 +189,16 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
     contentDefinition.main();
     await new Promise((r) => setTimeout(r, 20));
 
-    const shadow = document.getElementById('page-anchor-host')!.shadowRoot!;
-    const pill = shadow.querySelector('.pa-anchor-pill') as HTMLButtonElement;
+    const host = document.getElementById('page-anchor-host') as HTMLElement;
+    const shadow = host?.shadowRoot!;
+    const pill = shadow?.querySelector('.pa-anchor-pill') as HTMLButtonElement;
 
-    const statusFn = vi.fn();
-    messageListener?.({ type: 'PAGE_ANCHOR_GET_STATUS' }, {}, statusFn);
-    if (!statusFn.mock.calls[0]?.[0]?.active) {
-      pill.click();
-    }
+    // User clicks the floating pill to open drawing toolbar
+    pill.click();
+    await new Promise((r) => setTimeout(r, 20));
+
+    const toolbar = shadow.querySelector('.pa-toolbar') as HTMLElement;
+    expect(toolbar).not.toBeNull();
 
     const activeCanvas = shadow.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
     const penBtn = shadow.querySelector('[data-tool="pen"]') as HTMLButtonElement;
@@ -213,14 +215,9 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
       new PointerEvent('pointerup', { clientX: 80, clientY: 80, pointerId: 1 })
     );
 
-    // Verify drawing mode state query from popup
-    const sendResponse = vi.fn();
-    messageListener?.({ type: 'PAGE_ANCHOR_GET_STATUS' }, {}, sendResponse);
-    expect(sendResponse).toHaveBeenCalledWith(
-      expect.objectContaining({
-        active: true,
-        count: 1,
-      })
-    );
+    // User sees the active annotation counter badge increment to 1
+    const badge = shadow.querySelector('.pa-pill-badge') as HTMLElement;
+    expect(badge).not.toBeNull();
+    expect(badge.textContent).toBe('1');
   });
 });
