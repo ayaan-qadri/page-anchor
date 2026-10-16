@@ -2,21 +2,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import contentDefinition from '../entrypoints/content';
 import { loadPageData } from '../src/core/storage';
 
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navigation', () => {
   let mockChrome: any;
   let mockStorage: Record<string, any>;
-  let messageListener: any = null;
 
   beforeEach(() => {
     mockStorage = {};
-    messageListener = null;
 
     mockChrome = {
       runtime: {
         onMessage: {
-          addListener: vi.fn((fn) => {
-            messageListener = fn;
-          }),
+          addListener: vi.fn(),
         },
       },
       storage: {
@@ -84,6 +82,10 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
     // Verify drawing toolbar is open
     const toolbar = shadow.querySelector('.pa-toolbar') as HTMLElement;
     expect(toolbar).not.toBeNull();
+    const toolbarWrapper = shadow.querySelector('.pa-toolbar-wrapper') as HTMLElement;
+    expect(toolbarWrapper.style.display).toBe('block');
+    const badge = shadow.querySelector('.pa-pill-badge') as HTMLElement;
+    expect(badge).not.toBeNull();
 
     // Find the canvas layers
     const activeCanvas = shadow.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
@@ -92,6 +94,7 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
     // 3. User selects the Pen tool and draws a freehand stroke across the heading
     const penBtn = shadow.querySelector('[data-tool="pen"]') as HTMLButtonElement;
     penBtn.click();
+    expect(penBtn.classList.contains('active')).toBe(true);
 
     activeCanvas.dispatchEvent(
       new PointerEvent('pointerdown', { clientX: 100, clientY: 100, button: 0, pointerId: 1 })
@@ -106,9 +109,13 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
       new PointerEvent('pointerup', { clientX: 200, clientY: 100, pointerId: 1 })
     );
 
+    // The stroke was committed: the badge reflects one annotation
+    expect(badge.textContent).toBe('1');
+
     // 4. User selects Rectangle shape and draws a box around the article
     const rectBtn = shadow.querySelector('[data-tool="rect"]') as HTMLButtonElement;
     rectBtn.click();
+    expect(rectBtn.classList.contains('active')).toBe(true);
 
     activeCanvas.dispatchEvent(
       new PointerEvent('pointerdown', { clientX: 80, clientY: 80, button: 0, pointerId: 2 })
@@ -120,9 +127,13 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
       new PointerEvent('pointerup', { clientX: 300, clientY: 200, pointerId: 2 })
     );
 
+    // Rectangle committed: two annotations now exist
+    expect(badge.textContent).toBe('2');
+
     // 5. User clicks the Text tool to type a note
     const textBtn = shadow.querySelector('[data-tool="text"]') as HTMLButtonElement;
     textBtn.click();
+    expect(textBtn.classList.contains('active')).toBe(true);
 
     activeCanvas.dispatchEvent(
       new PointerEvent('pointerdown', { clientX: 320, clientY: 150, button: 0, pointerId: 3 })
@@ -139,32 +150,49 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
       new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
     );
 
+    // Note committed: three annotations exist and the editor overlay is removed
+    expect(badge.textContent).toBe('3');
+    expect(uiRoot.querySelector('.pa-text-input-wrapper')).toBeNull();
+
+    // The debounced save persists the three elements for this URL
+    await wait(320);
+    const persisted = await loadPageData(window.location.href);
+    expect(persisted?.elements.length).toBe(3);
+
     // 6. User switches to Select tool and selects the elements
     const selectBtn = shadow.querySelector('[data-tool="select"]') as HTMLButtonElement;
     selectBtn.click();
+    expect(selectBtn.classList.contains('active')).toBe(true);
 
-    // User uses Ctrl+A to select all annotations
+    // User uses Ctrl+A to select all annotations (puts engine in select mode)
     window.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true })
     );
+    expect(selectBtn.classList.contains('active')).toBe(true);
 
-    // 7. User tests the Eraser tool
+    // 7. User tests the Eraser tool by erasing the freehand stroke
     const eraserBtn = shadow.querySelector('[data-tool="eraser"]') as HTMLButtonElement;
     eraserBtn.click();
+    expect(eraserBtn.classList.contains('active')).toBe(true);
 
+    const countBeforeErase = Number(badge.textContent);
     activeCanvas.dispatchEvent(
-      new PointerEvent('pointerdown', { clientX: 150, clientY: 110, button: 0, pointerId: 4 })
+      new PointerEvent('pointerdown', { clientX: 100, clientY: 100, button: 0, pointerId: 4 })
     );
+    const countAfterErase = Number(badge.textContent);
+    expect(countAfterErase).toBeLessThan(countBeforeErase);
 
     // 8. User tests Undo (Ctrl+Z) to restore what was erased
     window.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true })
     );
+    expect(Number(badge.textContent)).toBe(countBeforeErase);
 
-    // User tests Redo (Ctrl+Shift+Z)
+    // User tests Redo (Ctrl+Y) to remove it again
     window.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true, bubbles: true })
+      new KeyboardEvent('keydown', { key: 'y', ctrlKey: true, bubbles: true })
     );
+    expect(Number(badge.textContent)).toBe(countAfterErase);
 
     // 9. User navigates to a new section in a Single-Page App (SPA)
     window.history.pushState({}, 'Section 2', '/section-2');
@@ -175,14 +203,21 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
     window.dispatchEvent(new Event('popstate'));
     await new Promise((r) => setTimeout(r, 60));
 
-    // 11. User exports snapshot
+    // 11. User exports snapshot (a PNG download link is triggered)
+    const downloadSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     const exportBtn = shadow.querySelector('[data-action="export"]') as HTMLButtonElement;
     exportBtn.click();
+    expect(downloadSpy).toHaveBeenCalled();
+    downloadSpy.mockRestore();
 
     // 12. User confirms Clear all annotations
     const clearBtn = shadow.querySelector('[data-action="clear"]') as HTMLButtonElement;
     clearBtn.click();
     expect(globalThis.confirm).toHaveBeenCalled();
+    // Canvas is empty: the badge is hidden and persisted data is removed
+    expect(badge.style.display).toBe('none');
+    await wait(320);
+    expect(await loadPageData(window.location.href)).toBeNull();
   });
 
   it('VERIFIES SMART DOM ANCHORING: Annotations dynamically follow moving elements', async () => {
@@ -190,7 +225,7 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
     await new Promise((r) => setTimeout(r, 20));
 
     const host = document.getElementById('page-anchor-host') as HTMLElement;
-    const shadow = host?.shadowRoot!;
+    const shadow = host.shadowRoot!;
     const pill = shadow?.querySelector('.pa-anchor-pill') as HTMLButtonElement;
 
     // User clicks the floating pill to open drawing toolbar
