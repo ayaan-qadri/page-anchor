@@ -142,6 +142,72 @@ export class SettingsModal {
     persistSection.appendChild(urlMatchRow);
     body.appendChild(persistSection);
 
+    const anchorSection = document.createElement('div');
+    anchorSection.innerHTML = `<div class="pa-section-title">Smart Element Anchoring</div>`;
+
+    const anchorRow = document.createElement('div');
+    anchorRow.className = 'pa-shortcut-row';
+
+    const anchorCheckbox = document.createElement('input');
+    anchorCheckbox.id = 'pa-modal-dom-anchor';
+    anchorCheckbox.type = 'checkbox';
+    anchorCheckbox.checked = this.settings.domAnchoringEnabled ?? true;
+    anchorCheckbox.style.cursor = 'pointer';
+    anchorCheckbox.style.width = '18px';
+    anchorCheckbox.style.height = '18px';
+    anchorCheckbox.setAttribute('aria-label', 'Enable Smart DOM Element Anchoring by default');
+    anchorCheckbox.addEventListener('change', () => {
+      this.settings.domAnchoringEnabled = anchorCheckbox.checked;
+    });
+
+    const anchorLabel = document.createElement('label');
+    anchorLabel.htmlFor = 'pa-modal-dom-anchor';
+    anchorLabel.className = 'pa-shortcut-info';
+    anchorLabel.innerHTML = `
+      <span class="pa-shortcut-name">Smart Element Anchoring</span>
+      <span class="pa-shortcut-desc">Pins highlights to DOM elements (follows moving GitHub issues, cards, comments)</span>
+    `;
+
+    anchorRow.appendChild(anchorLabel);
+    anchorRow.appendChild(anchorCheckbox);
+    anchorSection.appendChild(anchorRow);
+
+    const orphanRow = document.createElement('div');
+    orphanRow.className = 'pa-shortcut-row';
+
+    const orphanSelect = document.createElement('select');
+    orphanSelect.id = 'pa-modal-orphan-mode';
+    orphanSelect.style.background = 'rgba(255, 255, 255, 0.08)';
+    orphanSelect.style.color = '#ffffff';
+    orphanSelect.style.border = '1px solid rgba(255, 255, 255, 0.15)';
+    orphanSelect.style.borderRadius = '6px';
+    orphanSelect.style.padding = '4px 8px';
+    orphanSelect.style.outline = 'none';
+    orphanSelect.setAttribute('aria-label', 'When annotated element disappears or is removed from page');
+
+    orphanSelect.innerHTML = `
+      <option value="hide" ${(this.settings.orphanedAnchorMode || 'hide') === 'hide' ? 'selected' : ''}>Hide automatically (Default)</option>
+      <option value="dimmed" ${this.settings.orphanedAnchorMode === 'dimmed' ? 'selected' : ''}>Remain visible at original location (Dimmed)</option>
+    `;
+
+    orphanSelect.addEventListener('change', () => {
+      this.settings.orphanedAnchorMode = orphanSelect.value as 'hide' | 'dimmed';
+    });
+
+    const orphanInfo = document.createElement('label');
+    orphanInfo.htmlFor = 'pa-modal-orphan-mode';
+    orphanInfo.className = 'pa-shortcut-info';
+    orphanInfo.innerHTML = `
+      <span class="pa-shortcut-name">When Marked Item Is Not Found</span>
+      <span class="pa-shortcut-desc">Behavior when an annotated issue is closed or on another page</span>
+    `;
+
+    orphanRow.appendChild(orphanInfo);
+    orphanRow.appendChild(orphanSelect);
+    anchorSection.appendChild(orphanRow);
+
+    body.appendChild(anchorSection);
+
     const perfSection = document.createElement('div');
     perfSection.innerHTML = `<div class="pa-section-title">Optimization</div>`;
 

@@ -22,6 +22,22 @@ export interface BoundingBox {
   maxY: number;
 }
 
+export interface DOMAnchor {
+  selector: string;
+  fallbackSelectors?: string[];
+  textQuote?: {
+    exact: string;
+    prefix?: string;
+    suffix?: string;
+  };
+  initialRect: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
+}
+
 export interface BaseElement {
   id: string;
   type: ToolType;
@@ -30,6 +46,7 @@ export interface BaseElement {
   strokeWidth: number;
   opacity: number;
   createdAt: number;
+  anchor?: DOMAnchor;
 }
 
 export interface StrokeElement extends BaseElement {
@@ -65,4 +82,5 @@ export interface EngineCallbacks {
   onElementsChange?: (elements: AnchorElement[]) => void;
   onSelectionChange?: (selected: AnchorElement | null, selectedList?: AnchorElement[]) => void;
   onTextCreateRequested?: (pt: Point) => void;
+  onDomAnchoringToggle?: (enabled: boolean) => void;
 }

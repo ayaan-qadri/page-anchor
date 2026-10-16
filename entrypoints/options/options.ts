@@ -281,11 +281,15 @@ function setupPersistenceForm() {
   const perfMode = document.getElementById('pref-performance-mode') as HTMLInputElement;
   const toolbarOpenMode = document.getElementById('pref-toolbar-open') as HTMLInputElement;
   const showPillMode = document.getElementById('pref-show-pill') as HTMLInputElement;
+  const domAnchorMode = document.getElementById('pref-dom-anchoring') as HTMLInputElement;
+  const orphanMode = document.getElementById('pref-orphan-mode') as HTMLSelectElement;
 
   matchMode.value = currentSettings.urlMatchMode;
   perfMode.checked = currentSettings.performanceMode;
   toolbarOpenMode.checked = !!currentSettings.isToolbarOpen;
   showPillMode.checked = currentSettings.showFloatingPill !== false;
+  if (domAnchorMode) domAnchorMode.checked = currentSettings.domAnchoringEnabled ?? true;
+  if (orphanMode) orphanMode.value = currentSettings.orphanedAnchorMode || 'hide';
 
   matchMode.addEventListener('change', () => {
     currentSettings.urlMatchMode = matchMode.value as 'clean' | 'exact' | 'domain';
@@ -301,6 +305,14 @@ function setupPersistenceForm() {
 
   showPillMode.addEventListener('change', () => {
     currentSettings.showFloatingPill = showPillMode.checked;
+  });
+
+  domAnchorMode?.addEventListener('change', () => {
+    currentSettings.domAnchoringEnabled = domAnchorMode.checked;
+  });
+
+  orphanMode?.addEventListener('change', () => {
+    currentSettings.orphanedAnchorMode = orphanMode.value as 'hide' | 'dimmed';
   });
 }
 

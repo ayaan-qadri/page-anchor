@@ -2,6 +2,7 @@ import { AnchorElement } from './engine.types';
 import { ShortcutAction } from './shortcuts.types';
 
 export type UrlMatchMode = 'clean' | 'exact' | 'domain';
+export type OrphanedAnchorMode = 'hide' | 'dimmed';
 
 export interface PageAnchorData {
   url: string;
@@ -9,6 +10,7 @@ export interface PageAnchorData {
   pageTitle: string;
   updatedAt: number;
   elements: AnchorElement[];
+  domAnchoringEnabled?: boolean;
 }
 
 export interface PageMetadataSummary {
@@ -32,4 +34,6 @@ export interface ExtensionSettings {
   isToolbarOpen: boolean;
   showFloatingPill: boolean;
   areAnnotationsVisible: boolean;
+  domAnchoringEnabled: boolean;
+  orphanedAnchorMode: OrphanedAnchorMode;
 }

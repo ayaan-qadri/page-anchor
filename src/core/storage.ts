@@ -23,6 +23,8 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   isToolbarOpen: false,
   showFloatingPill: true,
   areAnnotationsVisible: true,
+  domAnchoringEnabled: true,
+  orphanedAnchorMode: 'hide',
 };
 
 const TRACKING_PARAMS = new Set([
@@ -192,7 +194,8 @@ export async function loadPageData(rawUrl: string): Promise<PageAnchorData | nul
 export async function savePageData(
   rawUrl: string,
   elements: AnchorElement[],
-  pageTitle: string
+  pageTitle: string,
+  domAnchoringEnabled?: boolean
 ): Promise<void> {
   const settings = await loadSettings();
   const normalized = normalizeUrl(rawUrl, settings.urlMatchMode);
@@ -203,12 +206,16 @@ export async function savePageData(
     return;
   }
 
+  const existing = await storageGet(key);
+  const existingData = existing?.[key] as PageAnchorData | undefined;
+
   const data: PageAnchorData = {
     url: rawUrl,
     normalizedUrl: normalized,
     pageTitle: pageTitle || (typeof document !== 'undefined' ? document.title : '') || rawUrl,
     updatedAt: Date.now(),
     elements,
+    domAnchoringEnabled: domAnchoringEnabled !== undefined ? domAnchoringEnabled : existingData?.domAnchoringEnabled,
   };
 
   await storageSet({ [key]: data });

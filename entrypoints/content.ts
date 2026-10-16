@@ -61,7 +61,7 @@ export default defineContentScript({
       if (saveTimeout) clearTimeout(saveTimeout);
       saveTimeout = window.setTimeout(async () => {
         try {
-          await savePageData(currentLoadedUrl, elements, document.title);
+          await savePageData(currentLoadedUrl, elements, document.title, engine.getDomAnchoringEnabled());
           toolbar?.updateBadge();
         } catch {}
       }, 250);
@@ -70,7 +70,7 @@ export default defineContentScript({
     const flushSave = async () => {
       if (engine && currentLoadedUrl) {
         try {
-          await savePageData(currentLoadedUrl, engine.getElements(), document.title);
+          await savePageData(currentLoadedUrl, engine.getElements(), document.title, engine.getDomAnchoringEnabled());
         } catch {}
       }
     };
@@ -115,9 +115,13 @@ export default defineContentScript({
         onExport: () => {
           exportSnapshot();
         },
+        onToggleDomAnchoring: () => {
+          triggerSave(engine.getElements());
+        },
         onSettingsUpdate: (newSettings) => {
           settings = newSettings;
           shortcutManager.setShortcuts(settings.shortcuts);
+          engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
         },
       }
     );
@@ -146,7 +150,7 @@ export default defineContentScript({
 
       if (engine && currentLoadedUrl) {
         try {
-          await savePageData(currentLoadedUrl, engine.getElements(), document.title);
+          await savePageData(currentLoadedUrl, engine.getElements(), document.title, engine.getDomAnchoringEnabled());
         } catch {}
       }
 
@@ -155,6 +159,11 @@ export default defineContentScript({
       try {
         const saved = await loadPageData(currentLoadedUrl);
         const newElements = saved?.elements || [];
+        const isAnchoring = saved?.domAnchoringEnabled !== undefined
+          ? saved.domAnchoringEnabled
+          : (settings.domAnchoringEnabled ?? true);
+        engine.setDomAnchoringEnabled(isAnchoring);
+        toolbar.updateDomAnchoringUI(isAnchoring);
 
         history.reset(newElements);
         engine.setElements(newElements);
@@ -233,6 +242,7 @@ export default defineContentScript({
           settings = loadedSettings;
           toolbar.setSettings(settings);
           shortcutManager.setShortcuts(settings.shortcuts);
+          engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
           if (settings.isToolbarOpen) {
             toolbar.setDrawingMode(true, false);
           }
@@ -242,6 +252,12 @@ export default defineContentScript({
       try {
         const saved = await loadPageData(window.location.href);
         const initialElements = saved?.elements || [];
+        const isAnchoring = saved?.domAnchoringEnabled !== undefined
+          ? saved.domAnchoringEnabled
+          : (settings.domAnchoringEnabled ?? true);
+        engine.setDomAnchoringEnabled(isAnchoring);
+        toolbar.updateDomAnchoringUI(isAnchoring);
+
         history.reset(initialElements);
         engine.setElements(initialElements);
         toolbar.updateBadge();

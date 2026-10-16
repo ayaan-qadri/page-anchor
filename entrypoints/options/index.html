@@ -120,6 +120,26 @@
           </div>
 
           <div class="pa-form-group mb-5.5 flex flex-col gap-2">
+            <span class="pa-form-label font-semibold text-slate-200">Smart DOM Element Anchoring</span>
+            <label class="pa-checkbox-row flex items-center gap-2.5 text-[13px] text-slate-300 cursor-pointer" for="pref-dom-anchoring">
+              <input type="checkbox" id="pref-dom-anchoring" class="w-[18px] h-[18px] accent-blue-600 cursor-pointer" checked />
+              <span>Enable Smart Element Anchoring by default (follows moving GitHub issues, cards, comments)</span>
+            </label>
+            <div class="pa-form-hint text-xs text-slate-400">
+              Pins drawings to underlying HTML elements instead of fixed screen pixels, so marks stay aligned when new items arrive or content shifts.
+            </div>
+
+            <label for="pref-orphan-mode" class="pa-form-label font-semibold text-slate-200 mt-2">When Annotated Element Is Not Found</label>
+            <select id="pref-orphan-mode" class="pa-select bg-white/5 border border-white/10 text-white px-3 py-2 rounded-lg outline-none max-w-[500px] focus:ring-2 focus:ring-sky-400 cursor-pointer [&>option]:bg-slate-900" aria-describedby="pref-orphan-hint">
+              <option value="hide">Hide automatically (Default - reveals when element returns)</option>
+              <option value="dimmed">Remain visible at original location (Dimmed with dashed outline)</option>
+            </select>
+            <div id="pref-orphan-hint" class="pa-form-hint text-xs text-slate-400">
+              Determines what happens when an issue is closed, filtered out, or navigated to another page.
+            </div>
+          </div>
+
+          <div class="pa-form-group mb-5.5 flex flex-col gap-2">
             <span class="pa-form-label font-semibold text-slate-200">Zero-Lag Performance Engine</span>
             <label class="pa-checkbox-row flex items-center gap-2.5 text-[13px] text-slate-300 cursor-pointer" for="pref-performance-mode">
               <input type="checkbox" id="pref-performance-mode" class="w-[18px] h-[18px] accent-blue-600 cursor-pointer" checked />

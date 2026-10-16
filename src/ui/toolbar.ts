@@ -139,6 +139,9 @@ export class FloatingToolbar {
     if (settings.areAnnotationsVisible !== undefined) {
       this.engine.setAnnotationsVisible(settings.areAnnotationsVisible);
     }
+    if (settings.orphanedAnchorMode !== undefined) {
+      this.engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
+    }
   }
 
   public updateBadge(): void {
@@ -347,10 +350,39 @@ export class FloatingToolbar {
     eyeBtn.setAttribute('aria-pressed', isVisible ? 'true' : 'false');
     this.toolbar.appendChild(eyeBtn);
 
+    const isAnchoring = this.engine.getDomAnchoringEnabled();
+    const anchorBtn = this.createActionButton(
+      'dom-anchor',
+      isAnchoring ? 'Smart Anchoring: ON (Follows moving items)' : 'Smart Anchoring: OFF (Fixed position)',
+      'action-toggle-toolbar',
+      isAnchoring ? ICONS.pin : ICONS.pinOff,
+      () => {
+        const next = !this.engine.getDomAnchoringEnabled();
+        this.engine.setDomAnchoringEnabled(next);
+        this.callbacks.onToggleDomAnchoring?.(next);
+        const label = next ? 'Smart Anchoring: ON (Follows moving items)' : 'Smart Anchoring: OFF (Fixed position)';
+        anchorBtn.setAttribute('aria-pressed', next ? 'true' : 'false');
+        anchorBtn.setAttribute('aria-label', label);
+        anchorBtn.innerHTML = `${next ? ICONS.pin : ICONS.pinOff}<span class="pa-tooltip" aria-hidden="true">${label}</span>`;
+      }
+    );
+    anchorBtn.setAttribute('aria-pressed', isAnchoring ? 'true' : 'false');
+    this.toolbar.appendChild(anchorBtn);
+
     const minBtn = this.createActionButton('minimize', 'Minimize (Alt+D to toggle)', 'toggle-active', ICONS.minimize, () => {
       this.setDrawingMode(false, true);
     });
     this.toolbar.appendChild(minBtn);
+  }
+
+  public updateDomAnchoringUI(enabled: boolean): void {
+    const btn = this.toolbar.querySelector('[data-action="dom-anchor"]') as HTMLButtonElement | null;
+    if (btn) {
+      const label = enabled ? 'Smart Anchoring: ON (Follows moving items)' : 'Smart Anchoring: OFF (Fixed position)';
+      btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+      btn.setAttribute('aria-label', label);
+      btn.innerHTML = `${enabled ? ICONS.pin : ICONS.pinOff}<span class="pa-tooltip" aria-hidden="true">${label}</span>`;
+    }
   }
 
   private buildColorPopover(): void {

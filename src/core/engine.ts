@@ -8,6 +8,8 @@ import {
   TextElement,
   ToolType,
 } from '../types/engine.types';
+import { OrphanedAnchorMode } from '../types/storage.types';
+import { DOMAnchorManager } from './anchor';
 import {
   computeBoundingBox,
   intersectsBoundingBox,
@@ -53,9 +55,16 @@ export class CanvasEngine {
   private dpr = 1;
   private callbacks: EngineCallbacks;
 
+  private anchorManager: DOMAnchorManager;
+  private isDomAnchoringEnabled = true;
+  private orphanedAnchorMode: OrphanedAnchorMode = 'hide';
+
   constructor(container: HTMLElement, callbacks: EngineCallbacks = {}) {
     this.container = container;
     this.callbacks = callbacks;
+    this.anchorManager = new DOMAnchorManager(() => {
+      this.renderBase();
+    });
 
     this.baseCanvas = document.createElement('canvas');
     this.baseCanvas.className = 'page-anchor-base-canvas';
@@ -87,6 +96,59 @@ export class CanvasEngine {
 
     this.updateDprAndSize();
     this.bindEvents();
+  }
+
+  public setDomAnchoringEnabled(enabled: boolean): void {
+    this.isDomAnchoringEnabled = enabled;
+    this.anchorManager.invalidateCache();
+    this.renderBase();
+    this.callbacks.onDomAnchoringToggle?.(enabled);
+  }
+
+  public getDomAnchoringEnabled(): boolean {
+    return this.isDomAnchoringEnabled;
+  }
+
+  public setOrphanedAnchorMode(mode: OrphanedAnchorMode): void {
+    this.orphanedAnchorMode = mode;
+    this.renderBase();
+  }
+
+  public getOrphanedAnchorMode(): OrphanedAnchorMode {
+    return this.orphanedAnchorMode;
+  }
+
+  public getElementEffectiveBBox(el: AnchorElement): {
+    bbox: BoundingBox;
+    deltaX: number;
+    deltaY: number;
+    isOrphaned: boolean;
+  } {
+    let deltaX = 0;
+    let deltaY = 0;
+    let isOrphaned = false;
+
+    if (this.isDomAnchoringEnabled && el.anchor) {
+      const res = this.anchorManager.resolve(el.anchor);
+      if (res.status === 'orphaned') {
+        isOrphaned = true;
+      } else {
+        deltaX = res.deltaX;
+        deltaY = res.deltaY;
+      }
+    }
+
+    return {
+      bbox: {
+        minX: el.bbox.minX + deltaX,
+        minY: el.bbox.minY + deltaY,
+        maxX: el.bbox.maxX + deltaX,
+        maxY: el.bbox.maxY + deltaY,
+      },
+      deltaX,
+      deltaY,
+      isOrphaned,
+    };
   }
 
   public setTool(tool: ToolType): void {
@@ -158,6 +220,10 @@ export class CanvasEngine {
   }
 
   public addElement(element: AnchorElement): void {
+    if (this.isDomAnchoringEnabled && !element.anchor) {
+      const pt = element.type === 'text' ? { x: element.x, y: element.y } : undefined;
+      element.anchor = this.anchorManager.captureAnchor(element.bbox, pt);
+    }
     this.elements.push(element);
     this.callbacks.onElementsChange?.(this.elements);
     this.renderBase();
@@ -479,15 +545,22 @@ export class CanvasEngine {
       if (this.isDraggingSelected) {
         this.isDraggingSelected = false;
         this.dragStartPoint = null;
+        if (this.isDomAnchoringEnabled) {
+          for (const el of this.selectedElements) {
+            el.anchor = this.anchorManager.captureAnchor(el.bbox);
+          }
+        }
         this.callbacks.onElementsChange?.(this.elements);
       }
       if (this.isMarqueeSelecting && this.currentMarqueeBBox) {
         const w = this.currentMarqueeBBox.maxX - this.currentMarqueeBBox.minX;
         const h = this.currentMarqueeBBox.maxY - this.currentMarqueeBBox.minY;
         if (w > 3 || h > 3) {
-          this.selectedElements = this.elements.filter((el) =>
-            intersectsBoundingBox(el.bbox, this.currentMarqueeBBox!)
-          );
+          this.selectedElements = this.elements.filter((el) => {
+            const eff = this.getElementEffectiveBBox(el);
+            if (eff.isOrphaned && this.orphanedAnchorMode === 'hide') return false;
+            return intersectsBoundingBox(eff.bbox, this.currentMarqueeBBox!);
+          });
           this.callbacks.onSelectionChange?.(this.selectedElements[0] || null, this.selectedElements);
         }
         this.isMarqueeSelecting = false;
@@ -516,6 +589,13 @@ export class CanvasEngine {
         };
         strokeElem.bbox = computeBoundingBox(strokeElem);
 
+        if (this.isDomAnchoringEnabled) {
+          strokeElem.anchor = this.anchorManager.captureAnchor(
+            strokeElem.bbox,
+            strokeElem.points[0]
+          );
+        }
+
         this.elements.push(strokeElem);
         this.currentStrokePoints = [];
         this.clearActiveCanvas();
@@ -531,6 +611,12 @@ export class CanvasEngine {
         this.currentShape.endY - this.currentShape.startY
       );
       if (dist >= 4) {
+        if (this.isDomAnchoringEnabled) {
+          this.currentShape.anchor = this.anchorManager.captureAnchor(this.currentShape.bbox, {
+            x: this.currentShape.startX,
+            y: this.currentShape.startY,
+          });
+        }
         this.elements.push(this.currentShape);
         this.callbacks.onElementsChange?.(this.elements);
       }
@@ -544,7 +630,17 @@ export class CanvasEngine {
 
   private eraseAtPoint(pt: Point): void {
     const prevCount = this.elements.length;
-    this.elements = this.elements.filter((el) => !isPointNearElement(pt, el, 12));
+    this.elements = this.elements.filter((el) => {
+      let testPt = pt;
+      if (this.isDomAnchoringEnabled && el.anchor) {
+        const eff = this.getElementEffectiveBBox(el);
+        if (eff.isOrphaned && this.orphanedAnchorMode === 'hide') {
+          return true;
+        }
+        testPt = { x: pt.x - eff.deltaX, y: pt.y - eff.deltaY };
+      }
+      return !isPointNearElement(testPt, el, 12);
+    });
     if (this.elements.length !== prevCount) {
       this.callbacks.onElementsChange?.(this.elements);
       this.renderBase();
@@ -553,8 +649,17 @@ export class CanvasEngine {
 
   private hitTest(pt: Point): AnchorElement | null {
     for (let i = this.elements.length - 1; i >= 0; i--) {
-      if (isPointNearElement(pt, this.elements[i], 8)) {
-        return this.elements[i];
+      const el = this.elements[i];
+      let testPt = pt;
+      if (this.isDomAnchoringEnabled && el.anchor) {
+        const eff = this.getElementEffectiveBBox(el);
+        if (eff.isOrphaned && this.orphanedAnchorMode === 'hide') {
+          continue;
+        }
+        testPt = { x: pt.x - eff.deltaX, y: pt.y - eff.deltaY };
+      }
+      if (isPointNearElement(testPt, el, 8)) {
+        return el;
       }
     }
     return null;
@@ -582,6 +687,10 @@ export class CanvasEngine {
       el.endY += dy;
     }
     el.bbox = computeBoundingBox(el);
+    if (el.anchor) {
+      el.anchor.initialRect.left += dx;
+      el.anchor.initialRect.top += dy;
+    }
   }
 
   private clearActiveCanvas(): void {
@@ -656,8 +765,14 @@ export class CanvasEngine {
 
     for (let i = 0; i < this.elements.length; i++) {
       const el = this.elements[i];
-      if (intersectsBoundingBox(el.bbox, viewportBox)) {
-        this.renderSingleElement(ctx, el);
+      const eff = this.getElementEffectiveBBox(el);
+
+      if (eff.isOrphaned && this.orphanedAnchorMode === 'hide') {
+        continue;
+      }
+
+      if (intersectsBoundingBox(eff.bbox, viewportBox)) {
+        this.renderSingleElementWithOffset(ctx, el, eff.deltaX, eff.deltaY, eff.isOrphaned);
       }
     }
 
@@ -665,6 +780,34 @@ export class CanvasEngine {
       this.renderSelection(ctx);
     }
 
+    ctx.restore();
+  }
+
+  private renderSingleElementWithOffset(
+    ctx: CanvasRenderingContext2D,
+    el: AnchorElement,
+    deltaX: number,
+    deltaY: number,
+    isOrphaned = false
+  ): void {
+    ctx.save();
+    if (deltaX !== 0 || deltaY !== 0) {
+      ctx.translate(deltaX, deltaY);
+    }
+    if (isOrphaned) {
+      ctx.globalAlpha = (el.opacity || 1) * 0.35;
+    }
+    this.renderSingleElement(ctx, el);
+
+    if (isOrphaned) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.65)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      const b = el.bbox;
+      ctx.strokeRect(b.minX - 3, b.minY - 3, b.maxX - b.minX + 6, b.maxY - b.minY + 6);
+      ctx.restore();
+    }
     ctx.restore();
   }
 
@@ -800,10 +943,11 @@ export class CanvasEngine {
     if (this.selectedElements.length === 0) return false;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const el of this.selectedElements) {
-      minX = Math.min(minX, el.bbox.minX);
-      minY = Math.min(minY, el.bbox.minY);
-      maxX = Math.max(maxX, el.bbox.maxX);
-      maxY = Math.max(maxY, el.bbox.maxY);
+      const eff = this.getElementEffectiveBBox(el);
+      minX = Math.min(minX, eff.bbox.minX);
+      minY = Math.min(minY, eff.bbox.minY);
+      maxX = Math.max(maxX, eff.bbox.maxX);
+      maxY = Math.max(maxY, eff.bbox.maxY);
     }
     return pt.x >= minX - 8 && pt.x <= maxX + 8 && pt.y >= minY - 8 && pt.y <= maxY + 8;
   }
@@ -840,10 +984,11 @@ export class CanvasEngine {
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const el of this.selectedElements) {
-      minX = Math.min(minX, el.bbox.minX);
-      minY = Math.min(minY, el.bbox.minY);
-      maxX = Math.max(maxX, el.bbox.maxX);
-      maxY = Math.max(maxY, el.bbox.maxY);
+      const eff = this.getElementEffectiveBBox(el);
+      minX = Math.min(minX, eff.bbox.minX);
+      minY = Math.min(minY, eff.bbox.minY);
+      maxX = Math.max(maxX, eff.bbox.maxX);
+      maxY = Math.max(maxY, eff.bbox.maxY);
 
       this.renderIndividualItemOutline(ctx, el);
     }
@@ -906,7 +1051,7 @@ export class CanvasEngine {
     ctx.lineWidth = 2;
     ctx.setLineDash([4, 4]);
 
-    const bbox = el.bbox;
+    const bbox = this.getElementEffectiveBBox(el).bbox;
     ctx.strokeRect(
       bbox.minX - pad,
       bbox.minY - pad,
@@ -937,7 +1082,7 @@ export class CanvasEngine {
     ctx.strokeStyle = 'rgba(59, 130, 246, 0.45)';
     ctx.lineWidth = 1;
     ctx.setLineDash([3, 3]);
-    const b = el.bbox;
+    const b = this.getElementEffectiveBBox(el).bbox;
     ctx.strokeRect(b.minX - pad, b.minY - pad, b.maxX - b.minX + pad * 2, b.maxY - b.minY + pad * 2);
     ctx.restore();
   }
@@ -975,6 +1120,7 @@ export class CanvasEngine {
   public destroy(): void {
     if (this.rafId) cancelAnimationFrame(this.rafId);
     if (this.scrollRafId) cancelAnimationFrame(this.scrollRafId);
+    this.anchorManager.destroy();
     this.baseCanvas.remove();
     this.activeCanvas.remove();
   }
