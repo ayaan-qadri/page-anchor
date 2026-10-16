@@ -7,3 +7,5 @@ dist/
 .agents/
 skills-lock.json
 coverage/
+test-results/
+playwright-report/
