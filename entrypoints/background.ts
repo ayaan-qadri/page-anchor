@@ -52,13 +52,6 @@ export default defineBackground(() => {
     }
   });
 
-  const actionApi = ext.action || (ext as any).browserAction;
-  actionApi?.onClicked?.addListener(async (tab: any) => {
-    if (tab?.id) {
-      await safeToggleTab(tab.id);
-    }
-  });
-
   ext.runtime?.onInstalled?.addListener(async () => {
     try {
       const tabs = await ext.tabs.query({ url: ['http://*/*', 'https://*/*'] });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CanvasEngine } from '../src/core/engine';
-import { StrokeElement, ShapeElement, TextElement, AnchorElement } from '../src/types/engine.types';
+import { StrokeElement, ShapeElement, TextElement } from '../src/types/engine.types';
 
 describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () => {
   let container: HTMLElement;
@@ -46,6 +46,15 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
       expect(engine.getAnnotationsVisible()).toBe(false);
       engine.setAnnotationsVisible(true);
       expect(engine.getAnnotationsVisible()).toBe(true);
+    });
+
+    it('toggles the performance mode (culling + RDP decimation) flag', () => {
+      expect(engine.getPerformanceMode()).toBe(true);
+      engine.setPerformanceMode(false);
+      expect(engine.getPerformanceMode()).toBe(false);
+      expect(() => engine.renderBase()).not.toThrow();
+      engine.setPerformanceMode(true);
+      expect(engine.getPerformanceMode()).toBe(true);
     });
 
     it('sets appropriate cursor styling on active canvas for each tool', () => {

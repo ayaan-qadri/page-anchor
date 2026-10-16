@@ -138,42 +138,38 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
     contentDefinition.main();
     await new Promise((r) => setTimeout(r, 20));
 
-    // Toggle active
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', altKey: true, shiftKey: true, bubbles: true }));
+    const host = document.getElementById('page-anchor-host') as HTMLElement;
+    const shadow = host.shadowRoot!;
+    const isActive = (tool: string) =>
+      (shadow.querySelector(`[data-tool="${tool}"]`) as HTMLElement)?.classList.contains('active') ?? false;
 
-    // Switch to pen
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', altKey: true, shiftKey: true, bubbles: true }));
+    // Enter drawing mode (global toggle works even when inactive)
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'd', altKey: true, shiftKey: true, bubbles: true, cancelable: true })
+    );
 
-    // Switch to rect
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', altKey: true, shiftKey: true, bubbles: true }));
+    // Single-letter tool shortcuts only work while drawing mode is active
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', bubbles: true, cancelable: true }));
+    expect(isActive('pen')).toBe(true);
 
-    // Switch to circle
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', altKey: true, shiftKey: true, bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', bubbles: true, cancelable: true }));
+    expect(isActive('rect')).toBe(true);
 
-    // Switch to line
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', altKey: true, shiftKey: true, bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', bubbles: true, cancelable: true }));
+    expect(isActive('double-arrow')).toBe(true);
 
-    // Switch to arrow
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', altKey: true, shiftKey: true, bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', bubbles: true, cancelable: true }));
+    expect(isActive('eraser')).toBe(true);
 
-    // Switch to text
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', altKey: true, shiftKey: true, bubbles: true }));
-
-    // Switch to eraser
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', altKey: true, shiftKey: true, bubbles: true }));
-
-    // Select all
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true }));
-
-    // Undo / Redo
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true, bubbles: true }));
-
-    // Clear
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', ctrlKey: true, shiftKey: true, bubbles: true }));
-
-    // Export
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, shiftKey: true, bubbles: true }));
+    // Undo / Redo / Clear / Export use their real default chords
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true, bubbles: true, cancelable: true }));
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'x', altKey: true, shiftKey: true, bubbles: true, cancelable: true })
+    );
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'e', altKey: true, shiftKey: true, bubbles: true, cancelable: true })
+    );
   });
 
   it('deletes selected drawing element on Delete or Backspace keydown', async () => {

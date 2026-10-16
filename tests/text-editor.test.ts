@@ -17,7 +17,7 @@ describe('TextEditorOverlay: In-Place Text Editing', () => {
     container.remove();
   });
 
-  it('mounts textarea positioned accurately based on coordinates and scroll offset', () => {
+  it('mounts the textarea at document coordinates so the overlay aligns with the committed note', () => {
     Object.defineProperty(window, 'scrollX', { value: 20, writable: true, configurable: true });
     Object.defineProperty(window, 'scrollY', { value: 50, writable: true, configurable: true });
 
@@ -29,8 +29,9 @@ describe('TextEditorOverlay: In-Place Text Editing', () => {
 
     const wrapper = container.querySelector('.pa-text-input-wrapper') as HTMLElement;
     expect(wrapper).not.toBeNull();
-    expect(wrapper.style.left).toBe('180px');
-    expect(wrapper.style.top).toBe('250px');
+    // `pt` is already in document coordinates, so the overlay must not subtract scroll.
+    expect(wrapper.style.left).toBe('200px');
+    expect(wrapper.style.top).toBe('300px');
 
     const textarea = wrapper.querySelector('textarea') as HTMLTextAreaElement;
     expect(textarea.style.fontSize).toBe('18px');

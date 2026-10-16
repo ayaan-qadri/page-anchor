@@ -3,7 +3,7 @@ import { AnchorElement } from '../types/engine.types';
 export class HistoryManager {
   private undoStack: AnchorElement[][] = [];
   private redoStack: AnchorElement[][] = [];
-  private maxDepth = 51;
+  private maxDepth = 51; // Retains the initial snapshot plus 50 undo steps.
 
   constructor(initialElements: AnchorElement[] = []) {
     this.undoStack.push(this.clone(initialElements));

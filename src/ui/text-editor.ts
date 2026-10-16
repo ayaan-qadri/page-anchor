@@ -32,8 +32,11 @@ export class TextEditorOverlay {
     wrapper.className = 'pa-text-input-wrapper';
     wrapper.setAttribute('role', 'region');
     wrapper.setAttribute('aria-label', 'Annotation text input editor');
-    wrapper.style.left = `${pt.x - window.scrollX}px`;
-    wrapper.style.top = `${pt.y - window.scrollY}px`;
+    // `pt` is in document coordinates and this overlay lives inside the
+    // absolutely-positioned `#page-anchor-host`, so it must use doc coords
+    // directly. Subtracting scroll here would offset it on scrolled pages.
+    wrapper.style.left = `${pt.x}px`;
+    wrapper.style.top = `${pt.y}px`;
 
     const textarea = document.createElement('textarea');
     textarea.className = 'pa-text-textarea';

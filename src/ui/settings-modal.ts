@@ -5,7 +5,6 @@ import {
   SHORTCUT_DEFINITIONS,
   formatShortcutForDisplay,
   normalizeKeyEvent,
-  isReservedBrowserShortcut,
   getBrowserShortcutConflict,
 } from '../core/shortcuts';
 import { DEFAULT_SETTINGS, saveSettings } from '../core/storage';

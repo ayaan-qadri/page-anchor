@@ -100,6 +100,28 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     expect(engine.getActiveMode()).toBe(true);
   });
 
+  it('collapses/expands the toolbar without leaving drawing mode', () => {
+    const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
+    toolbar.setDrawingMode(true, false);
+    expect(engine.getActiveMode()).toBe(true);
+    expect(wrapper.style.display).toBe('block');
+
+    toolbar.toggleToolbarVisibility();
+    expect(wrapper.style.display).toBe('none');
+    // Still in drawing mode — only the bar is hidden
+    expect(engine.getActiveMode()).toBe(true);
+
+    toolbar.toggleToolbarVisibility();
+    expect(wrapper.style.display).toBe('block');
+    expect(engine.getActiveMode()).toBe(true);
+  });
+
+  it('exposes a distinct shortcut label for the double-arrow tool', () => {
+    const doubleArrowBtn = container.querySelector('[data-tool="double-arrow"]') as HTMLButtonElement;
+    expect(doubleArrowBtn).not.toBeNull();
+    expect(doubleArrowBtn.dataset.shortcut).toBe('tool-double-arrow');
+  });
+
   it('updates undo and redo buttons availability based on history stack', () => {
     const undoBtn = container.querySelector('[data-action="undo"]') as HTMLButtonElement;
     const redoBtn = container.querySelector('[data-action="redo"]') as HTMLButtonElement;

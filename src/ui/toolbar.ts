@@ -142,6 +142,9 @@ export class FloatingToolbar {
     if (settings.orphanedAnchorMode !== undefined) {
       this.engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
     }
+    if (settings.performanceMode !== undefined) {
+      this.engine.setPerformanceMode(settings.performanceMode);
+    }
   }
 
   public updateBadge(): void {
@@ -224,6 +227,33 @@ export class FloatingToolbar {
     this.setDrawingMode(newState, persist);
   }
 
+  /**
+   * Collapses or expands the floating toolbar while keeping drawing mode (and
+   * the active tool) intact. Distinct from `toggleDrawingMode`, which enters or
+   * leaves drawing mode entirely.
+   */
+  public toggleToolbarVisibility(): void {
+    const isHidden = this.wrapper.style.display === 'none';
+
+    if (!isHidden) {
+      this.wrapper.style.display = 'none';
+      this.pillButton.classList.remove('active');
+      this.pillButton.setAttribute('aria-expanded', 'false');
+      this.colorPopover.classList.remove('open');
+      this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
+      return;
+    }
+
+    if (this.engine.getActiveMode()) {
+      this.wrapper.style.display = 'block';
+      this.pillButton.classList.add('active');
+      this.pillButton.setAttribute('aria-expanded', 'true');
+      this.ensureVisibleInViewport();
+    } else {
+      this.setDrawingMode(true);
+    }
+  }
+
   private buildToolbarContent(): void {
     const dragHandle = document.createElement('div');
     dragHandle.className = 'pa-drag-handle';
@@ -239,7 +269,7 @@ export class FloatingToolbar {
     this.toolbar.appendChild(
       this.createActionButton(
         'select-all',
-        'Select All to Move (Ctrl+A)',
+        'Select All to Move',
         'action-select-all',
         ICONS.selectAll,
         () => {
@@ -258,7 +288,7 @@ export class FloatingToolbar {
     this.toolbar.appendChild(this.createToolButton('circle', 'Circle', 'tool-circle', ICONS.circle));
     this.toolbar.appendChild(this.createToolButton('line', 'Line', 'tool-line', ICONS.line));
     this.toolbar.appendChild(this.createToolButton('arrow', 'Arrow', 'tool-arrow', ICONS.arrow));
-    this.toolbar.appendChild(this.createToolButton('double-arrow', 'Double Arrow', 'tool-line', ICONS.doubleArrow));
+    this.toolbar.appendChild(this.createToolButton('double-arrow', 'Double Arrow', 'tool-double-arrow', ICONS.doubleArrow));
 
     this.toolbar.appendChild(this.createToolButton('text', 'Text Note', 'tool-text', ICONS.text));
     this.toolbar.appendChild(this.createToolButton('eraser', 'Eraser', 'tool-eraser', ICONS.eraser));
@@ -320,7 +350,7 @@ export class FloatingToolbar {
     });
     this.toolbar.appendChild(exportBtn);
 
-    const settingsBtn = this.createActionButton('settings', 'Shortcuts & Settings', 'action-toggle-toolbar', ICONS.settings, () => {
+    const settingsBtn = this.createActionButton('settings', 'Shortcuts & Settings', '', ICONS.settings, () => {
       const modal = new SettingsModal(this.container, this.settings, {
         onSave: (newSettings) => {
           this.setSettings(newSettings);
@@ -335,7 +365,7 @@ export class FloatingToolbar {
     const eyeBtn = this.createActionButton(
       'visibility',
       isVisible ? 'Hide Drawings' : 'Show Drawings',
-      'action-toggle-toolbar',
+      '',
       isVisible ? ICONS.eye : ICONS.eyeOff,
       () => {
         const next = !this.engine.getAnnotationsVisible();
@@ -343,8 +373,10 @@ export class FloatingToolbar {
         this.settings.areAnnotationsVisible = next;
         saveSettings({ areAnnotationsVisible: next }).catch(() => {});
         eyeBtn.setAttribute('aria-pressed', next ? 'true' : 'false');
-        eyeBtn.setAttribute('aria-label', next ? 'Hide Drawings' : 'Show Drawings');
-        eyeBtn.innerHTML = `${next ? ICONS.eye : ICONS.eyeOff}<span class="pa-tooltip" aria-hidden="true">${next ? 'Hide Drawings' : 'Show Drawings'}</span>`;
+        const eyeLabel = next ? 'Hide Drawings' : 'Show Drawings';
+        eyeBtn.dataset.label = eyeLabel;
+        eyeBtn.setAttribute('aria-label', eyeLabel);
+        eyeBtn.innerHTML = `${next ? ICONS.eye : ICONS.eyeOff}<span class="pa-tooltip" aria-hidden="true">${eyeLabel}</span>`;
       }
     );
     eyeBtn.setAttribute('aria-pressed', isVisible ? 'true' : 'false');
@@ -354,13 +386,14 @@ export class FloatingToolbar {
     const anchorBtn = this.createActionButton(
       'dom-anchor',
       isAnchoring ? 'Smart Anchoring: ON (Follows moving items)' : 'Smart Anchoring: OFF (Fixed position)',
-      'action-toggle-toolbar',
+      '',
       isAnchoring ? ICONS.pin : ICONS.pinOff,
       () => {
         const next = !this.engine.getDomAnchoringEnabled();
         this.engine.setDomAnchoringEnabled(next);
         this.callbacks.onToggleDomAnchoring?.(next);
         const label = next ? 'Smart Anchoring: ON (Follows moving items)' : 'Smart Anchoring: OFF (Fixed position)';
+        anchorBtn.dataset.label = label;
         anchorBtn.setAttribute('aria-pressed', next ? 'true' : 'false');
         anchorBtn.setAttribute('aria-label', label);
         anchorBtn.innerHTML = `${next ? ICONS.pin : ICONS.pinOff}<span class="pa-tooltip" aria-hidden="true">${label}</span>`;
@@ -369,7 +402,7 @@ export class FloatingToolbar {
     anchorBtn.setAttribute('aria-pressed', isAnchoring ? 'true' : 'false');
     this.toolbar.appendChild(anchorBtn);
 
-    const minBtn = this.createActionButton('minimize', 'Minimize (Alt+D to toggle)', 'toggle-active', ICONS.minimize, () => {
+    const minBtn = this.createActionButton('minimize', 'Minimize Toolbar', 'toggle-active', ICONS.minimize, () => {
       this.setDrawingMode(false, true);
     });
     this.toolbar.appendChild(minBtn);
@@ -379,6 +412,7 @@ export class FloatingToolbar {
     const btn = this.toolbar.querySelector('[data-action="dom-anchor"]') as HTMLButtonElement | null;
     if (btn) {
       const label = enabled ? 'Smart Anchoring: ON (Follows moving items)' : 'Smart Anchoring: OFF (Fixed position)';
+      btn.dataset.label = label;
       btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
       btn.setAttribute('aria-label', label);
       btn.innerHTML = `${enabled ? ICONS.pin : ICONS.pinOff}<span class="pa-tooltip" aria-hidden="true">${label}</span>`;
@@ -501,9 +535,11 @@ export class FloatingToolbar {
     btn.dataset.tool = tool;
     btn.dataset.shortcut = shortcutId;
     const shortcutText = this.getShortcutDisplay(shortcutId);
+    btn.dataset.label = name;
     btn.setAttribute('aria-label', `${name}${shortcutText ? ` (${shortcutText})` : ''}`);
     btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    btn.innerHTML = `${iconSvg}<span class="pa-tooltip" aria-hidden="true">${name} <kbd>${shortcutText}</kbd></span>`;
+    const kbd = shortcutText ? ` <kbd>${shortcutText}</kbd>` : '';
+    btn.innerHTML = `${iconSvg}<span class="pa-tooltip" aria-hidden="true">${name}${kbd}</span>`;
 
     btn.addEventListener('click', () => {
       this.engine.setTool(tool);
@@ -526,8 +562,10 @@ export class FloatingToolbar {
     btn.dataset.action = actionName;
     btn.dataset.shortcut = shortcutId;
     const shortcutText = this.getShortcutDisplay(shortcutId);
+    btn.dataset.label = title;
     btn.setAttribute('aria-label', `${title}${shortcutText ? ` (${shortcutText})` : ''}`);
-    btn.innerHTML = `${iconSvg}<span class="pa-tooltip" aria-hidden="true">${title} <kbd>${shortcutText}</kbd></span>`;
+    const kbd = shortcutText ? ` <kbd>${shortcutText}</kbd>` : '';
+    btn.innerHTML = `${iconSvg}<span class="pa-tooltip" aria-hidden="true">${title}${kbd}</span>`;
 
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -546,7 +584,7 @@ export class FloatingToolbar {
 
   private getShortcutDisplay(actionId: string): string {
     const key = (this.settings.shortcuts as any)[actionId];
-    return formatShortcutForDisplay(key || '');
+    return key ? formatShortcutForDisplay(key) : '';
   }
 
   public updateActiveToolUI(): void {
@@ -568,13 +606,15 @@ export class FloatingToolbar {
     this.toolbar.querySelectorAll('[data-shortcut]').forEach((el) => {
       const btn = el as HTMLButtonElement;
       const shortcutId = btn.dataset.shortcut;
+      if (shortcutId === undefined) return;
+      const text = this.getShortcutDisplay(shortcutId);
       const kbd = btn.querySelector('kbd');
-      if (kbd && shortcutId) {
-        const text = this.getShortcutDisplay(shortcutId);
+      if (kbd) {
         kbd.textContent = text;
-        const currentName = btn.dataset.tool || btn.dataset.action || '';
-        btn.setAttribute('aria-label', `${currentName}${text ? ` (${text})` : ''}`);
+        kbd.style.display = text ? '' : 'none';
       }
+      const label = btn.dataset.label || btn.dataset.tool || btn.dataset.action || '';
+      btn.setAttribute('aria-label', `${label}${text ? ` (${text})` : ''}`);
     });
   }
 

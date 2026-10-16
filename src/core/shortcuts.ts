@@ -17,10 +17,12 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
   'tool-circle': 'c',
   'tool-line': 'l',
   'tool-arrow': 'a',
+  'tool-double-arrow': 'd',
   'tool-text': 't',
   'tool-eraser': 'e',
   'action-undo': 'Ctrl+z',
   'action-redo': 'Ctrl+y',
+  'action-delete': 'Delete',
   'action-clear': 'Alt+Shift+X',
   'action-export': 'Alt+Shift+E',
   'action-select-all': 'Ctrl+a',
@@ -82,6 +84,12 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     defaultKey: DEFAULT_SHORTCUTS['tool-arrow'],
   },
   {
+    id: 'tool-double-arrow',
+    name: 'Double-headed Arrow',
+    description: 'Draw dimension arrow with heads on both ends',
+    defaultKey: DEFAULT_SHORTCUTS['tool-double-arrow'],
+  },
+  {
     id: 'tool-text',
     name: 'Text Annotation',
     description: 'Add text note on page',
@@ -104,6 +112,12 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     name: 'Redo',
     description: 'Redo undone action',
     defaultKey: DEFAULT_SHORTCUTS['action-redo'],
+  },
+  {
+    id: 'action-delete',
+    name: 'Delete Selected',
+    description: 'Remove the selected element(s)',
+    defaultKey: DEFAULT_SHORTCUTS['action-delete'],
   },
   {
     id: 'action-clear',

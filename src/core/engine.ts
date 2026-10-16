@@ -43,6 +43,7 @@ export class CanvasEngine {
   private highlighterWidth = 20;
   private fontSize = 18;
   private isActiveMode = false;
+  private performanceMode = true;
 
   private isPointerDown = false;
   private pointerId: number | null = null;
@@ -184,6 +185,20 @@ export class CanvasEngine {
     this.fontSize = size;
   }
 
+  /**
+   * Toggles the Zero-Lag optimizations (viewport frustum culling + RDP point
+   * decimation). Disabling trades performance for completeness: every element
+   * is drawn and raw pointer points are kept.
+   */
+  public setPerformanceMode(enabled: boolean): void {
+    this.performanceMode = enabled;
+    this.renderBase();
+  }
+
+  public getPerformanceMode(): boolean {
+    return this.performanceMode;
+  }
+
   public setActiveMode(active: boolean): void {
     this.isActiveMode = active;
     if (active) {
@@ -203,6 +218,9 @@ export class CanvasEngine {
 
   public setAnnotationsVisible(visible: boolean): void {
     this.baseCanvas.style.display = visible ? 'block' : 'none';
+    // Also drop any in-progress preview so a half-drawn stroke does not linger
+    // on the active layer while annotations are hidden.
+    if (!visible) this.clearActiveCanvas();
   }
 
   public getAnnotationsVisible(): boolean {
@@ -537,7 +555,7 @@ export class CanvasEngine {
     }
   }
 
-  private onPointerUp(e: PointerEvent): void {
+  private onPointerUp(_e: PointerEvent): void {
     if (!this.isPointerDown) return;
     this.isPointerDown = false;
     this.pointerId = null;
@@ -576,7 +594,9 @@ export class CanvasEngine {
     if (this.activeTool === 'pen' || this.activeTool === 'highlighter') {
       if (this.currentStrokePoints.length > 0) {
         const isHighlighter = this.activeTool === 'highlighter';
-        const simplified = simplifyPointsRDP(this.currentStrokePoints, 1.2);
+        const simplified = this.performanceMode
+          ? simplifyPointsRDP(this.currentStrokePoints, 1.2)
+          : this.currentStrokePoints.slice();
 
         const strokeElem: StrokeElement = {
           id: `stroke_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -772,9 +792,10 @@ export class CanvasEngine {
         continue;
       }
 
-      if (intersectsBoundingBox(eff.bbox, viewportBox)) {
-        this.renderSingleElementWithOffset(ctx, el, eff.deltaX, eff.deltaY, eff.isOrphaned);
+      if (this.performanceMode && !intersectsBoundingBox(eff.bbox, viewportBox)) {
+        continue;
       }
+      this.renderSingleElementWithOffset(ctx, el, eff.deltaX, eff.deltaY, eff.isOrphaned);
     }
 
     if (this.selectedElements.length > 0) {
@@ -921,6 +942,9 @@ export class CanvasEngine {
     const boxW = Math.max(maxWidth + padding * 2, el.width || 60);
     const boxH = Math.max(lines.length * lineHeight + padding * 2, el.height || 30);
 
+    // Text sizing is measured lazily here (canvas metrics are only available at
+    // draw time). The result is deterministic for a given text/font, so the
+    // write-back keeps hit-testing and culling bboxes accurate.
     el.width = boxW;
     el.height = boxH;
     el.bbox = computeBoundingBox(el);

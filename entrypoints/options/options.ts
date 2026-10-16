@@ -12,12 +12,10 @@ import {
   formatShortcutForDisplay,
   normalizeKeyEvent,
   SHORTCUT_DEFINITIONS,
-  isReservedBrowserShortcut,
   getBrowserShortcutConflict,
 } from '../../src/core/shortcuts';
 
 let currentSettings: ExtensionSettings;
-let recordingAction: ShortcutAction | null = null;
 let recordingHandler: ((e: KeyboardEvent) => void) | null = null;
 
 export async function initOptions() {
@@ -94,15 +92,12 @@ function setupTabs() {
     });
 
     tab.addEventListener('keydown', (e: KeyboardEvent) => {
-      let nextIndex = index;
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
-        nextIndex = (index + 1) % tabs.length;
-        activateTab(tabs[nextIndex], true);
+        activateTab(tabs[(index + 1) % tabs.length], true);
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
-        nextIndex = (index - 1 + tabs.length) % tabs.length;
-        activateTab(tabs[nextIndex], true);
+        activateTab(tabs[(index - 1 + tabs.length) % tabs.length], true);
       } else if (e.key === 'Home') {
         e.preventDefault();
         activateTab(tabs[0], true);
@@ -159,7 +154,6 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
   const def = SHORTCUT_DEFINITIONS.find((d) => d.id === actionId);
   const actionName = def ? def.name : actionId;
 
-  recordingAction = actionId;
   btn.classList.add('recording', 'bg-red-600', 'border-red-500', 'text-white', 'animate-pulse');
   btn.classList.remove('bg-sky-400/10', 'border-sky-400/30', 'text-sky-400');
   btn.textContent = 'Press keys...';
@@ -183,7 +177,6 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
         window.removeEventListener('keydown', recordingHandler, true);
         recordingHandler = null;
       }
-      recordingAction = null;
       announce(`Shortcut recording for ${actionName} cancelled.`);
       return;
     }
@@ -217,7 +210,6 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
       window.removeEventListener('keydown', recordingHandler, true);
       recordingHandler = null;
     }
-    recordingAction = null;
   };
 
   window.addEventListener('keydown', recordingHandler, true);
@@ -237,18 +229,7 @@ function setupDrawingForm() {
   const fontSize = document.getElementById('pref-font-size') as HTMLInputElement;
   const fontSizeVal = document.getElementById('pref-font-size-val') as HTMLElement;
 
-  penColor.value = currentSettings.defaultStrokeColor;
-  penColorText.textContent = currentSettings.defaultStrokeColor;
-  penWidth.value = `${currentSettings.defaultStrokeWidth}`;
-  penWidthVal.textContent = `${currentSettings.defaultStrokeWidth}px`;
-
-  highlighterColor.value = currentSettings.defaultHighlighterColor;
-  highlighterColorText.textContent = currentSettings.defaultHighlighterColor;
-  highlighterWidth.value = `${currentSettings.defaultHighlighterWidth}`;
-  highlighterWidthVal.textContent = `${currentSettings.defaultHighlighterWidth}px`;
-
-  fontSize.value = `${currentSettings.defaultFontSize}`;
-  fontSizeVal.textContent = `${currentSettings.defaultFontSize}px`;
+  syncDrawingFormValues();
 
   penColor.addEventListener('input', () => {
     penColorText.textContent = penColor.value;
@@ -284,12 +265,7 @@ function setupPersistenceForm() {
   const domAnchorMode = document.getElementById('pref-dom-anchoring') as HTMLInputElement;
   const orphanMode = document.getElementById('pref-orphan-mode') as HTMLSelectElement;
 
-  matchMode.value = currentSettings.urlMatchMode;
-  perfMode.checked = currentSettings.performanceMode;
-  toolbarOpenMode.checked = !!currentSettings.isToolbarOpen;
-  showPillMode.checked = currentSettings.showFloatingPill !== false;
-  if (domAnchorMode) domAnchorMode.checked = currentSettings.domAnchoringEnabled ?? true;
-  if (orphanMode) orphanMode.value = currentSettings.orphanedAnchorMode || 'hide';
+  syncPersistenceFormValues();
 
   matchMode.addEventListener('change', () => {
     currentSettings.urlMatchMode = matchMode.value as 'clean' | 'exact' | 'domain';
@@ -314,6 +290,48 @@ function setupPersistenceForm() {
   orphanMode?.addEventListener('change', () => {
     currentSettings.orphanedAnchorMode = orphanMode.value as 'hide' | 'dimmed';
   });
+}
+
+/** Refreshes drawing-default form controls from `currentSettings` (no rebinding). */
+function syncDrawingFormValues(): void {
+  const penColor = document.getElementById('pref-pen-color') as HTMLInputElement;
+  const penColorText = document.getElementById('pref-pen-color-text') as HTMLElement;
+  const penWidth = document.getElementById('pref-pen-width') as HTMLInputElement;
+  const penWidthVal = document.getElementById('pref-pen-width-val') as HTMLElement;
+  const highlighterColor = document.getElementById('pref-highlighter-color') as HTMLInputElement;
+  const highlighterColorText = document.getElementById('pref-highlighter-color-text') as HTMLElement;
+  const highlighterWidth = document.getElementById('pref-highlighter-width') as HTMLInputElement;
+  const highlighterWidthVal = document.getElementById('pref-highlighter-width-val') as HTMLElement;
+  const fontSize = document.getElementById('pref-font-size') as HTMLInputElement;
+  const fontSizeVal = document.getElementById('pref-font-size-val') as HTMLElement;
+
+  penColor.value = currentSettings.defaultStrokeColor;
+  penColorText.textContent = currentSettings.defaultStrokeColor;
+  penWidth.value = `${currentSettings.defaultStrokeWidth}`;
+  penWidthVal.textContent = `${currentSettings.defaultStrokeWidth}px`;
+  highlighterColor.value = currentSettings.defaultHighlighterColor;
+  highlighterColorText.textContent = currentSettings.defaultHighlighterColor;
+  highlighterWidth.value = `${currentSettings.defaultHighlighterWidth}`;
+  highlighterWidthVal.textContent = `${currentSettings.defaultHighlighterWidth}px`;
+  fontSize.value = `${currentSettings.defaultFontSize}`;
+  fontSizeVal.textContent = `${currentSettings.defaultFontSize}px`;
+}
+
+/** Refreshes persistence form controls from `currentSettings` (no rebinding). */
+function syncPersistenceFormValues(): void {
+  const matchMode = document.getElementById('pref-url-match-mode') as HTMLSelectElement;
+  const perfMode = document.getElementById('pref-performance-mode') as HTMLInputElement;
+  const toolbarOpenMode = document.getElementById('pref-toolbar-open') as HTMLInputElement;
+  const showPillMode = document.getElementById('pref-show-pill') as HTMLInputElement;
+  const domAnchorMode = document.getElementById('pref-dom-anchoring') as HTMLInputElement;
+  const orphanMode = document.getElementById('pref-orphan-mode') as HTMLSelectElement;
+
+  matchMode.value = currentSettings.urlMatchMode;
+  perfMode.checked = currentSettings.performanceMode;
+  toolbarOpenMode.checked = !!currentSettings.isToolbarOpen;
+  showPillMode.checked = currentSettings.showFloatingPill !== false;
+  if (domAnchorMode) domAnchorMode.checked = currentSettings.domAnchoringEnabled ?? true;
+  if (orphanMode) orphanMode.value = currentSettings.orphanedAnchorMode || 'hide';
 }
 
 async function renderSavedPages() {
@@ -346,7 +364,7 @@ async function renderSavedPages() {
 
     info.innerHTML = `
       <div class="pa-saved-title font-semibold text-white text-sm">${escapeHtml(page.pageTitle || 'Untitled Page')}</div>
-      <a href="${page.url}" target="_blank" class="pa-saved-url text-xs text-sky-400 hover:underline truncate" aria-label="Open ${escapeHtml(page.pageTitle || page.url)} in new tab">${escapeHtml(page.url)}</a>
+      <a href="${escapeAttribute(page.url)}" target="_blank" rel="noopener noreferrer" class="pa-saved-url text-xs text-sky-400 hover:underline truncate" aria-label="Open ${escapeAttribute(page.pageTitle || page.url)} in new tab">${escapeHtml(page.url)}</a>
       <div class="pa-saved-meta text-[11px] text-slate-400">${page.elementCount} elements • Last updated ${dateStr}</div>
     `;
 
@@ -406,8 +424,8 @@ function setupBackupRestore() {
         announce('Backup restored successfully!');
         currentSettings = await loadSettings();
         renderShortcuts();
-        setupDrawingForm();
-        setupPersistenceForm();
+        syncDrawingFormValues();
+        syncPersistenceFormValues();
         await renderSavedPages();
       } else {
         if (statusSpan) statusSpan.textContent = 'Invalid backup format.';
@@ -439,6 +457,15 @@ function escapeHtml(str: string): string {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+function escapeAttribute(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 document.addEventListener('DOMContentLoaded', initOptions);

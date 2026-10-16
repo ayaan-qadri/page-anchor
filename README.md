@@ -30,7 +30,7 @@
   - Webpage CSS resets cannot alter the extension UI.
   - Extension styles cannot break or leak into host websites.
 - 🌐 **True Cross-Browser Support**:
-  - Compatible with Google Chrome, Microsoft Edge, Mozilla Firefox, Brave, Opera, and Safari (Manifest V3).
+  - Compatible with Google Chrome, Microsoft Edge, Mozilla Firefox, Brave, Opera, and Safari.
 
 ---
 
@@ -68,11 +68,12 @@ Page Anchor solves this with 5 dedicated performance strategies:
 | **Circle** | `C` | Draw circle or ellipse (active in draw mode) |
 | **Line** | `L` | Draw straight line (active in draw mode) |
 | **Arrow** | `A` | Draw directional arrow (active in draw mode) |
+| **Double Arrow** | `D` | Draw dimension arrow with heads on both ends (active in draw mode) |
 | **Text Note** | `T` | Click to place text note (active in draw mode) |
 | **Eraser** | `E` | Sweep or click to erase (active in draw mode) |
 | **Undo** | `Ctrl + Z` | Undo last action |
-| **Redo** | `Ctrl + Y` / `Ctrl + Shift + Z` | Redo undone action |
-| **Delete Selected** | `Delete` / `Backspace` | Remove selected element |
+| **Redo** | `Ctrl + Y` | Redo undone action |
+| **Delete Selected** | `Delete` | Remove selected element (`Backspace` also works as a fixed convenience key) |
 | **Clear Page** | `Alt + Shift + X` | Clear all drawings on current page |
 | **Export Snapshot** | `Alt + Shift + E` | Download PNG screenshot |
 
@@ -87,7 +88,7 @@ Page Anchor solves this with 5 dedicated performance strategies:
 
 - **Framework**: [WXT](https://wxt.dev/) 0.21.x (Built on Vite 8)
 - **Language**: TypeScript 7.x
-- **Standard**: Manifest V3 (Chrome, Edge, Firefox, Safari)
+- **Standard**: Manifest V3 (Chrome, Edge, Safari) · Manifest V2 (Firefox)
 - **Rendering**: Hardware-accelerated HTML5 Canvas 2D with Viewport Frustum Culling
 - **UI Architecture**: Isolated Shadow DOM (Mode: open)
 - **Package Manager**: pnpm
@@ -153,7 +154,7 @@ pnpm dev:firefox
 # Chrome (Manifest V3)
 pnpm build
 
-# Firefox (Manifest V3 / MV2)
+# Firefox (Manifest V2)
 pnpm build:firefox
 
 # Microsoft Edge
@@ -169,6 +170,16 @@ pnpm zip
 ```
 The zipped extension will be created in `.output/page-anchor-1.0.0-chrome.zip`.
 
+### 5. Quality Checks
+```bash
+pnpm compile   # Type-check with TypeScript 7 (tsc --noEmit)
+pnpm lint      # ESLint over src/, entrypoints/, tests/, e2e/, and scripts/
+pnpm test      # Vitest unit + integration suite
+pnpm check     # Type-check + lint + tests (what CI runs)
+```
+
+> **Note on the TypeScript toolchain**: TypeScript 7.0 ships without a compiler API, which `typescript-eslint` still requires. The `typescript` dev dependency is therefore aliased to `@typescript/typescript6` (the 6.0 compatibility API, exposes `tsc6`), while `@typescript/native` provides the TypeScript 7 `tsc` binary used by `pnpm compile` and `pnpm build`.
+
 ---
 
 ## 🌐 How to Load in Your Browser
@@ -178,7 +189,7 @@ The zipped extension will be created in `.output/page-anchor-1.0.0-chrome.zip`.
 2. Toggle on **Developer mode** in the top-right corner.
 3. Click **Load unpacked**.
 4. Select the `.output/chrome-mv3` folder inside this project directory.
-5. Open any website, press `Alt + D`, and start drawing!
+5. Open any website, press `Alt + Shift + D`, and start drawing!
 
 ### In Mozilla Firefox:
 1. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`.

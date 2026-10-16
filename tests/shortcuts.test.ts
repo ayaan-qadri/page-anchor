@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+  DEFAULT_SHORTCUTS,
+  SHORTCUT_DEFINITIONS,
   formatShortcutForDisplay,
   normalizeKeyEvent,
   ShortcutManager,
@@ -116,6 +118,15 @@ describe('Shortcuts Engine: Keyboard Normalization & Dispatching', () => {
     expect(isReservedBrowserShortcut('Alt+Shift+T')).toBe(false);
     expect(isReservedBrowserShortcut('Alt+Shift+X')).toBe(false);
     expect(isReservedBrowserShortcut('Alt+Shift+E')).toBe(false);
+  });
+
+  it('registers a default for every tool and action, including double-arrow and delete', () => {
+    expect(DEFAULT_SHORTCUTS['tool-double-arrow']).toBe('d');
+    expect(DEFAULT_SHORTCUTS['action-delete']).toBe('Delete');
+    // Every entry in the definition registry must have a default binding.
+    for (const def of SHORTCUT_DEFINITIONS) {
+      expect(DEFAULT_SHORTCUTS[def.id], `Missing default for ${def.id}`).toBeTruthy();
+    }
   });
 
   it('guarantees that every default shortcut in the central registry is collision-free', async () => {

@@ -127,6 +127,7 @@ export default defineContentScript({
           settings = newSettings;
           shortcutManager.setShortcuts(settings.shortcuts);
           engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
+          engine.setPerformanceMode(settings.performanceMode);
         },
       }
     );
@@ -138,13 +139,14 @@ export default defineContentScript({
     });
     shortcutManager.attach();
 
+    // Backspace stays a fixed convenience key for deleting the selection.
+    // The configurable Delete key is dispatched by ShortcutManager ('action-delete').
     window.addEventListener('keydown', (e) => {
       if (!engine.getActiveMode()) return;
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        const target = e.target as HTMLElement | null;
-        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
-        engine.deleteSelected();
-      }
+      if (e.key !== 'Backspace') return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+      engine.deleteSelected();
     });
 
     const handleUrlChange = async () => {
@@ -248,6 +250,7 @@ export default defineContentScript({
           toolbar.setSettings(settings);
           shortcutManager.setShortcuts(settings.shortcuts);
           engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
+          engine.setPerformanceMode(settings.performanceMode);
           if (settings.isToolbarOpen) {
             toolbar.setDrawingMode(true, false);
           }
@@ -276,7 +279,7 @@ export default defineContentScript({
           toolbar.toggleDrawingMode();
           break;
         case 'action-toggle-toolbar':
-          toolbar.toggleDrawingMode();
+          toolbar.toggleToolbarVisibility();
           break;
         case 'tool-select':
           toolbar.setDrawingMode(true);
@@ -318,6 +321,11 @@ export default defineContentScript({
           engine.setTool('arrow');
           toolbar.updateActiveToolUI();
           break;
+        case 'tool-double-arrow':
+          toolbar.setDrawingMode(true);
+          engine.setTool('double-arrow');
+          toolbar.updateActiveToolUI();
+          break;
         case 'tool-text':
           toolbar.setDrawingMode(true);
           engine.setTool('text');
@@ -346,6 +354,10 @@ export default defineContentScript({
             toolbar.updateBadge();
             triggerSave(next);
           }
+          break;
+        }
+        case 'action-delete': {
+          engine.deleteSelected();
           break;
         }
         case 'action-clear': {
