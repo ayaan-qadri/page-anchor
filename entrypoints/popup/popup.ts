@@ -2,7 +2,7 @@ import { browser } from 'wxt/browser';
 import { loadSettings } from '../../src/core/storage';
 import { formatShortcutForDisplay } from '../../src/core/shortcuts';
 
-async function initPopup() {
+export async function initPopup() {
   const toggleSwitch = document.getElementById('toggle-draw-mode') as HTMLInputElement;
   const pageTitleEl = document.getElementById('page-title') as HTMLElement;
   const countEl = document.getElementById('annotation-count') as HTMLElement;

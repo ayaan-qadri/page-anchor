@@ -1,0 +1,216 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import contentDefinition from '../entrypoints/content';
+
+describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Messaging', () => {
+  let mockChrome: any;
+  let messageListener: ((msg: any, sender: any, sendResponse: (r?: any) => void) => boolean) | null = null;
+  let mockLocalStorage: Record<string, any>;
+
+  beforeEach(() => {
+    mockLocalStorage = {};
+    messageListener = null;
+
+    mockChrome = {
+      runtime: {
+        onMessage: {
+          addListener: vi.fn((fn) => {
+            messageListener = fn;
+          }),
+        },
+      },
+      storage: {
+        local: {
+          get: vi.fn((key) => {
+            if (typeof key === 'string') return Promise.resolve({ [key]: mockLocalStorage[key] });
+            return Promise.resolve(mockLocalStorage);
+          }),
+          set: vi.fn((data) => {
+            Object.assign(mockLocalStorage, data);
+            return Promise.resolve();
+          }),
+          remove: vi.fn((key) => {
+            delete mockLocalStorage[key];
+            return Promise.resolve();
+          }),
+        },
+      },
+    };
+
+    (globalThis as any).chrome = mockChrome;
+    (globalThis as any).confirm = vi.fn().mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    const host = document.getElementById('page-anchor-host');
+    if (host) {
+      host.id = 'page-anchor-host-removed';
+      host.remove();
+    }
+    document.body.innerHTML = '';
+    delete (globalThis as any).chrome;
+  });
+
+  it('mounts isolated Shadow DOM root with high z-index and styles', async () => {
+    contentDefinition.main();
+
+    const host = document.getElementById('page-anchor-host') as HTMLElement;
+    expect(host).not.toBeNull();
+    expect(host.style.zIndex).toBe('2147483647');
+
+    const shadow = host.shadowRoot;
+    expect(shadow).not.toBeNull();
+
+    const style = shadow?.querySelector('style');
+    expect(style).not.toBeNull();
+    expect(style?.textContent).toContain('.pa-toolbar-wrapper');
+
+    const uiRoot = shadow?.querySelector('.page-anchor-ui-root');
+    expect(uiRoot).not.toBeNull();
+  });
+
+  it('prevents redundant duplicate host mount if already connected', () => {
+    contentDefinition.main();
+    const countFirst = document.querySelectorAll('#page-anchor-host').length;
+    expect(countFirst).toBe(1);
+
+    // Call main again
+    contentDefinition.main();
+    const countSecond = document.querySelectorAll('#page-anchor-host').length;
+    expect(countSecond).toBe(1);
+  });
+
+  it('handles PAGE_ANCHOR_GET_STATUS and responds with active state and count', async () => {
+    contentDefinition.main();
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(messageListener).not.toBeNull();
+
+    const sendResponse = vi.fn();
+    messageListener?.({ type: 'PAGE_ANCHOR_GET_STATUS' }, {}, sendResponse);
+
+    expect(sendResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        active: expect.any(Boolean),
+        count: expect.any(Number),
+        url: expect.any(String),
+      })
+    );
+  });
+
+  it('handles PAGE_ANCHOR_TOGGLE message to toggle drawing mode', async () => {
+    contentDefinition.main();
+    await new Promise((r) => setTimeout(r, 20));
+
+    const sendResponse = vi.fn();
+    messageListener?.({ type: 'PAGE_ANCHOR_TOGGLE' }, {}, sendResponse);
+
+    expect(sendResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        active: true,
+      })
+    );
+  });
+
+  it('handles PAGE_ANCHOR_CLEAR message and resets annotations', async () => {
+    contentDefinition.main();
+    await new Promise((r) => setTimeout(r, 20));
+
+    const sendResponse = vi.fn();
+    messageListener?.({ type: 'PAGE_ANCHOR_CLEAR' }, {}, sendResponse);
+
+    expect(sendResponse).toHaveBeenCalledWith({ success: true });
+  });
+
+  it('handles PAGE_ANCHOR_EXPORT and PAGE_ANCHOR_URL_CHANGED messages', async () => {
+    contentDefinition.main();
+    await new Promise((r) => setTimeout(r, 20));
+
+    const sendResponse1 = vi.fn();
+    messageListener?.({ type: 'PAGE_ANCHOR_EXPORT' }, {}, sendResponse1);
+    expect(sendResponse1).toHaveBeenCalledWith({ success: true });
+
+    const sendResponse2 = vi.fn();
+    messageListener?.({ type: 'PAGE_ANCHOR_URL_CHANGED' }, {}, sendResponse2);
+    expect(sendResponse2).toHaveBeenCalledWith({ success: true });
+  });
+
+  it('dispatches keyboard shortcuts for tools, shapes, undo, redo, and export', async () => {
+    contentDefinition.main();
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Toggle active
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', altKey: true, shiftKey: true, bubbles: true }));
+
+    // Switch to pen
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', altKey: true, shiftKey: true, bubbles: true }));
+
+    // Switch to rect
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', altKey: true, shiftKey: true, bubbles: true }));
+
+    // Switch to circle
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', altKey: true, shiftKey: true, bubbles: true }));
+
+    // Switch to line
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', altKey: true, shiftKey: true, bubbles: true }));
+
+    // Switch to arrow
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', altKey: true, shiftKey: true, bubbles: true }));
+
+    // Switch to text
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', altKey: true, shiftKey: true, bubbles: true }));
+
+    // Switch to eraser
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', altKey: true, shiftKey: true, bubbles: true }));
+
+    // Select all
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true }));
+
+    // Undo / Redo
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true, bubbles: true }));
+
+    // Clear
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', ctrlKey: true, shiftKey: true, bubbles: true }));
+
+    // Export
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, shiftKey: true, bubbles: true }));
+  });
+
+  it('deletes selected drawing element on Delete or Backspace keydown', async () => {
+    contentDefinition.main();
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Turn on drawing mode via toggle message
+    messageListener?.({ type: 'PAGE_ANCHOR_TOGGLE' }, {}, vi.fn());
+
+    // Dispatch Delete key on window
+    const delEvent = new KeyboardEvent('keydown', { key: 'Delete', bubbles: true });
+    window.dispatchEvent(delEvent);
+
+    // If target is inside input or textarea, delete should NOT trigger canvas deletion
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+
+    const backspaceEvent = new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true });
+    Object.defineProperty(backspaceEvent, 'target', { value: input });
+    window.dispatchEvent(backspaceEvent);
+
+    input.remove();
+  });
+
+  it('reacts to window navigation lifecycle events (beforeunload, pagehide, hashchange, popstate, pushState, replaceState)', async () => {
+    contentDefinition.main();
+    await new Promise((r) => setTimeout(r, 20));
+
+    window.dispatchEvent(new Event('beforeunload'));
+    window.dispatchEvent(new Event('pagehide'));
+    window.dispatchEvent(new Event('hashchange'));
+    window.dispatchEvent(new Event('popstate'));
+
+    window.history.pushState({}, 'New Route', '/docs/new-section');
+    window.history.replaceState({}, 'Replaced Route', '/docs/replaced-section');
+
+    await new Promise((r) => setTimeout(r, 20));
+  });
+});

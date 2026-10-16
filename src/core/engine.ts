@@ -469,7 +469,8 @@ export class CanvasEngine {
     if (!this.isPointerDown || !this.isActiveMode) return;
     if (this.pointerId !== null && e.pointerId !== this.pointerId) return;
 
-    const events = (e.getCoalescedEvents ? e.getCoalescedEvents() : [e]) as PointerEvent[];
+    const coalesced = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    const events = (coalesced && coalesced.length > 0 ? coalesced : [e]) as PointerEvent[];
 
     if (this.activeTool === 'eraser') {
       for (const ev of events) {
@@ -1111,10 +1112,12 @@ export class CanvasEngine {
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = this.baseCanvas.width;
     tempCanvas.height = this.baseCanvas.height;
-    const tempCtx = tempCanvas.getContext('2d')!;
+    const tempCtx = tempCanvas.getContext('2d');
 
-    tempCtx.drawImage(this.baseCanvas, 0, 0);
-    return tempCanvas.toDataURL('image/png');
+    if (tempCtx) {
+      tempCtx.drawImage(this.baseCanvas, 0, 0);
+    }
+    return tempCanvas.toDataURL ? tempCanvas.toDataURL('image/png') : '';
   }
 
   public destroy(): void {

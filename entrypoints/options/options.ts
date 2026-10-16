@@ -20,7 +20,7 @@ let currentSettings: ExtensionSettings;
 let recordingAction: ShortcutAction | null = null;
 let recordingHandler: ((e: KeyboardEvent) => void) | null = null;
 
-async function initOptions() {
+export async function initOptions() {
   currentSettings = await loadSettings();
 
   setupTabs();

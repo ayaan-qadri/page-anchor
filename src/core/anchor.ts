@@ -166,9 +166,9 @@ export function generateSelector(el: Element): { selector: string; fallbackSelec
       break;
     }
 
-    const parent = curr.parentElement;
+    const parent: Element | null = curr.parentElement;
     if (parent) {
-      const siblings = Array.from(parent.children).filter((c) => c.tagName === curr!.tagName);
+      const siblings = Array.from(parent.children).filter((c: Element) => c.tagName === curr!.tagName);
       if (siblings.length > 1) {
         const index = siblings.indexOf(curr) + 1;
         pathParts.unshift(`${tag}:nth-of-type(${index})`);
