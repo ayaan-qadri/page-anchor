@@ -11,7 +11,9 @@ export const test = base.extend<{
   context: BrowserContext;
   extensionId: string;
 }>({
-  context: async (_fixtures, use) => {
+  // Playwright requires a destructuring pattern; this fixture needs no others.
+  // eslint-disable-next-line no-empty-pattern
+  context: async ({}, use) => {
     const pathToExtension = path.resolve(__dirname, '../.output/chrome-mv3');
     const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'page-anchor-e2e-'));
 
