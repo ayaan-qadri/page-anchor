@@ -209,4 +209,16 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
 
     await new Promise((r) => setTimeout(r, 20));
   });
+
+  it('re-checks the URL on tab visibility change instead of polling on a timer', async () => {
+    const addEventListenerSpy = vi.spyOn(document, 'addEventListener');
+
+    contentDefinition.main();
+    await new Promise((r) => setTimeout(r, 20));
+
+    const registered = addEventListenerSpy.mock.calls.some(([type]) => type === 'visibilitychange');
+    expect(registered).toBe(true);
+
+    addEventListenerSpy.mockRestore();
+  });
 });

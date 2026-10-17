@@ -206,11 +206,18 @@ export default defineContentScript({
       return res;
     };
 
-    setInterval(() => {
-      if (window.location.href !== currentLoadedUrl) {
+    // Catches URL changes the patched history methods miss, event-driven rather
+    // than polled so an idle page costs no main-thread time.
+    const navigation = (window as any).navigation;
+    navigation?.addEventListener?.('navigate', () => {
+      handleUrlChange();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && window.location.href !== currentLoadedUrl) {
         handleUrlChange();
       }
-    }, 500);
+    });
 
     const runtime = typeof browser !== 'undefined' ? browser.runtime : (typeof chrome !== 'undefined' ? chrome.runtime : null);
     runtime?.onMessage?.addListener((msg: any, _sender: any, sendResponse: (r?: any) => void) => {
