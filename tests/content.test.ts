@@ -210,6 +210,21 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
     await new Promise((r) => setTimeout(r, 20));
   });
 
+  it('ignores unrecognised runtime messages and does not hold the channel open', async () => {
+    contentDefinition.main();
+    await new Promise((r) => setTimeout(r, 20));
+
+    const sendResponse = vi.fn();
+    const unknownKeepAlive = messageListener?.({ type: 'SOMETHING_ELSE' }, {}, sendResponse);
+    expect(unknownKeepAlive).toBe(false);
+    expect(sendResponse).not.toHaveBeenCalled();
+
+    const malformedKeepAlive = messageListener?.({}, {}, vi.fn());
+    expect(malformedKeepAlive).toBe(false);
+
+    expect(messageListener?.({ type: 'PAGE_ANCHOR_GET_STATUS' }, {}, vi.fn())).toBe(true);
+  });
+
   it('re-checks the URL on tab visibility change instead of polling on a timer', async () => {
     const addEventListenerSpy = vi.spyOn(document, 'addEventListener');
 

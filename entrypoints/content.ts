@@ -8,6 +8,15 @@ import { SHADOW_STYLES } from '../src/ui/styles';
 import { TextEditorOverlay } from '../src/ui/text-editor';
 import { FloatingToolbar } from '../src/ui/toolbar';
 
+/** Messages this content script acts on; anything else is ignored. */
+const HANDLED_MESSAGE_TYPES = new Set([
+  'PAGE_ANCHOR_TOGGLE',
+  'PAGE_ANCHOR_GET_STATUS',
+  'PAGE_ANCHOR_CLEAR',
+  'PAGE_ANCHOR_EXPORT',
+  'PAGE_ANCHOR_URL_CHANGED',
+]);
+
 export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_end',
@@ -221,30 +230,43 @@ export default defineContentScript({
 
     const runtime = typeof browser !== 'undefined' ? browser.runtime : (typeof chrome !== 'undefined' ? chrome.runtime : null);
     runtime?.onMessage?.addListener((msg: any, _sender: any, sendResponse: (r?: any) => void) => {
+      const type = typeof msg?.type === 'string' ? msg.type : '';
+      if (!HANDLED_MESSAGE_TYPES.has(type)) {
+        // Not one of ours: don't hold the response channel open.
+        return false;
+      }
+
       ensureHostAttached();
-      if (msg.type === 'PAGE_ANCHOR_TOGGLE') {
-        toolbar.toggleDrawingMode(true);
-        sendResponse({ active: engine.getActiveMode(), count: engine.getElements().length });
-      } else if (msg.type === 'PAGE_ANCHOR_GET_STATUS') {
-        sendResponse({
-          active: engine.getActiveMode(),
-          count: engine.getElements().length,
-          url: currentLoadedUrl,
-          title: document.title,
-        });
-      } else if (msg.type === 'PAGE_ANCHOR_CLEAR') {
-        history.pushState([]);
-        engine.clear();
-        clearPageData(currentLoadedUrl).catch(() => {});
-        toolbar.updateBadge();
-        toolbar.updateHistoryButtons();
-        sendResponse({ success: true });
-      } else if (msg.type === 'PAGE_ANCHOR_EXPORT') {
-        exportSnapshot();
-        sendResponse({ success: true });
-      } else if (msg.type === 'PAGE_ANCHOR_URL_CHANGED') {
-        handleUrlChange();
-        sendResponse({ success: true });
+
+      switch (type) {
+        case 'PAGE_ANCHOR_TOGGLE':
+          toolbar.toggleDrawingMode(true);
+          sendResponse({ active: engine.getActiveMode(), count: engine.getElements().length });
+          break;
+        case 'PAGE_ANCHOR_GET_STATUS':
+          sendResponse({
+            active: engine.getActiveMode(),
+            count: engine.getElements().length,
+            url: currentLoadedUrl,
+            title: document.title,
+          });
+          break;
+        case 'PAGE_ANCHOR_CLEAR':
+          history.pushState([]);
+          engine.clear();
+          clearPageData(currentLoadedUrl).catch(() => {});
+          toolbar.updateBadge();
+          toolbar.updateHistoryButtons();
+          sendResponse({ success: true });
+          break;
+        case 'PAGE_ANCHOR_EXPORT':
+          exportSnapshot();
+          sendResponse({ success: true });
+          break;
+        case 'PAGE_ANCHOR_URL_CHANGED':
+          handleUrlChange();
+          sendResponse({ success: true });
+          break;
       }
       return true;
     });
