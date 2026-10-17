@@ -14,6 +14,7 @@
     "zip:firefox": "wxt zip -b firefox",
     "zip:edge": "wxt zip -b edge",
     "zip:safari": "wxt zip -b safari",
+    "icons": "node scripts/generate-icons.js",
     "compile": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

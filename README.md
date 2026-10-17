@@ -125,7 +125,11 @@ page-anchor/
 │   │   └── settings-modal.ts    # Interactive settings & shortcut modal
 │   └── icons/
 │       └── svg-icons.ts         # Pure inline SVG icons (zero asset delay)
-├── public/                      # Extension icons (16, 32, 48, 128)
+├── public/                      # Extension icons (16, 32, 48, 128) — generated
+├── assets/
+│   └── icon-source.png          # Master brand artwork for the icon pipeline
+├── scripts/
+│   └── generate-icons.js        # Rebuilds public/ icons from assets/ (pnpm icons)
 ├── wxt.config.ts                # WXT & extension manifest configuration
 ├── tsconfig.json                # TypeScript configuration
 └── package.json
@@ -177,6 +181,17 @@ pnpm lint      # ESLint over src/, entrypoints/, tests/, e2e/, and scripts/
 pnpm test      # Vitest unit + integration suite
 pnpm check     # Type-check + lint + tests (what CI runs)
 ```
+
+### 6. Regenerate Extension Icons
+```bash
+pnpm icons                # rebuild 16/32/48/128 from assets/icon-source.png
+pnpm icons -- --all       # also emit 19/38/64/96/256/512
+```
+Every shipped size is derived from `assets/icon-source.png`, so replacing the
+brand artwork only means swapping that file and re-running the command. The
+script is dependency-free (it decodes, resamples and re-encodes PNGs itself),
+detects the artwork's bounding box automatically, and masks each tile with an
+anti-aliased rounded corner.
 
 > **Note on the TypeScript toolchain**: TypeScript 7.0 ships without a compiler API, which `typescript-eslint` still requires. The `typescript` dev dependency is therefore aliased to `@typescript/typescript6` (the 6.0 compatibility API, exposes `tsc6`), while `@typescript/native` provides the TypeScript 7 `tsc` binary used by `pnpm compile` and `pnpm build`.
 
