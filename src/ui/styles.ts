@@ -21,8 +21,8 @@ export const SHADOW_STYLES = `
   --pa-accent-strong: #3f63da;
   --pa-accent-soft: #a9c1f8;
   --pa-ring: #7ca5f7;
-  --pa-violet: #a78bfa;
-  --pa-mint: #5eead4;
+  --pa-violet: #8b7ae0;
+  --pa-mint: #7fd1d0;
   --pa-danger: #e0576b;
   --pa-danger-soft: #f2a0aa;
   --pa-warning: #e5a94a;
