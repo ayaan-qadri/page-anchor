@@ -110,13 +110,7 @@ export class SettingsModal {
 
     const urlMatchSelect = document.createElement('select');
     urlMatchSelect.id = 'pa-modal-url-match';
-    urlMatchSelect.style.background = 'rgba(255, 255, 255, 0.08)';
-    urlMatchSelect.style.color = '#ffffff';
-    urlMatchSelect.style.border = '1px solid rgba(255, 255, 255, 0.15)';
-    urlMatchSelect.style.borderRadius = '6px';
-    urlMatchSelect.style.padding = '4px 8px';
-    urlMatchSelect.style.outline = 'none';
-    urlMatchSelect.setAttribute('aria-label', 'URL Matching Mode');
+    this.styleSelect(urlMatchSelect, 'URL Matching Mode');
 
     urlMatchSelect.innerHTML = `
       <option value="clean" ${this.settings.urlMatchMode === 'clean' ? 'selected' : ''}>Clean URL (strip tracking params & hashes)</option>
@@ -176,13 +170,7 @@ export class SettingsModal {
 
     const orphanSelect = document.createElement('select');
     orphanSelect.id = 'pa-modal-orphan-mode';
-    orphanSelect.style.background = 'rgba(255, 255, 255, 0.08)';
-    orphanSelect.style.color = '#ffffff';
-    orphanSelect.style.border = '1px solid rgba(255, 255, 255, 0.15)';
-    orphanSelect.style.borderRadius = '6px';
-    orphanSelect.style.padding = '4px 8px';
-    orphanSelect.style.outline = 'none';
-    orphanSelect.setAttribute('aria-label', 'When annotated element disappears or is removed from page');
+    this.styleSelect(orphanSelect, 'When annotated element disappears or is removed from page');
 
     orphanSelect.innerHTML = `
       <option value="hide" ${(this.settings.orphanedAnchorMode || 'hide') === 'hide' ? 'selected' : ''}>Hide automatically (Default)</option>
@@ -326,6 +314,16 @@ export class SettingsModal {
     setTimeout(() => {
       closeBtn?.focus();
     }, 50);
+  }
+
+  /** Omits `outline: none`, which would beat the `:focus-visible` ring (WCAG 2.4.7). */
+  private styleSelect(select: HTMLSelectElement, ariaLabel: string): void {
+    select.style.background = 'rgba(255, 255, 255, 0.08)';
+    select.style.color = '#ffffff';
+    select.style.border = '1px solid rgba(255, 255, 255, 0.15)';
+    select.style.borderRadius = '6px';
+    select.style.padding = '4px 8px';
+    select.setAttribute('aria-label', ariaLabel);
   }
 
   private startRecording(actionId: ShortcutAction, btn: HTMLButtonElement): void {

@@ -224,6 +224,21 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
 
       triggerBtn.remove();
     });
+
+    it('keeps a visible focus indicator on modal select controls (WCAG 2.4.7)', () => {
+      modal.open();
+
+      const selects = container.querySelectorAll<HTMLSelectElement>('.pa-modal select');
+      expect(selects.length).toBeGreaterThan(0);
+
+      // An inline `outline: none` would beat the shadow sheet's `:focus-visible` ring.
+      selects.forEach((select) => {
+        expect(select.getAttribute('style') ?? '').not.toContain('outline');
+      });
+
+      const shadowStyles = fs.readFileSync(path.resolve(__dirname, '../src/ui/styles.ts'), 'utf-8');
+      expect(shadowStyles).toContain(':focus-visible');
+    });
   });
 
   describe('Canvas Engine Accessibility', () => {
