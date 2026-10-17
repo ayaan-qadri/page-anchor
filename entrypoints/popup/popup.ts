@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 import { loadSettings } from '../../src/core/storage';
 import { formatShortcutForDisplay } from '../../src/core/shortcuts';
+import { PopupSettingsPanel } from './popup-settings';
 
 export async function initPopup() {
   const toggleSwitch = document.getElementById('toggle-draw-mode') as HTMLInputElement;
@@ -9,34 +10,12 @@ export async function initPopup() {
   const exportBtn = document.getElementById('btn-export') as HTMLButtonElement;
   const clearBtn = document.getElementById('btn-clear') as HTMLButtonElement;
   const optionsBtn = document.getElementById('btn-options') as HTMLButtonElement;
+  const backBtn = document.getElementById('btn-settings-back') as HTMLButtonElement | null;
+  const fullSettingsBtn = document.getElementById('btn-open-full-settings') as HTMLButtonElement | null;
   const hintEl = document.getElementById('quick-shortcut-hint') as HTMLElement;
-
-  const ext: any = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null);
-  if (!ext) return;
-
-  const settings = await loadSettings();
-  const toggleKey = settings.shortcuts['toggle-active'] || 'Alt+Shift+D';
-  if (hintEl) {
-    hintEl.textContent = formatShortcutForDisplay(toggleKey);
-  }
-
-  optionsBtn?.addEventListener('click', () => {
-    if (ext.runtime?.openOptionsPage) {
-      ext.runtime.openOptionsPage();
-    } else if ((ext.runtime as any)?.getURL) {
-      window.open((ext.runtime as any).getURL('options.html'));
-    }
-  });
-
-  const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
-  if (!tab || tab.id === undefined) {
-    pageTitleEl.textContent = 'No active webpage';
-    toggleSwitch.disabled = true;
-    return;
-  }
-
-  const tabId = tab.id;
-  pageTitleEl.textContent = tab.title || tab.url || 'Webpage';
+  const homeView = document.getElementById('view-home');
+  const settingsView = document.getElementById('view-settings');
+  const settingsRoot = document.getElementById('popup-settings-root');
 
   const announcer = document.getElementById('popup-announcer');
   const announce = (msg: string) => {
@@ -47,6 +26,60 @@ export async function initPopup() {
       });
     }
   };
+
+  const ext: any = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null);
+  if (!ext) return;
+
+  // Settings live inside the popup itself, so the gear never navigates away.
+  let settingsPanel: PopupSettingsPanel | null = null;
+  let settingsMounted = false;
+
+  const openSettings = async () => {
+    homeView?.classList.add('hidden');
+    settingsView?.classList.remove('hidden');
+    if (!settingsMounted && settingsRoot) {
+      settingsMounted = true;
+      settingsPanel = new PopupSettingsPanel(settingsRoot, announce);
+      await settingsPanel.mount();
+      announce('Settings opened');
+    }
+  };
+
+  const closeSettings = () => {
+    settingsPanel?.dispose();
+    settingsView?.classList.add('hidden');
+    homeView?.classList.remove('hidden');
+  };
+
+  const openFullSettingsPage = () => {
+    if (ext.runtime?.openOptionsPage) {
+      ext.runtime.openOptionsPage();
+    } else if (ext.runtime?.getURL) {
+      window.open(ext.runtime.getURL('options.html'));
+    }
+  };
+
+  optionsBtn?.addEventListener('click', () => {
+    void openSettings();
+  });
+  backBtn?.addEventListener('click', closeSettings);
+  fullSettingsBtn?.addEventListener('click', openFullSettingsPage);
+
+  const settings = await loadSettings();
+  const toggleKey = settings.shortcuts['toggle-active'] || 'Alt+Shift+D';
+  if (hintEl) {
+    hintEl.textContent = formatShortcutForDisplay(toggleKey);
+  }
+
+  const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
+  if (!tab || tab.id === undefined) {
+    pageTitleEl.textContent = 'No active webpage';
+    toggleSwitch.disabled = true;
+    return;
+  }
+
+  const tabId = tab.id;
+  pageTitleEl.textContent = tab.title || tab.url || 'Webpage';
 
   async function injectContentScript(): Promise<boolean> {
     try {

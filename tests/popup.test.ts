@@ -96,12 +96,38 @@ describe('Popup UI: Status, Toggles, Actions, & Screen Reader Announcements', ()
     expect(countEl.textContent).toBe('0 annotations on page');
   });
 
-  it('navigates to options page when options button is clicked', async () => {
+  it('opens settings inside the popup instead of navigating to a new tab', async () => {
     await initPopup();
 
     const optionsBtn = document.getElementById('btn-options') as HTMLButtonElement;
-    optionsBtn.click();
+    const homeView = document.getElementById('view-home') as HTMLElement;
+    const settingsView = document.getElementById('view-settings') as HTMLElement;
+    const settingsRoot = document.getElementById('popup-settings-root') as HTMLElement;
 
+    expect(settingsView.classList.contains('hidden')).toBe(true);
+
+    optionsBtn.click();
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(homeView.classList.contains('hidden')).toBe(true);
+    expect(settingsView.classList.contains('hidden')).toBe(false);
+    expect(settingsRoot.children.length).toBeGreaterThan(0);
+    expect(mockChrome.runtime.openOptionsPage).not.toHaveBeenCalled();
+  });
+
+  it('returns to the dashboard from settings and can open the full page in a tab', async () => {
+    await initPopup();
+
+    (document.getElementById('btn-options') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 20));
+    (document.getElementById('btn-settings-back') as HTMLButtonElement).click();
+
+    const homeView = document.getElementById('view-home') as HTMLElement;
+    const settingsView = document.getElementById('view-settings') as HTMLElement;
+    expect(homeView.classList.contains('hidden')).toBe(false);
+    expect(settingsView.classList.contains('hidden')).toBe(true);
+
+    (document.getElementById('btn-open-full-settings') as HTMLButtonElement).click();
     expect(mockChrome.runtime.openOptionsPage).toHaveBeenCalled();
   });
 });
