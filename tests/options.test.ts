@@ -197,9 +197,7 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
     const mockFile = new File(
       [
         JSON.stringify({
-          version: 1,
-          settings: { defaultStrokeColor: '#abcdef' },
-          pages: {},
+          page_anchor_settings: { defaultStrokeColor: '#abcdef' },
         }),
       ],
       'page-anchor-backup.json',
@@ -216,5 +214,48 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
 
     const status = document.getElementById('import-status') as HTMLElement;
     expect(status.textContent).toBe('Backup restored successfully!');
+  });
+
+  it('renders saved-page titles and URLs as text, not injected markup', async () => {
+    mockLocalStore['page_anchor_index'] = {
+      'https://example.com/a': {
+        normalizedUrl: 'https://example.com/a',
+        url: 'https://example.com/a',
+        pageTitle: '<img src=x onerror="globalThis.pwned=true">',
+        updatedAt: Date.now(),
+        elementCount: 2,
+      },
+    };
+
+    await initOptions();
+
+    const list = document.getElementById('saved-pages-list') as HTMLElement;
+    expect(list.querySelector('img')).toBeNull();
+    expect((globalThis as any).pwned).toBeUndefined();
+
+    const titleEl = list.querySelector('.pa-saved-title') as HTMLElement;
+    expect(titleEl.textContent).toBe('<img src=x onerror="globalThis.pwned=true">');
+  });
+
+  it('does not render a stored non-http(s) URL as a clickable link', async () => {
+    mockLocalStore['page_anchor_index'] = {
+      'https://evil.test/': {
+        normalizedUrl: 'https://evil.test/',
+        url: 'javascript:alert(document.domain)',
+        pageTitle: 'Hostile backup entry',
+        updatedAt: Date.now(),
+        elementCount: 1,
+      },
+    };
+
+    await initOptions();
+
+    const list = document.getElementById('saved-pages-list') as HTMLElement;
+    expect(list.querySelector('a.pa-saved-url')).toBeNull();
+
+    const urlEl = list.querySelector('.pa-saved-url') as HTMLElement;
+    expect(urlEl.tagName).toBe('SPAN');
+    expect(urlEl.getAttribute('href')).toBeNull();
+    expect(urlEl.textContent).toBe('javascript:alert(document.domain)');
   });
 });

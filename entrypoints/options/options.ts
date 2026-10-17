@@ -4,6 +4,7 @@ import {
   exportAllDataAsJson,
   getAllSavedPagesSummary,
   importDataFromJson,
+  isSafeHttpUrl,
   loadSettings,
   saveSettings,
 } from '../../src/core/storage';
@@ -362,11 +363,30 @@ async function renderSavedPages() {
       minute: '2-digit',
     });
 
-    info.innerHTML = `
-      <div class="pa-saved-title font-semibold text-white text-sm">${escapeHtml(page.pageTitle || 'Untitled Page')}</div>
-      <a href="${escapeAttribute(page.url)}" target="_blank" rel="noopener noreferrer" class="pa-saved-url text-xs text-sky-400 hover:underline truncate" aria-label="Open ${escapeAttribute(page.pageTitle || page.url)} in new tab">${escapeHtml(page.url)}</a>
-      <div class="pa-saved-meta text-[11px] text-slate-400">${page.elementCount} elements • Last updated ${dateStr}</div>
-    `;
+    const title = page.pageTitle || 'Untitled Page';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'pa-saved-title font-semibold text-white text-sm';
+    titleEl.textContent = title;
+
+    // Only http(s) URLs become links; a stored URL can come from an untrusted backup.
+    const urlEl = document.createElement(isSafeHttpUrl(page.url) ? 'a' : 'span');
+    urlEl.className = 'pa-saved-url text-xs text-sky-400 hover:underline truncate';
+    urlEl.textContent = page.url;
+    if (urlEl instanceof HTMLAnchorElement) {
+      urlEl.href = page.url;
+      urlEl.target = '_blank';
+      urlEl.rel = 'noopener noreferrer';
+      urlEl.setAttribute('aria-label', `Open ${title} in new tab`);
+    }
+
+    const metaEl = document.createElement('div');
+    metaEl.className = 'pa-saved-meta text-[11px] text-slate-400';
+    metaEl.textContent = `${page.elementCount} elements • Last updated ${dateStr}`;
+
+    info.appendChild(titleEl);
+    info.appendChild(urlEl);
+    info.appendChild(metaEl);
 
     const actions = document.createElement('div');
     actions.className = 'pa-saved-actions flex items-center gap-2.5';
@@ -451,21 +471,6 @@ function showToast(msg: string) {
   toast.textContent = msg;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 2500);
-}
-
-function escapeHtml(str: string): string {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-function escapeAttribute(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
 }
 
 document.addEventListener('DOMContentLoaded', initOptions);

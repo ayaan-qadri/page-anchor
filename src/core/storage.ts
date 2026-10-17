@@ -76,12 +76,29 @@ export function normalizeUrl(
   }
 }
 
+/** Namespace owning every key; also the backup export/import allowlist. */
+const STORAGE_NAMESPACE = 'page_anchor_';
+
+const INDEX_KEY = `${STORAGE_NAMESPACE}index`;
+const SETTINGS_KEY = `${STORAGE_NAMESPACE}settings`;
+
 function getStorageKey(normalizedUrl: string): string {
-  return `page_anchor_data:${normalizedUrl}`;
+  return `${STORAGE_NAMESPACE}data:${normalizedUrl}`;
 }
 
-const INDEX_KEY = 'page_anchor_index';
-const SETTINGS_KEY = 'page_anchor_settings';
+/**
+ * True only for absolute `http:`/`https:` URLs. Stored URLs can originate from
+ * an untrusted backup, so a `javascript:`/`data:` value must never reach an href.
+ */
+export function isSafeHttpUrl(raw: unknown): boolean {
+  if (typeof raw !== 'string') return false;
+  try {
+    const { protocol } = new URL(raw);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Safely accesses storage across Chrome, Edge, Firefox, and Safari.
@@ -266,17 +283,54 @@ export async function getAllSavedPagesSummary(): Promise<PageMetadataSummary[]> 
   return list;
 }
 
-export async function exportAllDataAsJson(): Promise<string> {
-  const allData = await storageGet(null);
-  return JSON.stringify(allData || {}, null, 2);
+/** Upper bound on an imported backup, to bound parsing cost and storage writes. */
+const MAX_BACKUP_CHARS = 5_000_000;
+
+function isPlainObject(value: unknown): value is Record<string, any> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Serializes only the extension's own namespaced keys, so backups round-trip. */
+export async function exportAllDataAsJson(): Promise<string> {
+  const allData = (await storageGet(null)) || {};
+  const owned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(allData)) {
+    if (key.startsWith(STORAGE_NAMESPACE)) owned[key] = value;
+  }
+  return JSON.stringify(owned, null, 2);
+}
+
+/**
+ * Restores a backup from `exportAllDataAsJson`. The file is untrusted, so it is
+ * validated before anything is written; `false` means "invalid backup format".
+ */
 export async function importDataFromJson(jsonStr: string): Promise<boolean> {
+  if (typeof jsonStr !== 'string' || jsonStr.length === 0 || jsonStr.length > MAX_BACKUP_CHARS) {
+    return false;
+  }
+
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(jsonStr);
-    await storageSet(parsed);
-    return true;
+    parsed = JSON.parse(jsonStr);
   } catch {
     return false;
   }
+
+  if (!isPlainObject(parsed)) return false;
+
+  const sanitized: Record<string, any> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (key.startsWith(STORAGE_NAMESPACE) && isPlainObject(value)) {
+      sanitized[key] = value;
+    }
+  }
+
+  if (Object.keys(sanitized).length === 0) return false;
+
+  try {
+    await storageSet(sanitized);
+  } catch {
+    return false;
+  }
+  return true;
 }
