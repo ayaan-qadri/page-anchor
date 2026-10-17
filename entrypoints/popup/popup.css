@@ -1,19 +1,26 @@
 @import "tailwindcss";
 @import "../../src/styles/tailwind.css";
 
-/* Global Focus-Visible & Motion Safety (WCAG 2.4.7 & 2.3.3) */
-:focus-visible {
-  outline: 2px solid #38bdf8;
-  outline-offset: 2px;
-}
+/*
+ * Every visual in this popup is a Tailwind utility. The only rules that live
+ * here are document-wide guarantees, which cannot be expressed as utilities
+ * because they apply to elements the markup does not own (`*`, focus states).
+ */
+@layer base {
+  /* WCAG 2.4.7 — one consistent, visible indicator on every focusable control. */
+  :focus-visible {
+    @apply outline-2 outline-brand-ring outline-offset-2;
+  }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+  /* WCAG 2.3.3 — movement here is decorative, so it is always safe to drop. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }

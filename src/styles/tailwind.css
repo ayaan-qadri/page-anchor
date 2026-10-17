@@ -1,13 +1,53 @@
 @import "tailwindcss";
 
+/*
+ * Page Anchor design tokens.
+ *
+ * The palette is sampled from the brand mark: a periwinkle-blue nib, a violet
+ * highlight and a mint counter, all resting on a near-black navy canvas. The
+ * accent set stays deliberately small — one blue, one violet, one mint — so the
+ * colour gradient reads as a signature rather than decoration.
+ */
 @theme {
-  --color-brand-dark: #0f172a;
-  --color-brand-darker: #0b0f19;
-  --color-brand-card: #1e293b;
-  --color-brand-primary: #38bdf8;
-  --color-brand-accent: #3b82f6;
-  --color-brand-emerald: #22c55e;
-  --color-brand-danger: #ef4444;
-  --color-brand-warning: #f59e0b;
+  /* Surfaces */
+  --color-brand-bg: #0a0d16;
+  --color-brand-surface: #11141f;
+  --color-brand-surface-2: #161a27;
+  --color-brand-elevated: #1b2030;
+
+  /* Text */
+  --color-brand-text: #e8eaf3;
+  --color-brand-muted: #99a1b8;
+  --color-brand-faint: #7c849e;
+
+  /* Accents */
+  --color-brand-blue: #5b8def;
+  --color-brand-violet: #a78bfa;
+  --color-brand-mint: #5eead4;
+  --color-brand-accent: #3f63da;
+  --color-brand-accent-hover: #3557c6;
+  --color-brand-accent-soft: #a9c1f8;
+  --color-brand-ring: #7ca5f7;
+
+  /* Status */
+  --color-brand-danger: #e0576b;
+  --color-brand-danger-soft: #f2a0aa;
+  --color-brand-warning: #e5a94a;
+  --color-brand-warning-soft: #f0c680;
+  --color-brand-success: #34d399;
+
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+/* Base canvas for the extension pages (popup + options). */
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  ::selection {
+    background: rgba(91, 141, 239, 0.35);
+    color: #ffffff;
+  }
 }

@@ -1,41 +1,70 @@
 @import "tailwindcss";
 @import "../../src/styles/tailwind.css";
 
-/* Skip link styled for accessibility (WCAG 2.4.1) */
-.pa-skip-link {
-  position: absolute;
-  top: -4rem;
-  left: 1.25rem;
-  background-color: #2563eb;
-  color: #ffffff;
-  padding: 0.625rem 1.125rem;
-  border-radius: 0.5rem;
-  font-weight: 700;
-  font-size: 0.75rem;
-  z-index: 99999;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+/*
+ * Global guarantees that utilities cannot express, because they target elements
+ * the markup does not own (`*` and every focus state on the page).
+ */
+@layer base {
+  /* WCAG 2.4.7 — one consistent, visible indicator on every focusable control. */
+  :focus-visible {
+    @apply outline-2 outline-brand-ring outline-offset-2;
+  }
+
+  /* WCAG 2.3.3 — movement here is decorative, so it is always safe to drop. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
-.pa-skip-link:focus {
-  top: 1rem;
-  outline: 2px solid #38bdf8;
-  outline-offset: 2px;
-}
+/*
+ * Component classes, not utilities. Each one pairs a stable hook — scripted
+ * against in options.ts, or asserted by the a11y tests — with a state the
+ * utility layer cannot reach on its own: `.active` is switched from JS, the
+ * skip link only reveals on :focus, and the swatch targets a native input.
+ */
+@layer components {
+  /* Skip link (WCAG 2.4.1) — parked off-canvas until it takes focus. */
+  .pa-skip-link {
+    @apply absolute -top-16 left-5 z-[99999] rounded-lg bg-brand-accent px-4.5 py-2.5
+      text-xs font-bold text-white shadow-xl shadow-black/50
+      transition-[top] duration-150 ease-out focus:top-4;
+  }
 
-/* Global Focus-Visible & Motion Safety (WCAG 2.4.7 & 2.3.3) */
-:focus-visible {
-  outline: 2px solid #38bdf8;
-  outline-offset: 2px;
-}
+  /* Segmented tab bar (WAI-ARIA tablist pattern). */
+  .pa-tabs {
+    @apply flex items-center gap-1 p-1 mb-6 overflow-x-auto rounded-xl
+      border border-white/[0.07] bg-white/[0.02];
+  }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+  .pa-tab-btn {
+    @apply flex-none px-3.5 py-[7px] rounded-[9px] border border-transparent bg-transparent
+      text-[12.5px] font-semibold tracking-[-0.005em] whitespace-nowrap text-brand-muted
+      cursor-pointer transition-colors duration-[130ms] ease-out
+      hover:text-brand-text hover:bg-white/[0.04];
+  }
+
+  .pa-tab-btn.active {
+    @apply text-brand-text bg-white/[0.07] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)];
+  }
+
+  /* Native colour swatches, so they read as pickers rather than OS defaults. */
+  .pa-color-input-row input[type="color"] {
+    @apply rounded-lg border border-white/[0.12] bg-white/[0.03] p-0.5;
+  }
+
+  /* Destructive row action in the saved-pages list. */
+  .pa-btn-danger {
+    @apply px-3 py-1.5 rounded-lg border border-brand-danger/35 bg-brand-danger/10
+      text-xs font-semibold text-brand-danger-soft cursor-pointer
+      transition-colors duration-[130ms] ease-out
+      hover:bg-brand-danger/20 hover:border-brand-danger/50;
   }
 }

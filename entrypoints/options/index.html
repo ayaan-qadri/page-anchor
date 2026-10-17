@@ -4,46 +4,46 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Page Anchor - Settings & Preferences</title>
+    <!-- WXT entrypoint option: open the settings page in its own tab instead of
+         embedding it inside the browser's add-ons manager. -->
+    <meta name="manifest.open_in_tab" content="true" />
+    <link rel="icon" type="image/png" href="/icon-128.png" />
     <link rel="stylesheet" href="./options.css" />
   </head>
-  <body class="bg-[#0b0f19] text-slate-100 font-sans text-sm leading-relaxed m-0 p-0 antialiased">
+  <body class="bg-brand-bg text-brand-text font-sans text-sm leading-relaxed m-0 p-0 antialiased">
     <a href="#main-settings-content" class="pa-skip-link">Skip to settings content</a>
-    <div class="pa-options-container max-w-[900px] mx-auto px-5 py-8">
-      <!-- Sidebar / Header -->
-      <header class="pa-options-header flex items-center justify-between pb-6 mb-6 border-b border-white/[0.08]">
-        <div class="pa-options-brand flex items-center gap-4">
-          <div class="pa-brand-icon w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20" aria-hidden="true">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-              <circle cx="12" cy="5" r="3"/>
-              <line x1="12" y1="22" x2="12" y2="8"/>
-              <path d="M5 12H2a10 10 0 0 0 20 0h-3"/>
-            </svg>
+    <div class="pa-options-container max-w-[880px] mx-auto px-5 py-8">
+      <!-- Header -->
+      <header class="pa-options-header flex items-center justify-between gap-4 pb-6 mb-6 border-b border-white/[0.07]">
+        <div class="pa-options-brand flex items-center gap-3.5">
+          <div class="pa-brand-icon w-11 h-11 rounded-xl overflow-hidden flex items-center justify-center ring-1 ring-white/10" aria-hidden="true">
+            <img src="/icon-128.png" alt="" width="44" height="44" class="w-full h-full block" />
           </div>
           <div>
-            <h1 class="text-xl font-bold text-white tracking-tight">Page Anchor</h1>
-            <p class="text-[13px] text-slate-400">Customizable Web Annotations & Drawing Settings</p>
+            <h1 class="text-[19px] font-semibold tracking-[-0.015em] text-brand-text">Page Anchor</h1>
+            <p class="text-[13px] text-brand-faint">Web annotation &amp; drawing preferences</p>
           </div>
         </div>
 
         <div class="pa-header-actions">
-          <button id="btn-save" class="pa-btn-primary bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[13px] px-4 py-2 rounded-lg transition-colors cursor-pointer shadow-sm focus-visible:outline-2 focus-visible:outline-sky-400">Save Changes</button>
+          <button id="btn-save" class="bg-brand-accent hover:bg-brand-accent-hover text-white font-semibold text-[13px] px-4 py-2 rounded-lg transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-brand-ring">Save changes</button>
         </div>
       </header>
 
       <!-- Main Layout -->
       <main id="main-settings-content" class="pa-options-content outline-none" tabindex="-1">
         <!-- Navigation Tabs (WAI-ARIA Tablist Pattern) -->
-        <div class="pa-tabs flex gap-2 pb-2 mb-6 border-b border-white/[0.08] overflow-x-auto" role="tablist" aria-label="Settings categories">
-          <button role="tab" id="tab-btn-shortcuts" class="pa-tab-btn active px-4 py-2 rounded-lg text-[13px] font-semibold text-sky-400 bg-sky-400/10 shadow-[0_0_1px_#38bdf8] transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-sky-400" data-tab="shortcuts" aria-selected="true" aria-controls="tab-shortcuts" tabindex="0">Keyboard Shortcuts</button>
-          <button role="tab" id="tab-btn-drawing" class="pa-tab-btn px-4 py-2 rounded-lg text-[13px] font-semibold text-slate-400 hover:text-white hover:bg-white/[0.05] transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-sky-400" data-tab="drawing" aria-selected="false" aria-controls="tab-drawing" tabindex="-1">Drawing Defaults</button>
-          <button role="tab" id="tab-btn-persistence" class="pa-tab-btn px-4 py-2 rounded-lg text-[13px] font-semibold text-slate-400 hover:text-white hover:bg-white/[0.05] transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-sky-400" data-tab="persistence" aria-selected="false" aria-controls="tab-persistence" tabindex="-1">Persistence & Matching</button>
-          <button role="tab" id="tab-btn-saved-pages" class="pa-tab-btn px-4 py-2 rounded-lg text-[13px] font-semibold text-slate-400 hover:text-white hover:bg-white/[0.05] transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-sky-400" data-tab="saved-pages" aria-selected="false" aria-controls="tab-saved-pages" tabindex="-1">Saved Pages (<span id="saved-count">0</span>)</button>
-          <button role="tab" id="tab-btn-backup" class="pa-tab-btn px-4 py-2 rounded-lg text-[13px] font-semibold text-slate-400 hover:text-white hover:bg-white/[0.05] transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-sky-400" data-tab="backup" aria-selected="false" aria-controls="tab-backup" tabindex="-1">Backup & Restore</button>
+        <div class="pa-tabs" role="tablist" aria-label="Settings categories">
+          <button role="tab" id="tab-btn-shortcuts" class="pa-tab-btn active" data-tab="shortcuts" aria-selected="true" aria-controls="tab-shortcuts" tabindex="0">Keyboard Shortcuts</button>
+          <button role="tab" id="tab-btn-drawing" class="pa-tab-btn" data-tab="drawing" aria-selected="false" aria-controls="tab-drawing" tabindex="-1">Drawing Defaults</button>
+          <button role="tab" id="tab-btn-persistence" class="pa-tab-btn" data-tab="persistence" aria-selected="false" aria-controls="tab-persistence" tabindex="-1">Persistence &amp; Matching</button>
+          <button role="tab" id="tab-btn-saved-pages" class="pa-tab-btn" data-tab="saved-pages" aria-selected="false" aria-controls="tab-saved-pages" tabindex="-1">Saved Pages (<span id="saved-count">0</span>)</button>
+          <button role="tab" id="tab-btn-backup" class="pa-tab-btn" data-tab="backup" aria-selected="false" aria-controls="tab-backup" tabindex="-1">Backup &amp; Restore</button>
         </div>
 
         <!-- Tab 1: Shortcuts -->
         <section role="tabpanel" id="tab-shortcuts" class="pa-tab-pane active block" aria-labelledby="tab-btn-shortcuts" tabindex="0">
-          <div class="pa-section-desc text-slate-400 text-[13px] mb-4.5">
+          <div class="pa-section-desc text-brand-muted text-[13px] mb-4.5">
             Customize keyboard shortcuts for every tool and action. Click on any key combination box and press your preferred keystroke to rebind.
           </div>
           <div class="pa-shortcuts-table-wrapper">
@@ -52,100 +52,100 @@
             </div>
           </div>
           <div class="pa-pane-footer">
-            <button id="btn-reset-shortcuts" class="pa-btn-secondary bg-white/[0.08] hover:bg-white/[0.14] text-slate-200 hover:text-white border border-white/10 px-4 py-2 rounded-lg font-semibold text-[13px] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-sky-400">Reset Shortcuts to Default</button>
+            <button id="btn-reset-shortcuts" class="bg-white/[0.06] hover:bg-white/[0.1] text-brand-text border border-white/[0.09] px-4 py-2 rounded-lg font-semibold text-[13px] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-brand-ring">Reset shortcuts to default</button>
           </div>
         </section>
 
         <!-- Tab 2: Drawing Defaults -->
         <section role="tabpanel" id="tab-drawing" class="pa-tab-pane hidden" aria-labelledby="tab-btn-drawing" tabindex="0" hidden>
           <div class="pa-form-group mb-5.5 flex flex-col gap-2">
-            <label for="pref-pen-color" class="pa-form-label font-semibold text-slate-200">Default Pen Stroke Color</label>
+            <label for="pref-pen-color" class="pa-form-label font-semibold text-brand-text text-[13px]">Default pen stroke color</label>
             <div class="pa-color-input-row flex items-center gap-3">
-              <input type="color" id="pref-pen-color" class="border-0 bg-transparent w-10 h-10 cursor-pointer" aria-label="Default Pen Stroke Color Picker" />
-              <span id="pref-pen-color-text" class="pa-hex-code font-mono text-[13px] text-slate-400">#ef4444</span>
+              <input type="color" id="pref-pen-color" class="w-10 h-10 cursor-pointer" aria-label="Default Pen Stroke Color Picker" />
+              <span id="pref-pen-color-text" class="pa-hex-code font-mono text-[13px] text-brand-muted">#ef4444</span>
             </div>
           </div>
 
           <div class="pa-form-group mb-5.5 flex flex-col gap-2">
-            <label for="pref-pen-width" class="pa-form-label font-semibold text-slate-200">Default Pen Stroke Width (<span id="pref-pen-width-val">4px</span>)</label>
-            <input type="range" id="pref-pen-width" min="1" max="30" value="4" class="pa-range-slider w-full max-w-[400px] accent-blue-600 cursor-pointer" aria-label="Default Pen Stroke Width" />
+            <label for="pref-pen-width" class="pa-form-label font-semibold text-brand-text text-[13px]">Default pen stroke width (<span id="pref-pen-width-val">4px</span>)</label>
+            <input type="range" id="pref-pen-width" min="1" max="30" value="4" class="pa-range-slider w-full max-w-[400px] accent-brand-accent cursor-pointer" aria-label="Default Pen Stroke Width" />
           </div>
 
           <div class="pa-form-group mb-5.5 flex flex-col gap-2">
-            <label for="pref-highlighter-color" class="pa-form-label font-semibold text-slate-200">Default Highlighter Color</label>
+            <label for="pref-highlighter-color" class="pa-form-label font-semibold text-brand-text text-[13px]">Default highlighter color</label>
             <div class="pa-color-input-row flex items-center gap-3">
-              <input type="color" id="pref-highlighter-color" class="border-0 bg-transparent w-10 h-10 cursor-pointer" aria-label="Default Highlighter Color Picker" />
-              <span id="pref-highlighter-color-text" class="pa-hex-code font-mono text-[13px] text-slate-400">#facc15</span>
+              <input type="color" id="pref-highlighter-color" class="w-10 h-10 cursor-pointer" aria-label="Default Highlighter Color Picker" />
+              <span id="pref-highlighter-color-text" class="pa-hex-code font-mono text-[13px] text-brand-muted">#facc15</span>
             </div>
           </div>
 
           <div class="pa-form-group mb-5.5 flex flex-col gap-2">
-            <label for="pref-highlighter-width" class="pa-form-label font-semibold text-slate-200">Default Highlighter Width (<span id="pref-highlighter-width-val">20px</span>)</label>
-            <input type="range" id="pref-highlighter-width" min="8" max="50" value="20" class="pa-range-slider w-full max-w-[400px] accent-blue-600 cursor-pointer" aria-label="Default Highlighter Width" />
+            <label for="pref-highlighter-width" class="pa-form-label font-semibold text-brand-text text-[13px]">Default highlighter width (<span id="pref-highlighter-width-val">20px</span>)</label>
+            <input type="range" id="pref-highlighter-width" min="8" max="50" value="20" class="pa-range-slider w-full max-w-[400px] accent-brand-accent cursor-pointer" aria-label="Default Highlighter Width" />
           </div>
 
           <div class="pa-form-group mb-5.5 flex flex-col gap-2">
-            <label for="pref-font-size" class="pa-form-label font-semibold text-slate-200">Default Text Note Font Size (<span id="pref-font-size-val">18px</span>)</label>
-            <input type="range" id="pref-font-size" min="12" max="36" value="18" class="pa-range-slider w-full max-w-[400px] accent-blue-600 cursor-pointer" aria-label="Default Text Note Font Size" />
+            <label for="pref-font-size" class="pa-form-label font-semibold text-brand-text text-[13px]">Default text note font size (<span id="pref-font-size-val">18px</span>)</label>
+            <input type="range" id="pref-font-size" min="12" max="36" value="18" class="pa-range-slider w-full max-w-[400px] accent-brand-accent cursor-pointer" aria-label="Default Text Note Font Size" />
           </div>
         </section>
 
         <!-- Tab 3: Persistence & Matching -->
         <section role="tabpanel" id="tab-persistence" class="pa-tab-pane hidden" aria-labelledby="tab-btn-persistence" tabindex="0" hidden>
           <div class="pa-form-group mb-5.5 flex flex-col gap-2">
-            <label for="pref-url-match-mode" class="pa-form-label font-semibold text-slate-200">URL Matching Mode</label>
-            <select id="pref-url-match-mode" class="pa-select bg-white/5 border border-white/10 text-white px-3 py-2 rounded-lg outline-none max-w-[500px] focus:ring-2 focus:ring-sky-400 cursor-pointer [&>option]:bg-slate-900" aria-describedby="pref-url-match-hint">
+            <label for="pref-url-match-mode" class="pa-form-label font-semibold text-brand-text text-[13px]">URL matching mode</label>
+            <select id="pref-url-match-mode" class="pa-select bg-white/[0.04] border border-white/[0.09] text-brand-text px-3 py-2 rounded-lg outline-none max-w-[500px] focus:ring-2 focus:ring-brand-ring cursor-pointer [&>option]:bg-brand-surface" aria-describedby="pref-url-match-hint">
               <option value="clean">Clean URL (Default - strips tracking params like ?utm_* and #scroll anchors)</option>
               <option value="exact">Exact URL (Preserves all query parameters and hashes)</option>
               <option value="domain">Domain-wide (Applies the same annotations across all pages on the domain)</option>
             </select>
-            <div id="pref-url-match-hint" class="pa-form-hint text-xs text-slate-400">
+            <div id="pref-url-match-hint" class="pa-form-hint text-xs text-brand-faint">
               Clean URL ensures your drawings remain attached even if tracking IDs or campaign parameters change.
             </div>
           </div>
 
           <div class="pa-form-group mb-5.5 flex flex-col gap-2">
-            <span class="pa-form-label font-semibold text-slate-200">Toolbar Behavior & Visibility</span>
-            <label class="pa-checkbox-row flex items-center gap-2.5 text-[13px] text-slate-300 cursor-pointer" for="pref-toolbar-open">
-              <input type="checkbox" id="pref-toolbar-open" class="w-[18px] h-[18px] accent-blue-600 cursor-pointer" />
+            <span class="pa-form-label font-semibold text-brand-text text-[13px]">Toolbar behavior &amp; visibility</span>
+            <label class="pa-checkbox-row flex items-center gap-2.5 text-[13px] text-brand-muted cursor-pointer" for="pref-toolbar-open">
+              <input type="checkbox" id="pref-toolbar-open" class="w-[18px] h-[18px] accent-brand-accent cursor-pointer" />
               <span>Keep toolbar open by default on reload and page changes (Default: minimized/closed)</span>
             </label>
-            <label class="pa-checkbox-row flex items-center gap-2.5 text-[13px] text-slate-300 cursor-pointer mt-2" for="pref-show-pill">
-              <input type="checkbox" id="pref-show-pill" class="w-[18px] h-[18px] accent-blue-600 cursor-pointer" checked />
+            <label class="pa-checkbox-row flex items-center gap-2.5 text-[13px] text-brand-muted cursor-pointer mt-2" for="pref-show-pill">
+              <input type="checkbox" id="pref-show-pill" class="w-[18px] h-[18px] accent-brand-accent cursor-pointer" checked />
               <span>Show floating anchor pill in bottom-right corner for quick access</span>
             </label>
-            <div class="pa-form-hint text-xs text-slate-400 mt-1">
+            <div class="pa-form-hint text-xs text-brand-faint mt-1">
               When minimized, the toolbar stays neatly out of your way until activated with Alt+D or clicking the anchor pill.
             </div>
           </div>
 
           <div class="pa-form-group mb-5.5 flex flex-col gap-2">
-            <span class="pa-form-label font-semibold text-slate-200">Smart DOM Element Anchoring</span>
-            <label class="pa-checkbox-row flex items-center gap-2.5 text-[13px] text-slate-300 cursor-pointer" for="pref-dom-anchoring">
-              <input type="checkbox" id="pref-dom-anchoring" class="w-[18px] h-[18px] accent-blue-600 cursor-pointer" checked />
+            <span class="pa-form-label font-semibold text-brand-text text-[13px]">Smart DOM element anchoring</span>
+            <label class="pa-checkbox-row flex items-center gap-2.5 text-[13px] text-brand-muted cursor-pointer" for="pref-dom-anchoring">
+              <input type="checkbox" id="pref-dom-anchoring" class="w-[18px] h-[18px] accent-brand-accent cursor-pointer" checked />
               <span>Enable Smart Element Anchoring by default (follows moving GitHub issues, cards, comments)</span>
             </label>
-            <div class="pa-form-hint text-xs text-slate-400">
+            <div class="pa-form-hint text-xs text-brand-faint">
               Pins drawings to underlying HTML elements instead of fixed screen pixels, so marks stay aligned when new items arrive or content shifts.
             </div>
 
-            <label for="pref-orphan-mode" class="pa-form-label font-semibold text-slate-200 mt-2">When Annotated Element Is Not Found</label>
-            <select id="pref-orphan-mode" class="pa-select bg-white/5 border border-white/10 text-white px-3 py-2 rounded-lg outline-none max-w-[500px] focus:ring-2 focus:ring-sky-400 cursor-pointer [&>option]:bg-slate-900" aria-describedby="pref-orphan-hint">
+            <label for="pref-orphan-mode" class="pa-form-label font-semibold text-brand-text text-[13px] mt-2">When annotated element is not found</label>
+            <select id="pref-orphan-mode" class="pa-select bg-white/[0.04] border border-white/[0.09] text-brand-text px-3 py-2 rounded-lg outline-none max-w-[500px] focus:ring-2 focus:ring-brand-ring cursor-pointer [&>option]:bg-brand-surface" aria-describedby="pref-orphan-hint">
               <option value="hide">Hide automatically (Default - reveals when element returns)</option>
               <option value="dimmed">Remain visible at original location (Dimmed with dashed outline)</option>
             </select>
-            <div id="pref-orphan-hint" class="pa-form-hint text-xs text-slate-400">
+            <div id="pref-orphan-hint" class="pa-form-hint text-xs text-brand-faint">
               Determines what happens when an issue is closed, filtered out, or navigated to another page.
             </div>
           </div>
 
           <div class="pa-form-group mb-5.5 flex flex-col gap-2">
-            <span class="pa-form-label font-semibold text-slate-200">Zero-Lag Performance Engine</span>
-            <label class="pa-checkbox-row flex items-center gap-2.5 text-[13px] text-slate-300 cursor-pointer" for="pref-performance-mode">
-              <input type="checkbox" id="pref-performance-mode" class="w-[18px] h-[18px] accent-blue-600 cursor-pointer" checked />
-              <span>Enable Viewport Frustum Culling & RDP point reduction (Recommended for low-end devices)</span>
+            <span class="pa-form-label font-semibold text-brand-text text-[13px]">Zero-lag performance engine</span>
+            <label class="pa-checkbox-row flex items-center gap-2.5 text-[13px] text-brand-muted cursor-pointer" for="pref-performance-mode">
+              <input type="checkbox" id="pref-performance-mode" class="w-[18px] h-[18px] accent-brand-accent cursor-pointer" checked />
+              <span>Enable Viewport Frustum Culling &amp; RDP point reduction (Recommended for low-end devices)</span>
             </label>
-            <div class="pa-form-hint text-xs text-slate-400">
+            <div class="pa-form-hint text-xs text-brand-faint">
               Restricts canvas rendering strictly to visible elements on screen and optimizes polyline point density.
             </div>
           </div>
@@ -153,7 +153,7 @@
 
         <!-- Tab 4: Saved Pages Manager -->
         <section role="tabpanel" id="tab-saved-pages" class="pa-tab-pane hidden" aria-labelledby="tab-btn-saved-pages" tabindex="0" hidden>
-          <div class="pa-section-desc text-slate-400 text-[13px] mb-4.5">
+          <div class="pa-section-desc text-brand-muted text-[13px] mb-4.5">
             Manage all web pages where you have active drawings and annotations.
           </div>
           <div id="saved-pages-list" class="pa-saved-list flex flex-col gap-2.5">
@@ -163,18 +163,18 @@
 
         <!-- Tab 5: Backup & Restore -->
         <section role="tabpanel" id="tab-backup" class="pa-tab-pane hidden" aria-labelledby="tab-btn-backup" tabindex="0" hidden>
-          <div class="pa-card-box bg-white/[0.03] border border-white/[0.08] rounded-xl p-5 mb-5">
-            <h3 class="text-[15px] font-bold text-white mb-1.5">Export All Annotations & Settings</h3>
-            <p class="text-[13px] text-slate-400 mb-3.5">Download a JSON backup containing all your drawings across all websites and your customized shortcuts.</p>
-            <button id="btn-export-backup" class="pa-btn-primary bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[13px] px-4 py-2 rounded-lg transition-colors cursor-pointer shadow-sm focus-visible:outline-2 focus-visible:outline-sky-400">Download Backup (.json)</button>
+          <div class="pa-card-box bg-white/[0.03] border border-white/[0.07] rounded-xl p-5 mb-5">
+            <h3 class="text-[15px] font-semibold text-brand-text mb-1.5">Export all annotations &amp; settings</h3>
+            <p class="text-[13px] text-brand-muted mb-3.5">Download a JSON backup containing all your drawings across all websites and your customized shortcuts.</p>
+            <button id="btn-export-backup" class="bg-brand-accent hover:bg-brand-accent-hover text-white font-semibold text-[13px] px-4 py-2 rounded-lg transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-brand-ring">Download backup (.json)</button>
           </div>
 
-          <div class="pa-card-box bg-white/[0.03] border border-white/[0.08] rounded-xl p-5 mb-5">
-            <h3 class="text-[15px] font-bold text-white mb-1.5">Restore From Backup</h3>
-            <p class="text-[13px] text-slate-400 mb-3.5">Restore your saved annotations and configuration from a previous Page Anchor JSON export.</p>
+          <div class="pa-card-box bg-white/[0.03] border border-white/[0.07] rounded-xl p-5 mb-5">
+            <h3 class="text-[15px] font-semibold text-brand-text mb-1.5">Restore from backup</h3>
+            <p class="text-[13px] text-brand-muted mb-3.5">Restore your saved annotations and configuration from a previous Page Anchor JSON export.</p>
             <input type="file" id="backup-file-input" accept=".json" style="display: none;" aria-label="Upload JSON backup file to restore" />
-            <button id="btn-import-backup" class="pa-btn-secondary bg-white/[0.08] hover:bg-white/[0.14] text-slate-200 hover:text-white border border-white/10 px-4 py-2 rounded-lg font-semibold text-[13px] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-sky-400">Choose JSON File to Restore</button>
-            <span id="import-status" role="status" aria-live="polite" class="ml-2.5 text-xs text-sky-400"></span>
+            <button id="btn-import-backup" class="bg-white/[0.06] hover:bg-white/[0.1] text-brand-text border border-white/[0.09] px-4 py-2 rounded-lg font-semibold text-[13px] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-brand-ring">Choose JSON file to restore</button>
+            <span id="import-status" role="status" aria-live="polite" class="ml-2.5 text-xs text-brand-accent-soft"></span>
           </div>
         </section>
       </main>

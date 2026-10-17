@@ -318,11 +318,14 @@ export class SettingsModal {
 
   /** Omits `outline: none`, which would beat the `:focus-visible` ring (WCAG 2.4.7). */
   private styleSelect(select: HTMLSelectElement, ariaLabel: string): void {
-    select.style.background = 'rgba(255, 255, 255, 0.08)';
-    select.style.color = '#ffffff';
-    select.style.border = '1px solid rgba(255, 255, 255, 0.15)';
-    select.style.borderRadius = '6px';
-    select.style.padding = '4px 8px';
+    select.style.background = 'rgba(255, 255, 255, 0.04)';
+    select.style.color = 'var(--pa-text)';
+    select.style.border = '1px solid var(--pa-line)';
+    select.style.borderRadius = '8px';
+    select.style.padding = '5px 9px';
+    select.style.fontSize = '12px';
+    select.style.maxWidth = '260px';
+    select.style.cursor = 'pointer';
     select.setAttribute('aria-label', ariaLabel);
   }
 
@@ -372,8 +375,8 @@ export class SettingsModal {
 
       const conflict = getBrowserShortcutConflict(combo);
       if (conflict) {
-        btn.style.borderColor = '#f59e0b';
-        btn.style.color = '#fbbf24';
+        btn.style.borderColor = 'var(--pa-warning)';
+        btn.style.color = 'var(--pa-warning-soft)';
         btn.title = `Warning: "${combo}" conflicts with ${conflict.browser} (${conflict.action}). Key may be intercepted by the browser.`;
       } else {
         btn.style.borderColor = '';

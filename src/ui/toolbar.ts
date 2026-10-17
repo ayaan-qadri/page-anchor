@@ -451,7 +451,7 @@ export class FloatingToolbar {
     customRow.style.alignItems = 'center';
     customRow.style.justifyContent = 'space-between';
     customRow.style.fontSize = '12px';
-    customRow.style.color = '#94a3b8';
+    customRow.style.color = 'var(--pa-muted)';
 
     const customLabel = document.createElement('label');
     customLabel.htmlFor = 'pa-custom-color-picker';

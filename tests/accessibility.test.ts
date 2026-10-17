@@ -67,12 +67,18 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       expect(optionsHtml).toContain('aria-live="polite"');
     });
 
-    it('should mark decorative SVGs with aria-hidden="true"', () => {
+    it('should hide decorative graphics from assistive technology', () => {
       const popupHtml = fs.readFileSync(path.resolve(__dirname, '../entrypoints/popup/index.html'), 'utf-8');
       const optionsHtml = fs.readFileSync(path.resolve(__dirname, '../entrypoints/options/index.html'), 'utf-8');
 
+      // Inline SVG action icons in the popup (settings, export, trash) stay hidden from AT
       expect(popupHtml).toMatch(/<svg[^>]*aria-hidden="true"/);
-      expect(optionsHtml).toMatch(/<svg[^>]*aria-hidden="true"/);
+
+      // Brand marks are decorative logo images: aria-hidden container + empty alt
+      for (const html of [popupHtml, optionsHtml]) {
+        expect(html).toMatch(/class="pa-brand-icon[^"]*"\s+aria-hidden="true"/);
+        expect(html).toMatch(/<img[^>]*alt=""/);
+      }
     });
   });
 

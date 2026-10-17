@@ -990,10 +990,10 @@ export class CanvasEngine {
     const w = b.maxX - b.minX;
     const h = b.maxY - b.minY;
 
-    ctx.fillStyle = 'rgba(59, 130, 246, 0.12)';
+    ctx.fillStyle = 'rgba(91, 141, 239, 0.12)';
     ctx.fillRect(b.minX, b.minY, w, h);
 
-    ctx.strokeStyle = '#3b82f6';
+    ctx.strokeStyle = '#5b8def';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([4, 4]);
     ctx.strokeRect(b.minX, b.minY, w, h);
@@ -1027,7 +1027,7 @@ export class CanvasEngine {
     };
 
     ctx.save();
-    ctx.strokeStyle = '#3b82f6';
+    ctx.strokeStyle = '#5b8def';
     ctx.lineWidth = 2;
     ctx.setLineDash([5, 5]);
 
@@ -1036,7 +1036,7 @@ export class CanvasEngine {
     ctx.strokeRect(unionBBox.minX, unionBBox.minY, w, h);
 
     ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#3b82f6';
+    ctx.strokeStyle = '#5b8def';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([]);
     const corners = [
@@ -1058,7 +1058,7 @@ export class CanvasEngine {
     const badgeX = unionBBox.minX;
     const badgeY = Math.max(unionBBox.minY - badgeH - 6, window.scrollY + 8);
 
-    ctx.fillStyle = 'rgba(30, 64, 175, 0.95)';
+    ctx.fillStyle = 'rgba(63, 99, 218, 0.95)';
     this.roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 6);
     ctx.fill();
 
@@ -1072,7 +1072,7 @@ export class CanvasEngine {
   private renderSingleSelectionOutline(ctx: CanvasRenderingContext2D, el: AnchorElement): void {
     const pad = 6;
     ctx.save();
-    ctx.strokeStyle = '#3b82f6';
+    ctx.strokeStyle = '#5b8def';
     ctx.lineWidth = 2;
     ctx.setLineDash([4, 4]);
 
@@ -1085,7 +1085,7 @@ export class CanvasEngine {
     );
 
     ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#3b82f6';
+    ctx.strokeStyle = '#5b8def';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([]);
     const corners = [

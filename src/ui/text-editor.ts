@@ -68,7 +68,7 @@ export class TextEditorOverlay {
           text,
           fontSize: options.fontSize,
           fontColor: options.fontColor,
-          bgColor: options.bgColor || 'rgba(15, 23, 42, 0.88)',
+          bgColor: options.bgColor || 'rgba(17, 20, 31, 0.94)',
           strokeColor: options.fontColor,
           strokeWidth: 1,
           opacity: 1,
