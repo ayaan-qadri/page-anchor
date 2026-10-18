@@ -7,7 +7,7 @@
     <link rel="icon" type="image/png" href="/icon-128.png" />
     <link rel="stylesheet" href="./popup.css" />
   </head>
-  <body class="w-[360px] bg-brand-bg text-brand-text font-sans text-[13px] select-none m-0 p-0 antialiased">
+  <body class="w-90 bg-brand-bg text-brand-text font-sans text-[13px] select-none m-0 p-0 antialiased">
     <main id="view-home" class="flex flex-col p-4 gap-3.5">
       <header class="pa-popup-header flex items-center justify-between pb-3 border-b border-white/[0.07]">
         <div class="pa-brand flex items-center gap-2.5">
@@ -19,7 +19,7 @@
             <p class="pa-brand-subtitle text-[11px] text-brand-faint leading-tight">Web Drawing &amp; Annotations</p>
           </div>
         </div>
-        <button id="btn-options" class="pa-icon-btn w-8 h-8 rounded-lg flex items-center justify-center text-brand-muted hover:text-brand-text bg-transparent hover:bg-white/[0.06] border border-white/[0.07] hover:border-white/15 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-brand-ring" title="Settings" aria-label="Open settings">
+        <button id="btn-options" class="pa-icon-btn w-8 h-8 rounded-lg flex items-center justify-center text-brand-muted hover:text-brand-text bg-transparent hover:bg-white/6 border border-white/[0.07] hover:border-white/15 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-brand-ring" title="Settings" aria-label="Open settings">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
             <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
             <circle cx="12" cy="12" r="3"/>
@@ -27,22 +27,22 @@
         </button>
       </header>
 
-      <div class="pa-card bg-white/[0.03] border border-white/[0.07] rounded-xl p-3 flex flex-col gap-2.5">
+      <div class="pa-card bg-white/3 border border-white/[0.07] rounded-xl p-3 flex flex-col gap-2.5">
         <div class="pa-card-row flex items-center justify-between">
           <label for="toggle-draw-mode" class="pa-card-label font-medium text-brand-text text-[12.5px] cursor-pointer">Drawing toolbar</label>
           <label class="relative inline-flex items-center cursor-pointer select-none">
             <input type="checkbox" id="toggle-draw-mode" class="sr-only peer" aria-label="Toggle drawing toolbar on current page" />
-            <div class="w-9 h-5 bg-white/15 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-brand-bg rounded-full peer peer-checked:bg-brand-accent transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-transform after:duration-200 peer-checked:after:translate-x-4"></div>
+            <div class="w-9 h-5 bg-white/15 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-brand-bg rounded-full peer peer-checked:bg-brand-accent transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-transform after:duration-200 peer-checked:after:translate-x-4"></div>
           </label>
         </div>
-        <div class="pa-page-info flex flex-col gap-0.5 pt-2.5 border-t border-white/[0.06]">
+        <div class="pa-page-info flex flex-col gap-0.5 pt-2.5 border-t border-white/6">
           <div class="pa-page-title text-[12px] text-brand-muted truncate" id="page-title">Loading page...</div>
           <div class="pa-page-count text-[11px] font-semibold text-brand-accent-soft" id="annotation-count" aria-live="polite">0 annotations</div>
         </div>
       </div>
 
       <div class="pa-actions-grid grid grid-cols-2 gap-2.5">
-        <button id="btn-export" class="pa-action-card flex items-center gap-2.5 p-2.5 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] hover:border-white/15 rounded-[10px] cursor-pointer text-left transition-colors focus-visible:outline-2 focus-visible:outline-brand-ring">
+        <button id="btn-export" class="pa-action-card flex items-center gap-2.5 p-2.5 bg-white/3 hover:bg-white/6 border border-white/[0.07] hover:border-white/15 rounded-[10px] cursor-pointer text-left transition-colors focus-visible:outline-2 focus-visible:outline-brand-ring">
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#a9c1f8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
@@ -54,7 +54,7 @@
           </div>
         </button>
 
-        <button id="btn-clear" class="pa-action-card flex items-center gap-2.5 p-2.5 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] hover:border-white/15 rounded-[10px] cursor-pointer text-left transition-colors focus-visible:outline-2 focus-visible:outline-brand-ring">
+        <button id="btn-clear" class="pa-action-card flex items-center gap-2.5 p-2.5 bg-white/3 hover:bg-white/6 border border-white/[0.07] hover:border-white/15 rounded-[10px] cursor-pointer text-left transition-colors focus-visible:outline-2 focus-visible:outline-brand-ring">
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#f2a0aa" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
             <path d="M3 6h18"/>
             <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
@@ -67,9 +67,9 @@
         </button>
       </div>
 
-      <div class="pa-hint-box flex items-center justify-between px-3 py-2 bg-white/[0.03] border border-white/[0.07] rounded-lg text-[11px]" role="note">
+      <div class="pa-hint-box flex items-center justify-between px-3 py-2 bg-white/3 border border-white/[0.07] rounded-lg text-[11px]" role="note">
         <span class="text-brand-muted">Quick toggle</span>
-        <kbd id="quick-shortcut-hint" class="bg-white/[0.06] border border-white/10 rounded-md px-1.5 py-0.5 font-semibold text-brand-accent-soft">Alt + Shift + D</kbd>
+        <kbd id="quick-shortcut-hint" class="bg-white/6 border border-white/10 rounded-md px-1.5 py-0.5 font-semibold text-brand-accent-soft">Alt + Shift + D</kbd>
       </div>
     </main>
 
@@ -77,13 +77,13 @@
          class swap below is all the view switching needs. -->
     <section id="view-settings" class="hidden flex flex-col" aria-label="Settings">
       <header class="flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.07]">
-        <button id="btn-settings-back" class="w-7 h-7 rounded-lg flex items-center justify-center text-brand-muted hover:text-brand-text bg-transparent hover:bg-white/[0.06] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-brand-ring" title="Back" aria-label="Back to Page Anchor">
+        <button id="btn-settings-back" class="w-7 h-7 rounded-lg flex items-center justify-center text-brand-muted hover:text-brand-text bg-transparent hover:bg-white/6 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-brand-ring" title="Back" aria-label="Back to Page Anchor">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
             <path d="M15 18l-6-6 6-6"/>
           </svg>
         </button>
         <h2 class="pa-settings-title text-[13.5px] font-semibold tracking-[-0.01em] text-brand-text">Settings</h2>
-        <button id="btn-open-full-settings" class="ml-auto w-7 h-7 rounded-lg flex items-center justify-center text-brand-muted hover:text-brand-text bg-transparent hover:bg-white/[0.06] border border-white/[0.07] hover:border-white/15 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-brand-ring" title="Open full settings in a new tab" aria-label="Open full settings in a new tab">
+        <button id="btn-open-full-settings" class="ml-auto w-7 h-7 rounded-lg flex items-center justify-center text-brand-muted hover:text-brand-text bg-transparent hover:bg-white/6 border border-white/[0.07] hover:border-white/15 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-brand-ring" title="Open full settings in a new tab" aria-label="Open full settings in a new tab">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
             <path d="M15 3h6v6"/>
             <path d="M10 14 21 3"/>
@@ -91,7 +91,7 @@
           </svg>
         </button>
       </header>
-      <div id="popup-settings-root" class="p-4 flex flex-col gap-5 max-h-[480px] overflow-y-auto overscroll-contain"></div>
+      <div id="popup-settings-root" class="p-4 flex flex-col gap-5 max-h-120 overflow-y-auto overscroll-contain"></div>
     </section>
 
     <div id="popup-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>

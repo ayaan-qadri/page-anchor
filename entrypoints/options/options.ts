@@ -20,15 +20,15 @@ let saveStatusEl: HTMLElement | null = null;
 const shortcutRecorder = new ShortcutRecorder();
 
 /* Shared Tailwind recipes for the rows the page builds in TypeScript. */
-const ROW = 'pa-row flex items-center justify-between gap-6 px-[18px] py-[14px] max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3';
+const ROW = 'pa-row flex items-center justify-between gap-6 px-4.5 py-3.5 max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3';
 const ROW_TEXT = 'pa-row-text flex-[1_1_auto] min-w-0';
 const ROW_TITLE = 'pa-row-title block text-[13px] font-medium text-brand-text';
 const ROW_DESC = 'pa-row-desc mt-0.5 text-xs leading-[1.45] text-brand-muted';
 const ROW_CONTROL = 'pa-row-control flex-none flex items-center gap-3 max-[820px]:justify-start';
 const KEY_BADGE =
-  'pa-key-badge flex-none min-w-[104px] px-3 py-[7px] rounded-[9px] border border-white/10 bg-white/5 ' +
+  'pa-key-badge flex-none min-w-26 px-3 py-1.75 rounded-[9px] border border-white/10 bg-white/5 ' +
   'text-brand-accent-soft font-mono text-xs font-semibold text-center cursor-pointer ' +
-  'transition-colors duration-[130ms] hover:bg-white/[0.09] hover:border-white/[0.18] ' +
+  'transition-colors duration-130 hover:bg-white/9 hover:border-white/18 ' +
   'data-[capturing=true]:bg-brand-danger/[0.12] data-[capturing=true]:border-brand-danger ' +
   'data-[capturing=true]:text-brand-danger-soft data-[capturing=true]:animate-pulse ' +
   'data-[conflict=true]:border-brand-warning data-[conflict=true]:text-brand-warning-soft';
@@ -365,7 +365,7 @@ async function renderSavedPages() {
   if (countBadge) countBadge.textContent = `${pages.length}`;
 
   if (pages.length === 0) {
-    listContainer.innerHTML = `<div class="pa-empty p-[18px] text-[13px] text-brand-muted text-center">No saved annotations yet. Draw on any web page and it will appear here.</div>`;
+    listContainer.innerHTML = `<div class="pa-empty p-4.5 text-[13px] text-brand-muted text-center">No saved annotations yet. Draw on any web page and it will appear here.</div>`;
     return;
   }
 
@@ -415,7 +415,7 @@ async function renderSavedPages() {
     actions.className = `pa-saved-actions ${ROW_CONTROL}`;
 
     const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'pa-btn-danger px-3 py-1.5 rounded-lg border border-brand-danger/35 bg-brand-danger/10 text-xs font-semibold text-brand-danger-soft cursor-pointer transition-colors duration-[130ms] ease-out hover:bg-brand-danger/20 hover:border-brand-danger/50';
+    deleteBtn.className = 'pa-btn-danger px-3 py-1.5 rounded-lg border border-brand-danger/35 bg-brand-danger/10 text-xs font-semibold text-brand-danger-soft cursor-pointer transition-colors duration-130 ease-out hover:bg-brand-danger/20 hover:border-brand-danger/50';
     deleteBtn.textContent = 'Delete';
     deleteBtn.setAttribute('aria-label', `Delete saved drawings for ${page.pageTitle || page.url}`);
     deleteBtn.addEventListener('click', async () => {
@@ -491,7 +491,7 @@ function showToast(msg: string) {
   const toast = document.createElement('div');
   toast.setAttribute('role', 'status');
   toast.setAttribute('aria-live', 'polite');
-  toast.className = 'fixed bottom-6 right-6 bg-brand-success text-brand-bg px-4.5 py-2.5 rounded-lg font-semibold shadow-xl shadow-black/40 z-[9999] transition-all';
+  toast.className = 'fixed bottom-6 right-6 bg-brand-success text-brand-bg px-4.5 py-2.5 rounded-lg font-semibold shadow-xl shadow-black/40 z-9999 transition-all';
   toast.textContent = msg;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 2500);

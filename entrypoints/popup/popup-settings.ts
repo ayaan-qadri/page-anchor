@@ -19,77 +19,77 @@ const CHEVRON_RIGHT =
 const CHEVRON_LEFT =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg>';
 const CHEVRON_DOWN =
-  '<svg class="pointer-events-none absolute right-[9px] top-1/2 -translate-y-1/2 text-brand-muted" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>';
+  '<svg class="pointer-events-none absolute right-2.25 top-1/2 -translate-y-1/2 text-brand-muted" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>';
 
 /* Tailwind recipes for the settings surface, which is assembled in TypeScript. */
 const SECTION = 'pa-ps-section flex flex-col gap-2';
 const SECTION_TITLE = 'pa-ps-title text-[11px] font-semibold tracking-[0.08em] uppercase text-brand-faint';
 const CARD =
   'pa-ps-card border border-white/[0.07] rounded-xl bg-white/[0.022] overflow-hidden ' +
-  '[&>*+*]:border-t [&>*+*]:border-white/[0.06]';
+  '[&>*+*]:border-t [&>*+*]:border-white/6';
 const ROW = 'pa-ps-row flex items-center justify-between gap-3 px-3 py-2.5';
 const ROW_TEXT = 'pa-ps-row-text flex-[1_1_auto] min-w-0';
 const ROW_TITLE = 'pa-ps-row-title block text-xs font-medium text-brand-text';
 const ROW_DESC = 'pa-ps-row-desc mt-px text-[10.5px] leading-[1.4] text-brand-faint';
 const CONTROL = 'pa-ps-control flex-none flex items-center gap-2';
-const FIELD = 'pa-ps-field flex flex-col gap-[7px] px-3 py-2.5';
+const FIELD = 'pa-ps-field flex flex-col gap-1.75 px-3 py-2.5';
 const FIELD_HEAD = 'pa-ps-field-head flex items-center justify-between gap-2.5';
 const FIELD_LABEL = 'pa-ps-row-title text-xs font-medium text-brand-text';
 const FIELD_READOUT = 'pa-ps-readout font-mono text-[11px] font-semibold text-brand-accent-soft tabular-nums';
 const NAV_ROW =
-  'pa-ps-nav-row flex items-center justify-between gap-3 w-full px-3 py-[11px] bg-transparent border-none ' +
-  'text-inherit text-left cursor-pointer transition-colors duration-[130ms] hover:bg-white/[0.04]';
+  'pa-ps-nav-row flex items-center justify-between gap-3 w-full px-3 py-2.75 bg-transparent border-none ' +
+  'text-inherit text-left cursor-pointer transition-colors duration-130 hover:bg-white/4';
 const NAV_CHEVRON = 'pa-ps-nav-chevron flex-none flex text-brand-faint';
 const SUBHEAD = 'pa-ps-subhead flex items-center gap-1.5';
 const BACK =
   'pa-ps-back flex items-center justify-center w-6 h-6 -ml-1 border-none rounded-[7px] bg-transparent ' +
-  'text-brand-muted cursor-pointer transition-colors duration-[130ms] hover:bg-white/[0.06] hover:text-brand-text';
+  'text-brand-muted cursor-pointer transition-colors duration-130 hover:bg-white/6 hover:text-brand-text';
 const LINK_BTN =
   'pa-ps-link-btn self-start text-[11px] font-semibold text-brand-muted underline decoration-white/20 ' +
-  'underline-offset-2 cursor-pointer transition-colors duration-[130ms] hover:text-brand-text hover:decoration-white/40';
+  'underline-offset-2 cursor-pointer transition-colors duration-130 hover:text-brand-text hover:decoration-white/40';
 const SELECT =
-  'pa-ps-select w-full appearance-none pl-2.5 pr-[30px] py-[7px] border border-white/10 rounded-lg ' +
-  'bg-white/[0.04] text-brand-text text-xs cursor-pointer transition-colors duration-[130ms] hover:border-white/[0.18]';
-const SWITCH = 'pa-ps-switch relative inline-flex items-center w-[34px] h-5 cursor-pointer';
+  'pa-ps-select w-full appearance-none pl-2.5 pr-7.5 py-1.75 border border-white/10 rounded-lg ' +
+  'bg-white/4 text-brand-text text-xs cursor-pointer transition-colors duration-130 hover:border-white/18';
+const SWITCH = 'pa-ps-switch relative inline-flex items-center w-8.5 h-5 cursor-pointer';
 const SWITCH_INPUT = 'absolute inset-0 w-full h-full m-0 opacity-0 cursor-pointer peer';
 const SWITCH_TRACK =
-  'pa-ps-switch-track absolute inset-0 rounded-full bg-white/[0.16] transition-colors duration-[160ms] ' +
-  "after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:w-3.5 after:h-3.5 after:rounded-full " +
-  'after:bg-white after:transition-transform after:duration-[160ms] ' +
+  'pa-ps-switch-track absolute inset-0 rounded-full bg-white/16 transition-colors duration-160 ' +
+  "after:content-[''] after:absolute after:top-0.75 after:left-0.75 after:w-3.5 after:h-3.5 after:rounded-full " +
+  'after:bg-white after:transition-transform after:duration-160 ' +
   'peer-checked:bg-brand-accent peer-checked:after:translate-x-3.5 ' +
   'peer-focus-visible:outline-2 peer-focus-visible:outline-brand-ring peer-focus-visible:outline-offset-2';
 const RANGE =
-  'pa-ps-range appearance-none w-full h-[5px] rounded-full bg-white/[0.12] cursor-pointer ' +
-  '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-[15px] [&::-webkit-slider-thumb]:h-[15px] ' +
+  'pa-ps-range appearance-none w-full h-1.25 rounded-full bg-white/12 cursor-pointer ' +
+  '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.75 [&::-webkit-slider-thumb]:h-3.75 ' +
   '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-brand-accent-soft ' +
   '[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-brand-bg ' +
   '[&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(0,0,0,0.5)] [&::-webkit-slider-thumb]:cursor-pointer ' +
-  '[&::-moz-range-thumb]:w-[13px] [&::-moz-range-thumb]:h-[13px] [&::-moz-range-thumb]:rounded-full ' +
+  '[&::-moz-range-thumb]:w-3.25 [&::-moz-range-thumb]:h-3.25 [&::-moz-range-thumb]:rounded-full ' +
   '[&::-moz-range-thumb]:bg-brand-accent-soft [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-brand-bg ' +
   '[&::-moz-range-thumb]:cursor-pointer';
 const HEX = 'pa-ps-hex font-mono text-[10.5px] text-brand-faint';
 const SWATCH =
-  'pa-ps-swatch w-[30px] h-[30px] p-0.5 border border-white/[0.12] rounded-lg bg-white/[0.03] cursor-pointer';
+  'pa-ps-swatch w-7.5 h-7.5 p-0.5 border border-white/12 rounded-lg bg-white/3 cursor-pointer';
 const KEY =
-  'pa-ps-key flex-none min-w-[86px] px-[9px] py-[5px] rounded-[7px] border border-white/10 bg-white/5 ' +
+  'pa-ps-key flex-none min-w-21.5 px-2.25 py-1.25 rounded-[7px] border border-white/10 bg-white/5 ' +
   'text-brand-accent-soft text-[11px] font-semibold whitespace-nowrap text-center cursor-pointer ' +
-  'transition-colors duration-[130ms] hover:bg-white/[0.09] hover:border-white/[0.18] ' +
+  'transition-colors duration-130 hover:bg-white/9 hover:border-white/18 ' +
   'data-[capturing=true]:bg-brand-danger/[0.12] data-[capturing=true]:border-brand-danger ' +
   'data-[capturing=true]:text-brand-danger-soft data-[capturing=true]:animate-pulse ' +
   'data-[conflict=true]:border-brand-warning data-[conflict=true]:text-brand-warning-soft';
 const DELETE =
-  'pa-ps-delete flex-none px-[9px] py-[5px] rounded-[7px] border border-brand-danger/35 bg-brand-danger/10 ' +
-  'text-brand-danger-soft text-[11px] font-semibold cursor-pointer transition-colors duration-[130ms] ' +
+  'pa-ps-delete flex-none px-2.25 py-1.25 rounded-[7px] border border-brand-danger/35 bg-brand-danger/10 ' +
+  'text-brand-danger-soft text-[11px] font-semibold cursor-pointer transition-colors duration-130 ' +
   'hover:bg-brand-danger/20 hover:border-brand-danger/50';
 const BTN =
-  'pa-ps-btn w-full px-3 py-[9px] rounded-[9px] border border-white/10 bg-white/[0.06] text-brand-text ' +
-  'text-xs font-semibold cursor-pointer transition-colors duration-[130ms] hover:bg-white/10 hover:border-white/[0.18]';
+  'pa-ps-btn w-full px-3 py-2.25 rounded-[9px] border border-white/10 bg-white/6 text-brand-text ' +
+  'text-xs font-semibold cursor-pointer transition-colors duration-130 hover:bg-white/10 hover:border-white/18';
 const BTN_DASHED =
-  'pa-ps-btn dashed w-full px-3 py-[9px] rounded-[9px] border border-dashed border-white/[0.14] ' +
-  'bg-white/[0.03] text-brand-muted text-xs font-semibold cursor-pointer transition-colors duration-[130ms] ' +
-  'hover:bg-white/[0.06] hover:text-brand-text';
+  'pa-ps-btn dashed w-full px-3 py-2.25 rounded-[9px] border border-dashed border-white/[0.14] ' +
+  'bg-white/3 text-brand-muted text-xs font-semibold cursor-pointer transition-colors duration-130 ' +
+  'hover:bg-white/6 hover:text-brand-text';
 const ACTIONS = 'pa-ps-actions flex flex-col gap-2 p-3';
-const STATUS = 'pa-ps-status min-h-[14px] text-[11px] text-brand-accent-soft';
+const STATUS = 'pa-ps-status min-h-3.5 text-[11px] text-brand-accent-soft';
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
