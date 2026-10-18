@@ -21,8 +21,6 @@ import {
   Eye,
   EyeOff,
   BoxSelect,
-  Pin,
-  PinOff,
   type IconNode,
 } from 'lucide';
 
@@ -97,6 +95,4 @@ export const ICONS: Record<string, string> = {
   close: toSvg(X),
   dragHandle: dragHandleSvg(),
   selectAll: toSvg(BoxSelect),
-  pin: toSvg(Pin),
-  pinOff: toSvg(PinOff),
 };
