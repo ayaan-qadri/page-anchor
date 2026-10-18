@@ -236,7 +236,7 @@ function setupDrawingForm() {
 
 function setupPersistenceForm() {
   const matchMode = document.getElementById('pref-url-match-mode') as HTMLSelectElement;
-  const perfMode = document.getElementById('pref-performance-mode') as HTMLInputElement;
+  const strokeSimplification = document.getElementById('pref-stroke-simplification') as HTMLInputElement;
   const toolbarOpenMode = document.getElementById('pref-toolbar-open') as HTMLInputElement;
   const showPillMode = document.getElementById('pref-show-pill') as HTMLInputElement;
   const domAnchorMode = document.getElementById('pref-dom-anchoring') as HTMLInputElement;
@@ -248,8 +248,8 @@ function setupPersistenceForm() {
     currentSettings.urlMatchMode = matchMode.value as 'clean' | 'exact' | 'domain';
   });
 
-  perfMode.addEventListener('change', () => {
-    currentSettings.performanceMode = perfMode.checked;
+  strokeSimplification.addEventListener('change', () => {
+    currentSettings.strokeSimplification = strokeSimplification.checked;
   });
 
   toolbarOpenMode.addEventListener('change', () => {
@@ -297,14 +297,14 @@ function syncDrawingFormValues(): void {
 /** Refreshes persistence form controls from `currentSettings` (no rebinding). */
 function syncPersistenceFormValues(): void {
   const matchMode = document.getElementById('pref-url-match-mode') as HTMLSelectElement;
-  const perfMode = document.getElementById('pref-performance-mode') as HTMLInputElement;
+  const strokeSimplification = document.getElementById('pref-stroke-simplification') as HTMLInputElement;
   const toolbarOpenMode = document.getElementById('pref-toolbar-open') as HTMLInputElement;
   const showPillMode = document.getElementById('pref-show-pill') as HTMLInputElement;
   const domAnchorMode = document.getElementById('pref-dom-anchoring') as HTMLInputElement;
   const orphanMode = document.getElementById('pref-orphan-mode') as HTMLSelectElement;
 
   matchMode.value = currentSettings.urlMatchMode;
-  perfMode.checked = currentSettings.performanceMode;
+  strokeSimplification.checked = currentSettings.strokeSimplification;
   toolbarOpenMode.checked = !!currentSettings.isToolbarOpen;
   showPillMode.checked = currentSettings.showFloatingPill !== false;
   if (domAnchorMode) domAnchorMode.checked = currentSettings.domAnchoringEnabled ?? true;

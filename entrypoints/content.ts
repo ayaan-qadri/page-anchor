@@ -138,7 +138,7 @@ export default defineContentScript({
           settings = newSettings;
           shortcutManager.setShortcuts(settings.shortcuts);
           engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
-          engine.setPerformanceMode(settings.performanceMode);
+          engine.setStrokeSimplification(settings.strokeSimplification);
         },
       }
     );
@@ -288,7 +288,7 @@ export default defineContentScript({
           toolbar.setSettings(settings);
           shortcutManager.setShortcuts(settings.shortcuts);
           engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
-          engine.setPerformanceMode(settings.performanceMode);
+          engine.setStrokeSimplification(settings.strokeSimplification);
           if (settings.isToolbarOpen) {
             toolbar.setDrawingMode(true, false);
           }

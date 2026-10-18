@@ -132,13 +132,13 @@
           </div>
 
           <div class="pa-form-group mb-5.5 flex flex-col gap-2">
-            <span class="pa-form-label font-semibold text-brand-text text-[13px]">Zero-lag performance engine</span>
-            <label class="pa-checkbox-row flex items-center gap-2.5 text-[13px] text-brand-muted cursor-pointer" for="pref-performance-mode">
-              <input type="checkbox" id="pref-performance-mode" class="w-[18px] h-[18px] accent-brand-accent cursor-pointer" checked />
-              <span>Enable Viewport Frustum Culling &amp; RDP point reduction (Recommended for low-end devices)</span>
+            <span class="pa-form-label font-semibold text-brand-text text-[13px]">Stroke simplification</span>
+            <label class="pa-checkbox-row flex items-center gap-2.5 text-[13px] text-brand-muted cursor-pointer" for="pref-stroke-simplification">
+              <input type="checkbox" id="pref-stroke-simplification" class="w-[18px] h-[18px] accent-brand-accent cursor-pointer" checked />
+              <span>Compress freehand strokes with RDP point reduction (Recommended for busy pages)</span>
             </label>
             <div class="pa-form-hint text-xs text-brand-faint">
-              Restricts canvas rendering strictly to visible elements on screen and optimizes polyline point density.
+              Reduces stored stroke detail to save memory and storage; may soften very precise freehand lines. Viewport frustum culling always runs and cannot be disabled.
             </div>
           </div>
         </section>

@@ -19,7 +19,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   defaultHighlighterWidth: 20,
   defaultFontSize: 18,
   urlMatchMode: 'clean',
-  performanceMode: true,
+  strokeSimplification: true,
   toolbarPosition: null,
   isToolbarOpen: false,
   showFloatingPill: true,
@@ -178,9 +178,26 @@ async function storageRemove(key: string): Promise<void> {
   });
 }
 
+/**
+ * Applies setting-key renames from older schema versions so stored preferences
+ * survive upgrades. `performanceMode` used to bundle viewport culling (now
+ * always on) with stroke simplification, so its value now maps to the latter.
+ */
+function migrateSettings(stored: Record<string, any>): Record<string, any> {
+  const migrated = { ...stored };
+  if (
+    migrated.strokeSimplification === undefined &&
+    typeof migrated.performanceMode === 'boolean'
+  ) {
+    migrated.strokeSimplification = migrated.performanceMode;
+  }
+  delete migrated.performanceMode;
+  return migrated;
+}
+
 export async function loadSettings(): Promise<ExtensionSettings> {
   const result = await storageGet(SETTINGS_KEY);
-  const stored = result?.[SETTINGS_KEY] as Partial<ExtensionSettings> | undefined;
+  const stored = result?.[SETTINGS_KEY] as Record<string, any> | undefined;
   if (!stored) {
     return {
       ...DEFAULT_SETTINGS,
@@ -188,12 +205,13 @@ export async function loadSettings(): Promise<ExtensionSettings> {
     };
   }
 
+  const migrated = migrateSettings(stored);
   return {
     ...DEFAULT_SETTINGS,
-    ...stored,
+    ...migrated,
     shortcuts: {
       ...DEFAULT_SETTINGS.shortcuts,
-      ...(stored.shortcuts || {}),
+      ...(migrated.shortcuts || {}),
     },
   };
 }
@@ -417,7 +435,7 @@ function sanitizeSettings(raw: Record<string, any>): Record<string, any> {
       if (typeof key === 'string') shortcuts[action] = key;
     }
   }
-  return { ...raw, shortcuts };
+  return { ...migrateSettings(raw), shortcuts };
 }
 
 function sanitizeIndex(raw: Record<string, any>): Record<string, PageMetadataSummary> {

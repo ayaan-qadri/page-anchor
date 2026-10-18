@@ -43,7 +43,7 @@ export class CanvasEngine {
   private highlighterWidth = 20;
   private fontSize = 18;
   private isActiveMode = false;
-  private performanceMode = true;
+  private strokeSimplification = true;
 
   private isPointerDown = false;
   private pointerId: number | null = null;
@@ -186,17 +186,17 @@ export class CanvasEngine {
   }
 
   /**
-   * Toggles the Zero-Lag optimizations (viewport frustum culling + RDP point
-   * decimation). Disabling trades performance for completeness: every element
-   * is drawn and raw pointer points are kept.
+   * Toggles RDP point decimation for committed freehand strokes. Disabling
+   * keeps raw pointer points, trading memory/storage for full stroke fidelity.
+   * Viewport frustum culling is always on and is not affected by this flag.
    */
-  public setPerformanceMode(enabled: boolean): void {
-    this.performanceMode = enabled;
+  public setStrokeSimplification(enabled: boolean): void {
+    this.strokeSimplification = enabled;
     this.renderBase();
   }
 
-  public getPerformanceMode(): boolean {
-    return this.performanceMode;
+  public getStrokeSimplification(): boolean {
+    return this.strokeSimplification;
   }
 
   public setActiveMode(active: boolean): void {
@@ -566,7 +566,7 @@ export class CanvasEngine {
     if (this.activeTool === 'pen' || this.activeTool === 'highlighter') {
       if (this.currentStrokePoints.length > 0) {
         const isHighlighter = this.activeTool === 'highlighter';
-        const simplified = this.performanceMode
+        const simplified = this.strokeSimplification
           ? simplifyPointsRDP(this.currentStrokePoints, 1.2)
           : this.currentStrokePoints.slice();
 
@@ -756,7 +756,9 @@ export class CanvasEngine {
         continue;
       }
 
-      if (this.performanceMode && !intersectsBoundingBox(eff.bbox, viewportBox)) {
+      // Viewport frustum culling is always on: an element whose effective
+      // bounding box misses the padded viewport cannot be visible.
+      if (!intersectsBoundingBox(eff.bbox, viewportBox)) {
         continue;
       }
       this.renderSingleElementWithOffset(ctx, el, eff.deltaX, eff.deltaY, eff.isOrphaned);

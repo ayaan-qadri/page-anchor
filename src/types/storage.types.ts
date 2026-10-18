@@ -29,7 +29,7 @@ export interface ExtensionSettings {
   defaultHighlighterWidth: number;
   defaultFontSize: number;
   urlMatchMode: UrlMatchMode;
-  performanceMode: boolean;
+  strokeSimplification: boolean;
   toolbarPosition: { x: number; y: number } | null;
   isToolbarOpen: boolean;
   showFloatingPill: boolean;

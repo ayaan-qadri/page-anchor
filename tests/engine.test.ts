@@ -48,13 +48,13 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
       expect(engine.getAnnotationsVisible()).toBe(true);
     });
 
-    it('toggles the performance mode (culling + RDP decimation) flag', () => {
-      expect(engine.getPerformanceMode()).toBe(true);
-      engine.setPerformanceMode(false);
-      expect(engine.getPerformanceMode()).toBe(false);
+    it('toggles the stroke simplification flag', () => {
+      expect(engine.getStrokeSimplification()).toBe(true);
+      engine.setStrokeSimplification(false);
+      expect(engine.getStrokeSimplification()).toBe(false);
       expect(() => engine.renderBase()).not.toThrow();
-      engine.setPerformanceMode(true);
-      expect(engine.getPerformanceMode()).toBe(true);
+      engine.setStrokeSimplification(true);
+      expect(engine.getStrokeSimplification()).toBe(true);
     });
 
     it('sets appropriate cursor styling on active canvas for each tool', () => {

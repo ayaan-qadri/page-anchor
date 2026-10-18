@@ -43,11 +43,12 @@ Page Anchor solves this with 5 dedicated performance strategies:
 1. **Fixed Viewport Dual-Canvas Engine**:
    - The canvas resolution is clamped strictly to the user's viewport (`innerWidth` × `innerHeight`), avoiding hundreds of megabytes of GPU memory exhaustion.
    - Separate **Active Canvas Layer** (for real-time stroke preview) and **Base Canvas Layer** (for committed shapes). Drawing a freehand stroke never causes re-rendering of existing elements.
-2. **Spatial Viewport Frustum Culling**:
+2. **Spatial Viewport Frustum Culling** (always on, not configurable):
    - Uses sub-nanosecond Axis-Aligned Bounding Box (`AABB`) intersection tests.
    - Elements outside the visible screen are culled and never sent to Canvas 2D during scrolling.
-3. **Ramer-Douglas-Peucker (RDP) Point Decimation**:
+3. **Ramer-Douglas-Peucker (RDP) Point Decimation** (optional):
    - Pointer events generate thousands of raw coordinates. On stroke completion, the RDP algorithm compresses points by up to 75% without compromising curve smoothness, slashing memory and storage payloads by 4x.
+   - This is the only optimization exposed as a setting (`Simplify Stroke Points`). Disabling it keeps raw pointer points for maximum stroke fidelity at some memory cost.
 4. **Pointer Events Coalescing (`getCoalescedEvents`)**:
    - Sub-frame pointer precision from modern mice and trackpads is captured without dropping points or choking the main thread.
 5. **Passive Throttled Scroll Listener**:

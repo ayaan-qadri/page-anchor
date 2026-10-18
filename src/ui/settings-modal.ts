@@ -194,34 +194,34 @@ export class SettingsModal {
 
     body.appendChild(anchorSection);
 
-    const perfSection = document.createElement('div');
-    perfSection.innerHTML = `<div class="pa-section-title">Optimization</div>`;
+    const strokeSection = document.createElement('div');
+    strokeSection.innerHTML = `<div class="pa-section-title">Optimization</div>`;
 
-    const perfCheckbox = document.createElement('input');
-    perfCheckbox.id = 'pa-modal-perf-mode';
-    perfCheckbox.type = 'checkbox';
-    perfCheckbox.checked = this.settings.performanceMode;
-    perfCheckbox.style.cursor = 'pointer';
-    perfCheckbox.style.width = '18px';
-    perfCheckbox.style.height = '18px';
-    perfCheckbox.setAttribute('aria-label', 'Enable Zero-Lag Performance Mode');
-    perfCheckbox.addEventListener('change', () => {
-      this.settings.performanceMode = perfCheckbox.checked;
+    const strokeCheckbox = document.createElement('input');
+    strokeCheckbox.id = 'pa-modal-stroke-simplification';
+    strokeCheckbox.type = 'checkbox';
+    strokeCheckbox.checked = this.settings.strokeSimplification;
+    strokeCheckbox.style.cursor = 'pointer';
+    strokeCheckbox.style.width = '18px';
+    strokeCheckbox.style.height = '18px';
+    strokeCheckbox.setAttribute('aria-label', 'Enable stroke point simplification');
+    strokeCheckbox.addEventListener('change', () => {
+      this.settings.strokeSimplification = strokeCheckbox.checked;
     });
 
-    const perfLabel = document.createElement('label');
-    perfLabel.htmlFor = 'pa-modal-perf-mode';
-    perfLabel.className = 'pa-shortcut-row';
-    perfLabel.style.cursor = 'pointer';
-    perfLabel.innerHTML = `
+    const strokeLabel = document.createElement('label');
+    strokeLabel.htmlFor = 'pa-modal-stroke-simplification';
+    strokeLabel.className = 'pa-shortcut-row';
+    strokeLabel.style.cursor = 'pointer';
+    strokeLabel.innerHTML = `
       <div class="pa-shortcut-info">
-        <span class="pa-shortcut-name">Zero-Lag Performance Mode</span>
-        <span class="pa-shortcut-desc">Enables spatial frustum culling & adaptive point smoothing</span>
+        <span class="pa-shortcut-name">Simplify Stroke Points</span>
+        <span class="pa-shortcut-desc">Compresses freehand strokes to save memory and storage (may soften very precise lines)</span>
       </div>
     `;
-    perfLabel.appendChild(perfCheckbox);
-    perfSection.appendChild(perfLabel);
-    body.appendChild(perfSection);
+    strokeLabel.appendChild(strokeCheckbox);
+    strokeSection.appendChild(strokeLabel);
+    body.appendChild(strokeSection);
 
     const footer = document.createElement('div');
     footer.className = 'pa-modal-footer';

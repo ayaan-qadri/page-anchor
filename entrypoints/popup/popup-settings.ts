@@ -210,11 +210,11 @@ export class PopupSettingsPanel {
     );
     section.appendChild(
       this.checkField(
-        'Zero-lag performance mode',
-        'Frustum culling and stroke smoothing on busy pages',
-        this.settings.performanceMode,
+        'Simplify stroke points',
+        'Compress freehand strokes to save memory on busy pages',
+        this.settings.strokeSimplification,
         (checked) => {
-          this.settings.performanceMode = checked;
+          this.settings.strokeSimplification = checked;
           this.persist();
         },
       ),

@@ -142,8 +142,8 @@ export class FloatingToolbar {
     if (settings.orphanedAnchorMode !== undefined) {
       this.engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
     }
-    if (settings.performanceMode !== undefined) {
-      this.engine.setPerformanceMode(settings.performanceMode);
+    if (settings.strokeSimplification !== undefined) {
+      this.engine.setStrokeSimplification(settings.strokeSimplification);
     }
   }
 
@@ -387,7 +387,7 @@ export class FloatingToolbar {
       'dom-anchor',
       isAnchoring ? 'Smart Anchoring: ON (Follows moving items)' : 'Smart Anchoring: OFF (Fixed position)',
       '',
-      isAnchoring ? ICONS.pin : ICONS.pinOff,
+      ICONS.anchor,
       () => {
         const next = !this.engine.getDomAnchoringEnabled();
         this.engine.setDomAnchoringEnabled(next);
@@ -396,10 +396,12 @@ export class FloatingToolbar {
         anchorBtn.dataset.label = label;
         anchorBtn.setAttribute('aria-pressed', next ? 'true' : 'false');
         anchorBtn.setAttribute('aria-label', label);
-        anchorBtn.innerHTML = `${next ? ICONS.pin : ICONS.pinOff}<span class="pa-tooltip" aria-hidden="true">${label}</span>`;
+        anchorBtn.classList.toggle('active', next);
+        anchorBtn.innerHTML = `${ICONS.anchor}<span class="pa-tooltip" aria-hidden="true">${label}</span>`;
       }
     );
     anchorBtn.setAttribute('aria-pressed', isAnchoring ? 'true' : 'false');
+    anchorBtn.classList.toggle('active', isAnchoring);
     this.toolbar.appendChild(anchorBtn);
 
     const minBtn = this.createActionButton('minimize', 'Minimize Toolbar', 'toggle-active', ICONS.minimize, () => {
@@ -415,7 +417,8 @@ export class FloatingToolbar {
       btn.dataset.label = label;
       btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
       btn.setAttribute('aria-label', label);
-      btn.innerHTML = `${enabled ? ICONS.pin : ICONS.pinOff}<span class="pa-tooltip" aria-hidden="true">${label}</span>`;
+      btn.classList.toggle('active', enabled);
+      btn.innerHTML = `${ICONS.anchor}<span class="pa-tooltip" aria-hidden="true">${label}</span>`;
     }
   }
 

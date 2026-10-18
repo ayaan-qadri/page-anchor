@@ -154,6 +154,34 @@ describe('Storage Engine: Persistence with Mocked Chrome Storage', () => {
     expect(afterRestore.defaultStrokeWidth).toBe(8);
   });
 
+  describe('Settings Schema Migration', () => {
+    it('maps a legacy `performanceMode` value onto `strokeSimplification`', async () => {
+      mockStore['page_anchor_settings'] = { performanceMode: false };
+
+      const settings = await loadSettings();
+      expect(settings.strokeSimplification).toBe(false);
+      expect((settings as any).performanceMode).toBeUndefined();
+    });
+
+    it('prefers an explicit `strokeSimplification` over a stale `performanceMode`', async () => {
+      mockStore['page_anchor_settings'] = { strokeSimplification: false, performanceMode: true };
+
+      const settings = await loadSettings();
+      expect(settings.strokeSimplification).toBe(false);
+    });
+
+    it('migrates legacy keys from imported backups', async () => {
+      const backup = JSON.stringify({
+        page_anchor_settings: { performanceMode: false },
+      });
+
+      expect(await importDataFromJson(backup)).toBe(true);
+
+      const settings = await loadSettings();
+      expect(settings.strokeSimplification).toBe(false);
+    });
+  });
+
   describe('Backup Import Boundary Validation', () => {
     it('rejects payloads that are not a JSON object', async () => {
       expect(await importDataFromJson('not json at all')).toBe(false);

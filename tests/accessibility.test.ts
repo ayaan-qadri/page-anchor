@@ -53,8 +53,8 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       expect(optionsHtml).toContain('id="pref-toolbar-open"');
       expect(optionsHtml).toContain('for="pref-show-pill"');
       expect(optionsHtml).toContain('id="pref-show-pill"');
-      expect(optionsHtml).toContain('for="pref-performance-mode"');
-      expect(optionsHtml).toContain('id="pref-performance-mode"');
+      expect(optionsHtml).toContain('for="pref-stroke-simplification"');
+      expect(optionsHtml).toContain('id="pref-stroke-simplification"');
     });
 
     it('should include aria-live regions for dynamic status announcements', () => {
