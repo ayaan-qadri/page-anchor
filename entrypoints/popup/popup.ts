@@ -8,7 +8,6 @@ export async function initPopup() {
   const toggleSwitch = document.getElementById('toggle-draw-mode') as HTMLInputElement;
   const pageTitleEl = document.getElementById('page-title') as HTMLElement;
   const countEl = document.getElementById('annotation-count') as HTMLElement;
-  const exportBtn = document.getElementById('btn-export') as HTMLButtonElement;
   const clearBtn = document.getElementById('btn-clear') as HTMLButtonElement;
   const optionsBtn = document.getElementById('btn-options') as HTMLButtonElement;
   const backBtn = document.getElementById('btn-settings-back') as HTMLButtonElement | null;
@@ -138,16 +137,6 @@ export async function initPopup() {
         countEl.textContent = 'Please refresh the webpage';
         announce('Could not connect to webpage. Please refresh.');
       }
-    }
-  });
-
-  exportBtn.addEventListener('click', async () => {
-    try {
-      await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_EXPORT' });
-      announce('Drawing exported as PNG');
-      window.close();
-    } catch {
-      alert('Could not export. Please ensure the page allows extension scripts.');
     }
   });
 

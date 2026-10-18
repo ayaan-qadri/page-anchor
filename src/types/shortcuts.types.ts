@@ -14,7 +14,6 @@ export type ShortcutAction =
   | 'action-redo'
   | 'action-delete'
   | 'action-clear'
-  | 'action-export'
   | 'action-toggle-toolbar'
   | 'action-select-all';
 

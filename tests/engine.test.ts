@@ -379,11 +379,6 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
       engine.setElements([text]);
       expect(() => engine.renderBase()).not.toThrow();
     });
-
-    it('exports canvas snapshot as a data URL', () => {
-      const url = engine.exportAsDataUrl();
-      expect(url).toMatch(/^data:image\/png;base64/);
-    });
   });
 
   describe('Lifecycle and Teardown', () => {

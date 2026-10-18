@@ -3,7 +3,6 @@ import { ExtensionSettings } from './storage.types';
 
 export interface ToolbarCallbacks {
   onClear?: () => void;
-  onExport?: () => void;
   onSettingsUpdate?: (settings: ExtensionSettings) => void;
   onToggleActive?: (active: boolean) => void;
   onToggleDomAnchoring?: (enabled: boolean) => void;

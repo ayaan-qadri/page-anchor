@@ -13,7 +13,6 @@ const HANDLED_MESSAGE_TYPES = new Set([
   'PAGE_ANCHOR_TOGGLE',
   'PAGE_ANCHOR_GET_STATUS',
   'PAGE_ANCHOR_CLEAR',
-  'PAGE_ANCHOR_EXPORT',
   'PAGE_ANCHOR_URL_CHANGED',
 ]);
 
@@ -127,9 +126,6 @@ export default defineContentScript({
         },
         onClear: () => {
           triggerSave(engine.getElements());
-        },
-        onExport: () => {
-          exportSnapshot();
         },
         onToggleDomAnchoring: () => {
           triggerSave(engine.getElements());
@@ -268,10 +264,6 @@ export default defineContentScript({
           toolbar.updateHistoryButtons();
           sendResponse({ success: true });
           break;
-        case 'PAGE_ANCHOR_EXPORT':
-          exportSnapshot();
-          sendResponse({ success: true });
-          break;
         case 'PAGE_ANCHOR_URL_CHANGED':
           handleUrlChange();
           sendResponse({ success: true });
@@ -405,22 +397,7 @@ export default defineContentScript({
           }
           break;
         }
-        case 'action-export': {
-          exportSnapshot();
-          break;
-        }
       }
-    }
-
-    function exportSnapshot(): void {
-      const dataUrl = engine.exportAsDataUrl();
-      const a = document.createElement('a');
-      const sanitizedTitle = (document.title || 'page-anchor').replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
-      a.download = `page-anchor-${sanitizedTitle}-${Date.now()}.png`;
-      a.href = dataUrl;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
     }
   },
 });

@@ -1095,18 +1095,6 @@ export class CanvasEngine {
     ctx.closePath();
   }
 
-  public exportAsDataUrl(): string {
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = this.baseCanvas.width;
-    tempCanvas.height = this.baseCanvas.height;
-    const tempCtx = tempCanvas.getContext('2d');
-
-    if (tempCtx) {
-      tempCtx.drawImage(this.baseCanvas, 0, 0);
-    }
-    return tempCanvas.toDataURL ? tempCanvas.toDataURL('image/png') : '';
-  }
-
   public destroy(): void {
     if (this.rafId) cancelAnimationFrame(this.rafId);
     if (this.scrollRafId) cancelAnimationFrame(this.scrollRafId);

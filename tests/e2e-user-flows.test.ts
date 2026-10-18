@@ -183,12 +183,6 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
     window.dispatchEvent(new Event('popstate'));
     await new Promise((r) => setTimeout(r, 60));
 
-    const downloadSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    const exportBtn = shadow.querySelector('[data-action="export"]') as HTMLButtonElement;
-    exportBtn.click();
-    expect(downloadSpy).toHaveBeenCalled();
-    downloadSpy.mockRestore();
-
     const clearBtn = shadow.querySelector('[data-action="clear"]') as HTMLButtonElement;
     clearBtn.click();
     expect(globalThis.confirm).toHaveBeenCalled();

@@ -24,7 +24,6 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
   'action-redo': 'Mod+y',
   'action-delete': 'Delete',
   'action-clear': 'Alt+Shift+X',
-  'action-export': 'Alt+Shift+E',
   'action-select-all': 'Mod+a',
 };
 
@@ -124,12 +123,6 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     name: 'Clear All',
     description: 'Clear all annotations on current page',
     defaultKey: DEFAULT_SHORTCUTS['action-clear'],
-  },
-  {
-    id: 'action-export',
-    name: 'Export drawings',
-    description: 'Export your drawings as a transparent PNG',
-    defaultKey: DEFAULT_SHORTCUTS['action-export'],
   },
   {
     id: 'action-select-all',

@@ -20,7 +20,6 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     mockCallbacks = {
       onToggleActive: vi.fn(),
       onClear: vi.fn(),
-      onExport: vi.fn(),
       onToggleDomAnchoring: vi.fn(),
       onSettingsUpdate: vi.fn(),
     };
@@ -306,16 +305,12 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     expect(mockCallbacks.onToggleDomAnchoring).toHaveBeenCalledWith(true);
   });
 
-  it('triggers clear and export callbacks from action buttons', () => {
+  it('triggers the clear callback from its action button', () => {
     (globalThis as any).confirm = vi.fn().mockReturnValue(true);
 
     const clearBtn = container.querySelector('[data-action="clear"]') as HTMLButtonElement;
     clearBtn.click();
     expect(mockCallbacks.onClear).toHaveBeenCalled();
-
-    const exportBtn = container.querySelector('[data-action="export"]') as HTMLButtonElement;
-    exportBtn.click();
-    expect(mockCallbacks.onExport).toHaveBeenCalled();
   });
 
   it('does not expose a settings action in the drawing toolbar', () => {

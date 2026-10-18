@@ -192,9 +192,6 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     const toggleSwitch = page.locator('#toggle-draw-mode');
     await expect(toggleSwitch).toBeAttached();
 
-    const exportCard = page.locator('#btn-export');
-    await expect(exportCard).toBeVisible();
-
     const clearCard = page.locator('#btn-clear');
     await expect(clearCard).toBeVisible();
 

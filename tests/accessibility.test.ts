@@ -58,7 +58,7 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       const popupHtml = fs.readFileSync(path.resolve(__dirname, '../entrypoints/popup/index.html'), 'utf-8');
       const optionsHtml = fs.readFileSync(path.resolve(__dirname, '../entrypoints/options/index.html'), 'utf-8');
 
-      // Inline SVG action icons in the popup (settings, export, trash) stay hidden from AT
+      // Inline SVG action icons in the popup (settings, trash) stay hidden from AT
       expect(popupHtml).toMatch(/<svg[^>]*aria-hidden="true"/);
 
       // Brand marks are decorative logo images: aria-hidden container + empty alt

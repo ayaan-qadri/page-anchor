@@ -13,7 +13,6 @@ import {
   Undo2,
   Redo2,
   Trash2,
-  Download,
   Minimize2,
   GripVertical,
   Eye,
@@ -85,7 +84,6 @@ export const ICONS: Record<string, string> = {
   undo: toSvg(Undo2),
   redo: toSvg(Redo2),
   trash: toSvg(Trash2),
-  download: toSvg(Download),
 
   eye: toSvg(Eye),
   eyeOff: toSvg(EyeOff),

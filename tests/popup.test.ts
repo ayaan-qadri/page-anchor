@@ -71,17 +71,6 @@ describe('Popup UI: Status, Toggles, Actions, & Screen Reader Announcements', ()
     expect(toggle.checked).toBe(false);
   });
 
-  it('triggers snapshot export and closes popup', async () => {
-    await initPopup();
-
-    const exportBtn = document.getElementById('btn-export') as HTMLButtonElement;
-    exportBtn.click();
-    await new Promise((r) => setTimeout(r, 20));
-
-    expect(mockChrome.tabs.sendMessage).toHaveBeenCalledWith(10, { type: 'PAGE_ANCHOR_EXPORT' });
-    expect(window.close).toHaveBeenCalled();
-  });
-
   it('clears drawings when user confirms via clear button', async () => {
     await initPopup();
 

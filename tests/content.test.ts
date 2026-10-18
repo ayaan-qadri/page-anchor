@@ -120,20 +120,16 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
     expect(sendResponse).toHaveBeenCalledWith({ success: true });
   });
 
-  it('handles PAGE_ANCHOR_EXPORT and PAGE_ANCHOR_URL_CHANGED messages', async () => {
+  it('handles PAGE_ANCHOR_URL_CHANGED messages', async () => {
     contentDefinition.main();
     await new Promise((r) => setTimeout(r, 20));
 
-    const sendResponse1 = vi.fn();
-    messageListener?.({ type: 'PAGE_ANCHOR_EXPORT' }, {}, sendResponse1);
-    expect(sendResponse1).toHaveBeenCalledWith({ success: true });
-
-    const sendResponse2 = vi.fn();
-    messageListener?.({ type: 'PAGE_ANCHOR_URL_CHANGED' }, {}, sendResponse2);
-    expect(sendResponse2).toHaveBeenCalledWith({ success: true });
+    const sendResponse = vi.fn();
+    messageListener?.({ type: 'PAGE_ANCHOR_URL_CHANGED' }, {}, sendResponse);
+    expect(sendResponse).toHaveBeenCalledWith({ success: true });
   });
 
-  it('dispatches keyboard shortcuts for tools, shapes, undo, redo, and export', async () => {
+  it('dispatches keyboard shortcuts for tools, shapes, undo, redo, and clear', async () => {
     contentDefinition.main();
     await new Promise((r) => setTimeout(r, 20));
 
@@ -160,14 +156,11 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', bubbles: true, cancelable: true }));
     expect(isActive('eraser')).toBe(true);
 
-    // Undo / Redo / Clear / Export use their real default chords
+    // Undo / Redo / Clear use their real default chords
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true, bubbles: true, cancelable: true }));
     window.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'x', altKey: true, shiftKey: true, bubbles: true, cancelable: true })
-    );
-    window.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'e', altKey: true, shiftKey: true, bubbles: true, cancelable: true })
     );
   });
 
