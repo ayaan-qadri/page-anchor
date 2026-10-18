@@ -45,6 +45,15 @@ export const SHADOW_STYLES = `
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
+/*
+ * While the user repositions the toolbar we place it at pixel coordinates and
+ * clear the centering transform. Without this the left/top snap is instant but
+ * the transform animates, which reads as a one-off flick on the first drag.
+ */
+.pa-toolbar-wrapper.pa-repositioning {
+  transition: none;
+}
+
 .pa-toolbar {
   display: flex;
   align-items: center;

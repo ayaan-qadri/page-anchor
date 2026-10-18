@@ -709,6 +709,8 @@ export class FloatingToolbar {
       if (e.button !== 0) return;
       this.isDragging = true;
       moved = false;
+      // Snap instead of animating the centering transform away (first-drag flick).
+      this.wrapper.classList.add('pa-repositioning');
       startX = e.clientX;
       startY = e.clientY;
       const rect = this.wrapper.getBoundingClientRect();
@@ -733,6 +735,7 @@ export class FloatingToolbar {
     const finishDrag = (commit: boolean) => {
       if (!this.isDragging) return;
       this.isDragging = false;
+      this.wrapper.classList.remove('pa-repositioning');
       if (!commit || !moved) return;
       const rect = this.wrapper.getBoundingClientRect();
       this.settings.toolbarPosition = { x: rect.left, y: rect.top };
@@ -766,11 +769,14 @@ export class FloatingToolbar {
 
       if (nextMoved) {
         e.preventDefault();
+        // Same snap-not-animate requirement as dragging.
+        this.wrapper.classList.add('pa-repositioning');
         this.wrapper.style.transform = 'none';
         this.wrapper.style.left = `${newX}px`;
         this.wrapper.style.top = `${newY}px`;
         this.settings.toolbarPosition = { x: newX, y: newY };
         this.callbacks.onSettingsUpdate?.(this.settings);
+        requestAnimationFrame(() => this.wrapper.classList.remove('pa-repositioning'));
       }
     });
   }

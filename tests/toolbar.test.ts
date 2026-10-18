@@ -256,12 +256,38 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     expect(redoBtn.disabled).toBe(true);
   });
 
-  it('supports keyboard navigation on the drag handle using Arrow keys', () => {
+  it('suppresses the transform transition while dragging so the first move does not flick', () => {
+    const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
+    const dragHandle = container.querySelector('.pa-drag-handle') as HTMLElement;
+    (dragHandle as any).setPointerCapture = vi.fn();
+
+    // Default resting state centres the toolbar with a transform.
+    expect(wrapper.style.transform).toBe('translateX(-50%)');
+    expect(wrapper.classList.contains('pa-repositioning')).toBe(false);
+
+    dragHandle.dispatchEvent(
+      new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 40, pointerId: 1, bubbles: true })
+    );
+    expect(wrapper.classList.contains('pa-repositioning')).toBe(true);
+
+    dragHandle.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 140, clientY: 60, pointerId: 1, bubbles: true })
+    );
+    expect(wrapper.style.transform).toBe('none');
+    expect(wrapper.style.left).toBe('40px');
+
+    dragHandle.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, bubbles: true }));
+    expect(wrapper.classList.contains('pa-repositioning')).toBe(false);
+  });
+
+  it('suppresses the transform transition when repositioning with the keyboard', () => {
     const dragHandle = container.querySelector('.pa-drag-handle') as HTMLElement;
     const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
 
     dragHandle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     expect(wrapper.style.left).toBe('20px');
+    expect(wrapper.style.transform).toBe('none');
+    expect(wrapper.classList.contains('pa-repositioning')).toBe(true);
 
     dragHandle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     expect(wrapper.style.top).toBe('20px');
