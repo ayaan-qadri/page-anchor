@@ -139,9 +139,6 @@ export function simplifyPointsRDP(points: Point[], epsilon = 1.2): Point[] {
   return result;
 }
 
-/**
- * Checks whether a test point touches or is near an element (for eraser or selection).
- */
 export function isPointNearElement(pt: Point, element: AnchorElement, threshold = 8): boolean {
   if (!isPointInBoundingBox(pt, element.bbox, threshold)) {
     return false;
@@ -219,9 +216,6 @@ export function isPointNearElement(pt: Point, element: AnchorElement, threshold 
   return false;
 }
 
-/**
- * Draws smooth quadratic bezier spline across sampled points.
- */
 export function renderSmoothSpline(ctx: CanvasRenderingContext2D, points: Point[]): void {
   if (points.length === 0) return;
 
@@ -253,9 +247,6 @@ export function renderSmoothSpline(ctx: CanvasRenderingContext2D, points: Point[
   ctx.stroke();
 }
 
-/**
- * Renders an arrow head at (x, y) pointing in angle direction.
- */
 export function renderArrowHead(
   ctx: CanvasRenderingContext2D,
   x: number,

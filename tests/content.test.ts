@@ -73,7 +73,6 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
     const countFirst = document.querySelectorAll('#page-anchor-host').length;
     expect(countFirst).toBe(1);
 
-    // Call main again
     contentDefinition.main();
     const countSecond = document.querySelectorAll('#page-anchor-host').length;
     expect(countSecond).toBe(1);
@@ -176,10 +175,8 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
     contentDefinition.main();
     await new Promise((r) => setTimeout(r, 20));
 
-    // Turn on drawing mode via toggle message
     messageListener?.({ type: 'PAGE_ANCHOR_TOGGLE' }, {}, vi.fn());
 
-    // Dispatch Delete key on window
     const delEvent = new KeyboardEvent('keydown', { key: 'Delete', bubbles: true });
     window.dispatchEvent(delEvent);
 

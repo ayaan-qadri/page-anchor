@@ -45,8 +45,6 @@ export const SHADOW_STYLES = `
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
-/* ── Floating toolbar ───────────────────────────────────────── */
-
 .pa-toolbar {
   display: flex;
   align-items: center;
@@ -126,8 +124,6 @@ export const SHADOW_STYLES = `
   pointer-events: none;
 }
 
-/* ── Tooltips ───────────────────────────────────────────────── */
-
 .pa-tooltip {
   position: absolute;
   bottom: calc(100% + 10px);
@@ -166,8 +162,6 @@ export const SHADOW_STYLES = `
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
-
-/* ── Colour controls ────────────────────────────────────────── */
 
 .pa-color-preview-btn {
   width: 24px;
@@ -281,8 +275,6 @@ export const SHADOW_STYLES = `
   cursor: pointer;
 }
 
-/* ── Anchor pill ────────────────────────────────────────────── */
-
 .pa-anchor-pill {
   position: fixed;
   bottom: 22px;
@@ -340,8 +332,6 @@ export const SHADOW_STYLES = `
   text-align: center;
 }
 
-/* ── Text annotation editor ─────────────────────────────────── */
-
 .pa-text-input-wrapper {
   position: absolute;
   z-index: 2147483644;
@@ -369,8 +359,6 @@ export const SHADOW_STYLES = `
   color: var(--pa-faint);
   font-weight: 500;
 }
-
-/* ── Settings modal ─────────────────────────────────────────── */
 
 .pa-modal-backdrop {
   position: fixed;
@@ -581,7 +569,6 @@ export const SHADOW_STYLES = `
   outline-offset: 4px;
 }
 
-/* Screen Reader Only Utility */
 .sr-only {
   position: absolute;
   width: 1px;

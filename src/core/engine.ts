@@ -280,9 +280,6 @@ export class CanvasEngine {
     return [...this.selectedElements];
   }
 
-  /**
-   * Translates all elements on the canvas by (dx, dy).
-   */
   public moveAll(dx: number, dy: number): void {
     if (this.elements.length === 0 || (dx === 0 && dy === 0)) return;
     for (const el of this.elements) {
@@ -292,9 +289,6 @@ export class CanvasEngine {
     this.renderBase();
   }
 
-  /**
-   * Deletes all currently selected elements.
-   */
   public deleteSelected(): void {
     if (this.selectedElements.length === 0) return;
     const selectedIds = new Set(this.selectedElements.map((el) => el.id));
@@ -369,9 +363,6 @@ export class CanvasEngine {
     window.addEventListener('pointercancel', this.onPointerUp.bind(this));
   }
 
-  /**
-   * Translates client coordinates to document coordinates.
-   */
   private clientToDoc(clientX: number, clientY: number): Point {
     return {
       x: Math.round(clientX + window.scrollX),
@@ -630,11 +621,6 @@ export class CanvasEngine {
     }
   }
 
-  /**
-   * Erases everything near any of the given points in one pass. Batching the
-   * coalesced pointer events avoids one history snapshot and canvas repaint
-   * per event while dragging the eraser.
-   */
   private eraseAtPoints(points: Point[]): void {
     const prevCount = this.elements.length;
     this.elements = this.elements.filter((el) => !points.some((pt) => this.isPointErasing(el, pt)));
@@ -730,9 +716,6 @@ export class CanvasEngine {
     ctx.restore();
   }
 
-  /**
-   * Real-time preview rendering of active shape.
-   */
   private drawActiveShape(): void {
     this.clearActiveCanvas();
     if (!this.currentShape || !this.activeCtx) return;
@@ -746,9 +729,6 @@ export class CanvasEngine {
     ctx.restore();
   }
 
-  /**
-   * High performance render of all committed elements with Viewport Frustum Culling.
-   */
   public renderBase(): void {
     const ctx = this.baseCtx;
     if (!ctx) return;
@@ -1113,9 +1093,6 @@ export class CanvasEngine {
     ctx.closePath();
   }
 
-  /**
-   * Exports an annotated snapshot image (Data URL).
-   */
   public exportAsDataUrl(): string {
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = this.baseCanvas.width;

@@ -72,10 +72,8 @@ function dragHandleSvg(): string {
 }
 
 export const ICONS: Record<string, string> = {
-  // Brand
   anchor: toSvg(Anchor),
 
-  // Drawing tools
   pen: toSvg(Pencil),
   highlighter: toSvg(Highlighter),
   select: toSvg(MousePointer2),
@@ -87,14 +85,12 @@ export const ICONS: Record<string, string> = {
   text: toSvg(Type),
   eraser: toSvg(Eraser),
 
-  // Actions
   undo: toSvg(Undo2),
   redo: toSvg(Redo2),
   trash: toSvg(Trash2),
   download: toSvg(Download),
   settings: toSvg(Settings),
 
-  // Visibility / UI
   eye: toSvg(Eye),
   eyeOff: toSvg(EyeOff),
   minimize: toSvg(Minimize2),

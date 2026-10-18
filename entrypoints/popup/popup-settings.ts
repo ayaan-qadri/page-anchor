@@ -14,7 +14,6 @@ import {
 } from '../../src/core/shortcuts';
 import { ShortcutRecorder } from '../../src/ui/shortcut-recorder';
 
-/** Creates a typed element with optional class list and initial innerHTML. */
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className?: string,
@@ -67,7 +66,6 @@ export class PopupSettingsPanel {
     this.renderBackup();
   }
 
-  /** Cancels any in-flight shortcut recording and restores the idle badge state. */
   public dispose(): void {
     this.recorder.stop();
     if (this.recordingButton) {
@@ -95,7 +93,6 @@ export class PopupSettingsPanel {
     });
   }
 
-  /** Builds a titled section shell that callers append controls to. */
   private section(title: string, subtitle?: string): HTMLElement {
     const wrap = el('section', 'pa-ps-section flex flex-col gap-2.5');
     const head = el('div', 'flex flex-col gap-0.5');

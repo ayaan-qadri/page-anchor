@@ -42,9 +42,6 @@ const TRACKING_PARAMS = new Set([
   'source',
 ]);
 
-/**
- * Normalizes URL according to user settings (stripping trackers, hashes, etc.)
- */
 export function normalizeUrl(
   rawUrl: string,
   mode: 'clean' | 'exact' | 'domain' = 'clean'
@@ -340,7 +337,6 @@ function sanitizeAnchor(raw: unknown): DOMAnchor | undefined {
   };
 }
 
-/** Anything that would crash the canvas renderer (bad points/text/anchor) is dropped or repaired. */
 function sanitizeElement(raw: unknown): AnchorElement | null {
   if (!isPlainObject(raw) || typeof raw.id !== 'string') return null;
 

@@ -114,7 +114,6 @@ describe('Geometry Engine: Render Helpers and Missing Hit-Test Branches', () => 
       expect(isPointNearElement({ x: 50, y: 100 }, circle, 6)).toBe(true);
       // Point (50, 50) is the center (unfilled), should NOT hit perimeter
       expect(isPointNearElement({ x: 50, y: 50 }, circle, 6)).toBe(false);
-      // Point far away
       expect(isPointNearElement({ x: 200, y: 200 }, circle, 6)).toBe(false);
     });
 
@@ -135,7 +134,6 @@ describe('Geometry Engine: Render Helpers and Missing Hit-Test Branches', () => 
       };
       // Center (50, 50) is inside filled circle
       expect(isPointNearElement({ x: 50, y: 50 }, circle)).toBe(true);
-      // Point outside
       expect(isPointNearElement({ x: 150, y: 150 }, circle)).toBe(false);
     });
   });
@@ -156,9 +154,7 @@ describe('Geometry Engine: Render Helpers and Missing Hit-Test Branches', () => 
         createdAt: 0,
         bbox: { minX: 50, minY: 50, maxX: 150, maxY: 150 },
       };
-      // Center of rectangle
       expect(isPointNearElement({ x: 100, y: 100 }, rect)).toBe(true);
-      // Outside
       expect(isPointNearElement({ x: 40, y: 100 }, rect)).toBe(false);
     });
   });

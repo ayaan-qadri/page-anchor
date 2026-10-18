@@ -141,7 +141,6 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
       engine.setTool('rect');
       const activeCanvas = container.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
 
-      // Tiny gesture
       activeCanvas.dispatchEvent(
         new PointerEvent('pointerdown', { clientX: 10, clientY: 10, button: 0, pointerId: 1 })
       );
@@ -153,7 +152,6 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
       );
       expect(engine.getElements()).toHaveLength(0);
 
-      // Normal rectangle gesture
       activeCanvas.dispatchEvent(
         new PointerEvent('pointerdown', { clientX: 20, clientY: 20, button: 0, pointerId: 2 })
       );
@@ -232,7 +230,6 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
       activeCanvas.dispatchEvent(
         new PointerEvent('pointerdown', { clientX: 0, clientY: 0, button: 0, pointerId: 1 })
       );
-      // Drag near 45 degrees
       window.dispatchEvent(
         new PointerEvent('pointermove', { clientX: 100, clientY: 85, shiftKey: true, pointerId: 1 })
       );
@@ -241,7 +238,6 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
       );
 
       const line = engine.getElements()[0] as ShapeElement;
-      // At 45 deg, endX and endY should be equal
       expect(Math.abs(line.endX - line.endY)).toBeLessThanOrEqual(2);
     });
   });
@@ -318,7 +314,6 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
 
       const activeCanvas = container.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
 
-      // Drag marquee over rect1 (from 10,10 to 60,60)
       activeCanvas.dispatchEvent(
         new PointerEvent('pointerdown', { clientX: 10, clientY: 10, button: 0, pointerId: 1 })
       );
@@ -342,7 +337,6 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
       engine.setTool('select');
       const activeCanvas = container.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
 
-      // Click far away empty space
       activeCanvas.dispatchEvent(
         new PointerEvent('pointerdown', { clientX: 999, clientY: 999, button: 0, pointerId: 1 })
       );

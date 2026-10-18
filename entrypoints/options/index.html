@@ -13,7 +13,6 @@
   <body class="bg-brand-bg text-brand-text font-sans text-sm leading-relaxed m-0 p-0 antialiased">
     <a href="#main-settings-content" class="pa-skip-link">Skip to settings content</a>
     <div class="pa-options-container max-w-[880px] mx-auto px-5 py-8">
-      <!-- Header -->
       <header class="pa-options-header flex items-center justify-between gap-4 pb-6 mb-6 border-b border-white/[0.07]">
         <div class="pa-options-brand flex items-center gap-3.5">
           <div class="pa-brand-icon w-11 h-11 rounded-xl overflow-hidden flex items-center justify-center ring-1 ring-white/10" aria-hidden="true">
@@ -30,9 +29,7 @@
         </div>
       </header>
 
-      <!-- Main Layout -->
       <main id="main-settings-content" class="pa-options-content outline-none" tabindex="-1">
-        <!-- Navigation Tabs (WAI-ARIA Tablist Pattern) -->
         <div class="pa-tabs" role="tablist" aria-label="Settings categories">
           <button role="tab" id="tab-btn-shortcuts" class="pa-tab-btn active" data-tab="shortcuts" aria-selected="true" aria-controls="tab-shortcuts" tabindex="0">Keyboard Shortcuts</button>
           <button role="tab" id="tab-btn-drawing" class="pa-tab-btn" data-tab="drawing" aria-selected="false" aria-controls="tab-drawing" tabindex="-1">Drawing Defaults</button>
@@ -41,22 +38,18 @@
           <button role="tab" id="tab-btn-backup" class="pa-tab-btn" data-tab="backup" aria-selected="false" aria-controls="tab-backup" tabindex="-1">Backup &amp; Restore</button>
         </div>
 
-        <!-- Tab 1: Shortcuts -->
         <section role="tabpanel" id="tab-shortcuts" class="pa-tab-pane active block" aria-labelledby="tab-btn-shortcuts" tabindex="0">
           <div class="pa-section-desc text-brand-muted text-[13px] mb-4.5">
             Customize keyboard shortcuts for every tool and action. Click on any key combination box and press your preferred keystroke to rebind.
           </div>
           <div class="pa-shortcuts-table-wrapper">
-            <div id="shortcuts-container" class="pa-shortcuts-list flex flex-col gap-2 mb-5">
-              <!-- Dynamically populated -->
-            </div>
+            <div id="shortcuts-container" class="pa-shortcuts-list flex flex-col gap-2 mb-5"></div>
           </div>
           <div class="pa-pane-footer">
             <button id="btn-reset-shortcuts" class="bg-white/[0.06] hover:bg-white/[0.1] text-brand-text border border-white/[0.09] px-4 py-2 rounded-lg font-semibold text-[13px] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-brand-ring">Reset shortcuts to default</button>
           </div>
         </section>
 
-        <!-- Tab 2: Drawing Defaults -->
         <section role="tabpanel" id="tab-drawing" class="pa-tab-pane hidden" aria-labelledby="tab-btn-drawing" tabindex="0" hidden>
           <div class="pa-form-group mb-5.5 flex flex-col gap-2">
             <label for="pref-pen-color" class="pa-form-label font-semibold text-brand-text text-[13px]">Default pen stroke color</label>
@@ -90,7 +83,6 @@
           </div>
         </section>
 
-        <!-- Tab 3: Persistence & Matching -->
         <section role="tabpanel" id="tab-persistence" class="pa-tab-pane hidden" aria-labelledby="tab-btn-persistence" tabindex="0" hidden>
           <div class="pa-form-group mb-5.5 flex flex-col gap-2">
             <label for="pref-url-match-mode" class="pa-form-label font-semibold text-brand-text text-[13px]">URL matching mode</label>
@@ -151,17 +143,13 @@
           </div>
         </section>
 
-        <!-- Tab 4: Saved Pages Manager -->
         <section role="tabpanel" id="tab-saved-pages" class="pa-tab-pane hidden" aria-labelledby="tab-btn-saved-pages" tabindex="0" hidden>
           <div class="pa-section-desc text-brand-muted text-[13px] mb-4.5">
             Manage all web pages where you have active drawings and annotations.
           </div>
-          <div id="saved-pages-list" class="pa-saved-list flex flex-col gap-2.5">
-            <!-- Dynamically populated -->
-          </div>
+          <div id="saved-pages-list" class="pa-saved-list flex flex-col gap-2.5"></div>
         </section>
 
-        <!-- Tab 5: Backup & Restore -->
         <section role="tabpanel" id="tab-backup" class="pa-tab-pane hidden" aria-labelledby="tab-btn-backup" tabindex="0" hidden>
           <div class="pa-card-box bg-white/[0.03] border border-white/[0.07] rounded-xl p-5 mb-5">
             <h3 class="text-[15px] font-semibold text-brand-text mb-1.5">Export all annotations &amp; settings</h3>
@@ -179,7 +167,6 @@
         </section>
       </main>
 
-      <!-- Global status announcer for screen readers -->
       <div id="options-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
     </div>
 

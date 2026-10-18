@@ -64,18 +64,14 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
     const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.pa-tab-btn'));
     expect(tabs.length).toBeGreaterThanOrEqual(3);
 
-    // Initial tab: shortcuts
     expect(tabs[0].getAttribute('aria-selected')).toBe('true');
 
-    // ArrowRight moves to next tab
     tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     expect(tabs[1].getAttribute('aria-selected')).toBe('true');
 
-    // End key moves to last tab
     tabs[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
     expect(tabs[tabs.length - 1].getAttribute('aria-selected')).toBe('true');
 
-    // Home key moves to first tab
     tabs[tabs.length - 1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
     expect(tabs[0].getAttribute('aria-selected')).toBe('true');
   });
@@ -86,12 +82,10 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
     const badge = document.querySelector('.pa-key-badge') as HTMLButtonElement;
     expect(badge).not.toBeNull();
 
-    // Click badge to start recording
     badge.click();
     expect(badge.classList.contains('recording')).toBe(true);
     expect(badge.textContent).toBe('Press keys...');
 
-    // Press custom key combo: Ctrl+Shift+K
     window.dispatchEvent(
       new KeyboardEvent('keydown', {
         key: 'k',
@@ -192,7 +186,6 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
 
     expect(globalThis.URL.createObjectURL).toHaveBeenCalled();
 
-    // Import file flow
     const fileInput = document.getElementById('backup-file-input') as HTMLInputElement;
     const mockFile = new File(
       [

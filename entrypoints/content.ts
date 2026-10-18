@@ -35,9 +35,6 @@ export default defineContentScript({
     host.style.overflow = 'visible';
     host.style.zIndex = '2147483647';
 
-    // Open so browser-automation (Playwright's selector engine) and in-page
-    // debugging can reach the UI; closing it would block both, and the drawings
-    // themselves are already readable from the canvas by any page script.
     const shadowRoot = host.attachShadow({ mode: 'open' });
 
     const styleSheet = document.createElement('style');
@@ -77,8 +74,6 @@ export default defineContentScript({
 
     const triggerSave = (elements: AnchorElement[]) => {
       if (saveTimeout) clearTimeout(saveTimeout);
-      // Capture the page this change belongs to now: a SPA navigation during the
-      // debounce window must not save the old page's drawings under the new URL.
       const url = currentLoadedUrl;
       saveTimeout = window.setTimeout(async () => {
         try {
@@ -164,8 +159,6 @@ export default defineContentScript({
       engine.deleteSelected();
     });
 
-    // Bumped on every navigation so a load that resolves after a newer
-    // navigation started can be discarded instead of overwriting fresh state.
     let navToken = 0;
 
     const handleUrlChange = async () => {

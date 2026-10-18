@@ -187,9 +187,7 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       wrapper.style.left = '100px';
       wrapper.style.top = '100px';
 
-      // Press ArrowDown
       handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-      // Press ArrowRight
       handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     });
   });

@@ -309,7 +309,6 @@ export class SettingsModal {
     this.container.appendChild(backdrop);
     this.currentModal = backdrop;
 
-    // Initial focus on close button or first interactive element
     setTimeout(() => {
       closeBtn?.focus();
     }, 50);
@@ -379,7 +378,6 @@ export class SettingsModal {
       this.currentModal = null;
     }
 
-    // Restore focus to previously active element
     this.previousActiveElement?.focus();
     this.previousActiveElement = null;
 

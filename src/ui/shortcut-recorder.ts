@@ -5,11 +5,6 @@ export type ShortcutRecordResult =
   | { type: 'cancel' }
   | { type: 'recorded'; combo: string; conflict: BrowserConflictInfo | null };
 
-/**
- * Owns the one-shot window keydown capture used to rebind a shortcut, so the
- * in-page modal, the popup panel and the options page all record keystrokes the
- * same way. Callers keep their own markup and styling.
- */
 export class ShortcutRecorder {
   private handler: ((e: KeyboardEvent) => void) | null = null;
 

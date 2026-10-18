@@ -64,7 +64,6 @@ describe('TextEditorOverlay: In-Place Text Editing', () => {
     expect(created.bbox).toBeDefined();
     expect(created.bbox.minX).toBeLessThanOrEqual(100);
 
-    // Overlay should close after commit
     expect(container.querySelector('.pa-text-input-wrapper')).toBeNull();
   });
 

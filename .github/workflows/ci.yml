@@ -34,8 +34,6 @@ jobs:
         run: pnpm build
 
   e2e:
-    # Separate job so a flaky browser test reports independently of the unit
-    # suite, and so unit failures stop the run before the browser download.
     needs: check
     runs-on: ubuntu-latest
     steps:
@@ -64,12 +62,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-
 
-      # Downloads are skipped when the cache above hits; --with-deps still needs
-      # to run so the runner has Chromium's system libraries.
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      # The fixture launches a headed Chromium with the built extension loaded,
-      # which needs a virtual display on Linux. One retry absorbs runner flake.
       - name: End-to-end tests
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" pnpm test:e2e --retries=1

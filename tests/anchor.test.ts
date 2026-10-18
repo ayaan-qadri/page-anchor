@@ -93,7 +93,6 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
 
   describe('Deterministic Position Tracking (New Issue Arrival Simulation)', () => {
     it('accurately calculates delta shift when a new issue pushes existing rows down', () => {
-      // Simulate GitHub issues list
       const issuesList = document.createElement('div');
       issuesList.id = 'issues-list';
       testDomContainer.appendChild(issuesList);
@@ -102,7 +101,6 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       issue1.id = 'issue_14723';
       issue1.className = 'Box-row';
       issue1.textContent = 'Improve the image description field';
-      // Mock initial layout rect
       issue1.getBoundingClientRect = () => ({
         left: 200,
         top: 300,
@@ -116,26 +114,22 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       });
       issuesList.appendChild(issue1);
 
-      // Create DOM anchor at initial state
       const anchor = createDOMAnchor(issue1);
       expect(anchor.selector).toBe('#issue_14723');
       expect(anchor.initialRect.top).toBe(300);
       expect(anchor.initialRect.left).toBe(200);
 
-      // Verify at initial state, delta is zero
       const initialResolution = resolveAnchor(anchor);
       expect(initialResolution.status).toBe('found');
       expect(initialResolution.deltaX).toBe(0);
       expect(initialResolution.deltaY).toBe(0);
 
-      // Now simulate a NEW issue arriving at the top of the list!
       const newArrivedIssue = document.createElement('div');
       newArrivedIssue.id = 'issue_14730';
       newArrivedIssue.className = 'Box-row';
       newArrivedIssue.textContent = 'New critical bug in Wagtail core';
       issuesList.insertBefore(newArrivedIssue, issue1);
 
-      // Because new issue arrived above, issue1 physically shifted down by 65px!
       issue1.getBoundingClientRect = () => ({
         left: 200,
         top: 365, // shifted from 300 to 365
@@ -148,11 +142,10 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
         toJSON: () => {},
       });
 
-      // Resolve the anchor again
       const shiftedResolution = resolveAnchor(anchor);
       expect(shiftedResolution.status).toBe('found');
       expect(shiftedResolution.deltaX).toBe(0);
-      expect(shiftedResolution.deltaY).toBe(65); // Accurately tracked the +65px layout shift!
+      expect(shiftedResolution.deltaY).toBe(65);
     });
 
     it('falls back to W3C Text Quote if selector is altered or moved', () => {
@@ -173,7 +166,6 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       testDomContainer.appendChild(containerEl);
 
       const anchor = createDOMAnchor(containerEl);
-      // Now break the selector by changing class/id
       containerEl.className = 'rebranded-row';
       containerEl.getBoundingClientRect = () => ({
         left: 100,
@@ -210,7 +202,6 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       testDomContainer.appendChild(el);
 
       const anchor = createDOMAnchor(el);
-      // Issue closed & deleted from DOM
       el.remove();
 
       const res = resolveAnchor(anchor);
@@ -260,7 +251,6 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
     it('automatically applies delta transformation to effective bounding box', () => {
       const engine = new CanvasEngine(container);
 
-      // Create a test issue element
       const issueEl = document.createElement('div');
       issueEl.id = 'engine-test-issue';
       issueEl.textContent = 'Wagtail Issue #14723';
@@ -296,13 +286,11 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
 
       engine.addElement(stroke);
 
-      // At initial state
       let eff = engine.getElementEffectiveBBox(stroke);
       expect(eff.deltaX).toBe(0);
       expect(eff.deltaY).toBe(0);
       expect(eff.bbox.minY).toBe(300);
 
-      // Shift the DOM element down by 80px (e.g. new issue arrived)
       issueEl.getBoundingClientRect = () => ({
         left: 200,
         top: 380, // +80px shift
@@ -320,7 +308,7 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
 
       eff = engine.getElementEffectiveBBox(stroke);
       expect(eff.deltaY).toBe(80);
-      expect(eff.bbox.minY).toBe(380); // Follows the issue down perfectly!
+      expect(eff.bbox.minY).toBe(380);
 
       engine.destroy();
     });
@@ -359,7 +347,6 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
 
       engine.addElement(stroke);
 
-      // Shift DOM element
       issueEl.getBoundingClientRect = () => ({
         left: 100,
         top: 320,
@@ -373,14 +360,11 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       });
       (engine as any).anchorManager.invalidateCache();
 
-      // With anchoring enabled:
       expect(engine.getElementEffectiveBBox(stroke).deltaY).toBe(120);
 
-      // Disable anchoring for this page:
       engine.setDomAnchoringEnabled(false);
       expect(engine.getDomAnchoringEnabled()).toBe(false);
 
-      // When disabled, delta is 0 and bbox stays at original coordinates:
       const disabledEff = engine.getElementEffectiveBBox(stroke);
       expect(disabledEff.deltaY).toBe(0);
       expect(disabledEff.bbox.minY).toBe(210);
@@ -425,8 +409,6 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       (engine as any).moveElement(element, 30, 40);
       const second = engine.getElementEffectiveBBox(element).bbox;
 
-      // The anchor's original DOM rect must not move with the element, otherwise
-      // the resolved delta cancels the drag and the element appears frozen.
       expect(element.anchor!.initialRect.left).toBe(100);
       expect(element.anchor!.initialRect.top).toBe(200);
       expect(second.minX - first.minX).toBe(30);
@@ -460,12 +442,10 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
 
       engine.addElement(textEl);
 
-      // Default orphaned mode is 'hide'
       expect(engine.getOrphanedAnchorMode()).toBe('hide');
       let eff = engine.getElementEffectiveBBox(textEl);
       expect(eff.isOrphaned).toBe(true);
 
-      // Switch to dimmed mode
       engine.setOrphanedAnchorMode('dimmed');
       expect(engine.getOrphanedAnchorMode()).toBe('dimmed');
 

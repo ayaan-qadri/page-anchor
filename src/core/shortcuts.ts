@@ -139,9 +139,6 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   },
 ];
 
-/**
- * Normalizes a KeyboardEvent into a canonical shortcut string (e.g. "Ctrl+Shift+K").
- */
 export function normalizeKeyEvent(e: KeyboardEvent): string {
   const parts: string[] = [];
 
@@ -166,9 +163,6 @@ export function normalizeKeyEvent(e: KeyboardEvent): string {
   return parts.join('+');
 }
 
-/**
- * Formats a key combo string for display with platform styling.
- */
 export function formatShortcutForDisplay(keyCombo: string): string {
   if (!keyCombo) return 'None';
   return keyCombo
@@ -275,9 +269,6 @@ export const BROWSER_RESERVED_CONFLICTS: Record<string, BrowserConflictInfo> = {
  */
 export const RESERVED_BROWSER_SHORTCUTS = new Set(Object.keys(BROWSER_RESERVED_CONFLICTS));
 
-/**
- * Checks whether a key combination conflicts with any known browser or OS shortcut.
- */
 export function isReservedBrowserShortcut(combo: string): boolean {
   return getBrowserShortcutConflict(combo) !== null;
 }
@@ -296,12 +287,6 @@ export function getBrowserShortcutConflict(combo: string): BrowserConflictInfo |
   return BROWSER_RESERVED_CONFLICTS[normalized] || null;
 }
 
-/**
- * True when a keydown originated in a text field. `composedPath()` is required
- * because an event raised inside the extension's Shadow DOM is re-targeted to
- * the host element (a plain `<div>`) before it reaches a window listener, so
- * checking `e.target` alone would miss the real input.
- */
 export function isEditableTarget(e: KeyboardEvent): boolean {
   const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
   const target = (path.find((n) => n instanceof HTMLElement) as HTMLElement | null) ??

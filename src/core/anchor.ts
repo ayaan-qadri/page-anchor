@@ -41,7 +41,6 @@ export function findBestAnchorElement(
 
   if (!elements || elements.length === 0) return null;
 
-  // Filter out extension shadow host, canvases, and root page tags
   const validElements = elements.filter((el) => {
     if (!el || el === document.documentElement || el === document.body) return false;
     if (el.id === hostElementId || el.closest?.(`#${hostElementId}`)) return false;
@@ -58,20 +57,17 @@ export function findBestAnchorElement(
 
   const deepest = validElements[0];
 
-  // Traverse upward to locate a semantic container (e.g. GitHub issue row, comment, list item, card)
   let current: Element | null = deepest;
   let bestContainer: Element | null = null;
 
   while (current && current !== document.body && current !== document.documentElement) {
     if (current.id === hostElementId) break;
 
-    // Check for explicit ID (excluding auto-generated pure digits or internal keys)
     const id = current.id;
     if (id && !id.startsWith('page-anchor') && !id.match(/^[0-9]+$/)) {
       return current;
     }
 
-    // Check for stable semantic attributes (GitHub, Jira, React apps)
     if (
       current.hasAttribute('data-id') ||
       current.hasAttribute('data-testid') ||
@@ -109,7 +105,6 @@ export function findBestAnchorElement(
 
   if (bestContainer) return bestContainer;
 
-  // Avoid anchoring to giant screen-wide wrappers
   const rect = deepest.getBoundingClientRect();
   if (rect.width > winW * 0.9 && rect.height > winH * 0.9) {
     return null;
@@ -124,13 +119,11 @@ export function findBestAnchorElement(
 export function generateSelector(el: Element): { selector: string; fallbackSelectors: string[] } {
   const fallbacks: string[] = [];
 
-  // 1. Direct ID
   if (el.id && !el.id.startsWith('page-anchor') && !el.id.match(/^[0-9]+$/)) {
     const directId = `#${safeCssEscape(el.id)}`;
     return { selector: directId, fallbackSelectors: [] };
   }
 
-  // 2. Direct data-* attributes
   const dataId = el.getAttribute('data-id') || el.getAttribute('data-testid') || el.getAttribute('data-item-id');
   if (dataId) {
     const attrName = el.hasAttribute('data-id')
@@ -144,7 +137,6 @@ export function generateSelector(el: Element): { selector: string; fallbackSelec
     };
   }
 
-  // 3. Anchor link with distinct path (e.g. /issues/14723 or /pull/500)
   const linkEl = (el.tagName.toLowerCase() === 'a' ? el : el.querySelector?.('a')) as HTMLAnchorElement | null;
   if (linkEl && linkEl.href) {
     try {
@@ -155,7 +147,6 @@ export function generateSelector(el: Element): { selector: string; fallbackSelec
     } catch {}
   }
 
-  // 4. Hierarchical path
   const pathParts: string[] = [];
   let curr: Element | null = el;
 
@@ -183,7 +174,6 @@ export function generateSelector(el: Element): { selector: string; fallbackSelec
 
   const hierarchicalSelector = pathParts.join(' > ') || el.tagName.toLowerCase();
 
-  // Also build class-based fallback if distinct classes exist
   if (typeof el.className === 'string' && el.className.trim()) {
     const classList = el.className
       .trim()
@@ -213,9 +203,6 @@ export function extractTextQuote(
   return { exact };
 }
 
-/**
- * Creates a DOMAnchor payload for an element.
- */
 export function createDOMAnchor(targetEl: Element): DOMAnchor {
   const scrollX = typeof window !== 'undefined' ? window.scrollX : 0;
   const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
@@ -246,8 +233,6 @@ export interface ResolvedAnchor {
 
 /**
  * Resolves the live location of an anchored DOM element.
- * `allowTextWalk` can be turned off to skip the whole-document text search,
- * which is the expensive part when many anchors miss their selectors.
  */
 export function resolveAnchor(anchor: DOMAnchor, allowTextWalk = true): ResolvedAnchor {
   if (typeof document === 'undefined') {
@@ -256,7 +241,6 @@ export function resolveAnchor(anchor: DOMAnchor, allowTextWalk = true): Resolved
 
   let matchedElement: Element | null = null;
 
-  // 1. Primary selector lookup
   try {
     const el = document.querySelector(anchor.selector);
     if (el && el.isConnected) {
@@ -266,7 +250,6 @@ export function resolveAnchor(anchor: DOMAnchor, allowTextWalk = true): Resolved
     }
   } catch {}
 
-  // 2. Fallback selectors lookup
   if (!matchedElement && anchor.fallbackSelectors) {
     for (const fb of anchor.fallbackSelectors) {
       try {
@@ -281,7 +264,7 @@ export function resolveAnchor(anchor: DOMAnchor, allowTextWalk = true): Resolved
     }
   }
 
-  // 3. W3C Text Quote search across page if DOM structure mutated
+  // Last resort: text-quote search, which survives DOM structure changes.
   if (allowTextWalk && !matchedElement && anchor.textQuote?.exact && document.body) {
     const snippet = anchor.textQuote.exact.slice(0, 30);
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -290,7 +273,6 @@ export function resolveAnchor(anchor: DOMAnchor, allowTextWalk = true): Resolved
       if (node.nodeValue && node.nodeValue.includes(snippet)) {
         const parent = node.parentElement;
         if (parent && parent.isConnected && !parent.closest('#page-anchor-host')) {
-          // Find closest semantic container matching original element type
           matchedElement = parent.closest('li, tr, article, section, details, .Box-row, [data-id]') || parent;
           break;
         }
@@ -322,9 +304,6 @@ export function resolveAnchor(anchor: DOMAnchor, allowTextWalk = true): Resolved
   };
 }
 
-/**
- * Manages DOM anchors, live translation tracking, and high-performance caching.
- */
 export class DOMAnchorManager {
   private cache = new Map<string, ResolvedAnchor>();
   private textWalkAt = new Map<string, number>();
@@ -389,9 +368,6 @@ export class DOMAnchorManager {
       return cached;
     }
 
-    // The whole-document text search is only worth running about once a second
-    // per selector; a page that mutates every 50ms would otherwise re-walk it
-    // for every still-broken anchor on every render.
     const now = Date.now();
     const allowTextWalk = now - (this.textWalkAt.get(anchor.selector) ?? 0) >= 1000;
     if (allowTextWalk) {

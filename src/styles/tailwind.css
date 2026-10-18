@@ -9,18 +9,15 @@
  * colour gradient reads as a signature rather than decoration.
  */
 @theme {
-  /* Surfaces */
   --color-brand-bg: #0a0d16;
   --color-brand-surface: #11141f;
   --color-brand-surface-2: #161a27;
   --color-brand-elevated: #1b2030;
 
-  /* Text */
   --color-brand-text: #e8eaf3;
   --color-brand-muted: #99a1b8;
   --color-brand-faint: #7c849e;
 
-  /* Accents */
   --color-brand-blue: #5b8def;
   --color-brand-violet: #8b7ae0;
   --color-brand-mint: #7fd1d0;
@@ -29,7 +26,6 @@
   --color-brand-accent-soft: #a9c1f8;
   --color-brand-ring: #7ca5f7;
 
-  /* Status */
   --color-brand-danger: #e0576b;
   --color-brand-danger-soft: #f2a0aa;
   --color-brand-warning: #e5a94a;
@@ -40,7 +36,6 @@
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
-/* Base canvas for the extension pages (popup + options). */
 @layer base {
   :root {
     color-scheme: dark;

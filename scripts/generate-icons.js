@@ -22,7 +22,6 @@ import zlib from 'zlib';
 
 /** Optically tighter crop at the smallest sizes so the mark still reads. */
 const CROP_PLAN = (size) => (size <= 19 ? 1.04 : 1.22);
-/** Corner radius of the rounded tile, as a fraction of the icon size. */
 const CORNER_RADIUS = 0.22;
 /** Distance (sum of channel deltas) from the background that counts as artwork. */
 const CONTENT_THRESHOLD = 40;
@@ -33,8 +32,6 @@ const EXTRA_SIZES = [19, 38, 64, 96, 256, 512];
  * every output still gets supersampled, and it keeps the repo binary small.
  */
 const MASTER_SIZE = 512;
-
-/* ------------------------------------------------------------------ decode */
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
@@ -141,8 +138,6 @@ function unfilterLine(line, previous, bpp, filter) {
   }
 }
 
-/* ------------------------------------------------------------------ encode */
-
 const crcTable = [];
 for (let n = 0; n < 256; n++) {
   let c = n;
@@ -244,9 +239,6 @@ function encodePng(width, height, rgba) {
   ]);
 }
 
-/* ------------------------------------------------------------------- image */
-
-/** Bounding box of everything that differs from the corner (background) colour. */
 function contentBounds({ width, height, data }) {
   const bgIndex = 0;
   const bgR = data[bgIndex];
@@ -280,7 +272,6 @@ function contentBounds({ width, height, data }) {
   return { minX, minY, maxX, maxY };
 }
 
-/** Extract a square region centred on the artwork, scaled by `padFactor`. */
 function cropSquare(image, bounds, padFactor) {
   const { width, height, data } = image;
   const spanX = bounds.maxX - bounds.minX + 1;
@@ -408,8 +399,6 @@ function roundTile(image) {
 
   return image;
 }
-
-/* --------------------------------------------------------------------- cli */
 
 function parseArgs(argv) {
   const options = { source: null, out: 'public', all: false, writeMaster: false };
