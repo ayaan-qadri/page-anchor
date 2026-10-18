@@ -33,7 +33,10 @@ export class FloatingToolbar {
 
   private wrapper: HTMLElement;
   private toolbar: HTMLElement;
-  private pillButton: HTMLElement;
+  private dockPanel: HTMLElement;
+  private dockTab: HTMLButtonElement;
+  private dockBadge: HTMLElement;
+  private dockClose: HTMLButtonElement;
   private colorPopover: HTMLElement;
   private colorPreviewBtn: HTMLElement;
   private strokeSlider: HTMLInputElement;
@@ -41,7 +44,7 @@ export class FloatingToolbar {
 
   private isDragging = false;
   private dragOffset = { x: 0, y: 0 };
-  private isMinimized = false;
+  private isDocked = false;
 
   constructor(
     container: HTMLElement,
@@ -79,18 +82,6 @@ export class FloatingToolbar {
 
     const shouldBeOpen = !!this.settings.isToolbarOpen;
 
-    this.pillButton = document.createElement('button');
-    (this.pillButton as HTMLButtonElement).type = 'button';
-    this.pillButton.className = 'pa-anchor-pill';
-    this.pillButton.setAttribute('aria-label', 'Toggle Page Anchor toolbar');
-    this.pillButton.setAttribute('aria-expanded', shouldBeOpen ? 'true' : 'false');
-    this.pillButton.innerHTML = `
-      ${ICONS.anchor}
-      <span class="pa-pill-label">Page Anchor</span>
-      <span class="pa-pill-badge" style="display: none;" aria-label="Active annotations">0</span>
-    `;
-    this.container.appendChild(this.pillButton);
-
     this.colorPopover = document.createElement('div');
     this.colorPopover.className = 'pa-popover';
     this.colorPopover.setAttribute('role', 'dialog');
@@ -102,24 +93,50 @@ export class FloatingToolbar {
     (this.colorPreviewBtn as HTMLButtonElement).type = 'button';
 
     this.buildToolbarContent();
+
+    this.dockPanel = document.createElement('div');
+    this.dockPanel.className = 'pa-dock';
+
+    this.dockTab = document.createElement('button');
+    this.dockTab.type = 'button';
+    this.dockTab.className = 'pa-dock-tab';
+    this.dockTab.setAttribute('aria-label', 'Open drawing toolbar');
+    this.dockTab.setAttribute('aria-expanded', shouldBeOpen ? 'true' : 'false');
+    this.dockTab.title = 'Open drawing toolbar';
+    this.dockTab.innerHTML = `
+      ${ICONS.dragHandle}
+      <span class="pa-dock-badge" style="display: none;" aria-label="Active annotations">0</span>
+    `;
+    this.dockBadge = this.dockTab.querySelector('.pa-dock-badge') as HTMLElement;
+    this.dockPanel.appendChild(this.dockTab);
+
+    this.dockClose = document.createElement('button');
+    this.dockClose.type = 'button';
+    this.dockClose.className = 'pa-dock-close';
+    this.dockClose.setAttribute('aria-label', 'Hide toolbar');
+    this.dockClose.title = 'Hide toolbar';
+    this.dockClose.innerHTML = ICONS.close;
+    this.dockPanel.appendChild(this.dockClose);
+
     this.wrapper.appendChild(this.toolbar);
     this.wrapper.appendChild(this.colorPopover);
+    this.wrapper.appendChild(this.dockPanel);
     this.container.appendChild(this.wrapper);
 
     this.initDragEvents();
-    this.bindPillEvents();
+    this.bindDockEvents();
     this.updateActiveToolUI();
     this.updateHistoryButtons();
     this.updateBadge();
 
-    this.setDrawingMode(shouldBeOpen, false);
+    if (this.settings.isToolbarHidden) {
+      this.hideToolbar(false);
+    } else {
+      this.setDrawingMode(shouldBeOpen, false);
+    }
 
     if (this.settings.areAnnotationsVisible !== undefined) {
       this.engine.setAnnotationsVisible(this.settings.areAnnotationsVisible);
-    }
-
-    if (this.settings.showFloatingPill === false) {
-      this.pillButton.style.display = 'none';
     }
 
     window.addEventListener('resize', () => {
@@ -132,9 +149,6 @@ export class FloatingToolbar {
   public setSettings(settings: ExtensionSettings): void {
     this.settings = settings;
     this.updateTooltips();
-    if (settings.showFloatingPill !== undefined) {
-      this.pillButton.style.display = settings.showFloatingPill ? 'flex' : 'none';
-    }
     if (settings.areAnnotationsVisible !== undefined) {
       this.engine.setAnnotationsVisible(settings.areAnnotationsVisible);
     }
@@ -144,18 +158,21 @@ export class FloatingToolbar {
     if (settings.strokeSimplification !== undefined) {
       this.engine.setStrokeSimplification(settings.strokeSimplification);
     }
+    if (settings.isToolbarHidden) {
+      this.hideToolbar(false);
+    } else {
+      this.setDrawingMode(!!settings.isToolbarOpen, false);
+    }
   }
 
   public updateBadge(): void {
     const count = this.engine.getElements().length;
-    const badge = this.pillButton.querySelector('.pa-pill-badge') as HTMLElement;
-    if (badge) {
-      if (count > 0) {
-        badge.textContent = `${count}`;
-        badge.style.display = 'inline-block';
-      } else {
-        badge.style.display = 'none';
-      }
+    if (!this.dockBadge) return;
+    if (count > 0) {
+      this.dockBadge.textContent = `${count}`;
+      this.dockBadge.style.display = 'inline-block';
+    } else {
+      this.dockBadge.style.display = 'none';
     }
   }
 
@@ -177,26 +194,109 @@ export class FloatingToolbar {
   public setDrawingMode(active: boolean, persist = true): void {
     this.engine.setActiveMode(active);
     if (active) {
-      this.wrapper.style.display = 'block';
-      this.pillButton.classList.add('active');
-      this.pillButton.setAttribute('aria-expanded', 'true');
-      this.ensureVisibleInViewport();
+      this.expandToolbar();
     } else {
-      this.wrapper.style.display = 'none';
-      this.pillButton.classList.remove('active');
-      this.pillButton.setAttribute('aria-expanded', 'false');
-      this.colorPopover.classList.remove('open');
-      this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
+      this.dockToolbar();
     }
     if (persist) {
       this.settings.isToolbarOpen = active;
-      saveSettings({ isToolbarOpen: active }).catch(() => {});
+      saveSettings({ isToolbarOpen: active, isToolbarHidden: false }).catch(() => {});
     }
     this.callbacks.onToggleActive?.(active);
   }
 
+  /**
+   * Removes the toolbar entirely, dock tab included. Unlike docking, nothing
+   * stays on the page — use the extension icon or a shortcut to bring it back.
+   */
+  public hideToolbar(persist = true): void {
+    this.engine.setActiveMode(false);
+    this.isDocked = false;
+    this.settings.isToolbarHidden = true;
+    this.wrapper.classList.remove('docked');
+    this.wrapper.style.display = 'none';
+    this.colorPopover.classList.remove('open');
+    this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
+    if (persist) {
+      this.settings.isToolbarOpen = false;
+      saveSettings({ isToolbarOpen: false, isToolbarHidden: true }).catch(() => {});
+    }
+    this.updateDockUI();
+    this.callbacks.onToggleActive?.(false);
+  }
+
+  private showWrapper(): void {
+    this.settings.isToolbarHidden = false;
+    this.wrapper.style.display = 'block';
+  }
+
+  /** Collapses the toolbar into the left-edge dock tab. */
+  private dockToolbar(): void {
+    this.colorPopover.classList.remove('open');
+    this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
+    this.showWrapper();
+
+    if (this.isDocked) {
+      this.updateDockUI();
+      return;
+    }
+
+    const rect = this.wrapper.getBoundingClientRect();
+    let top = rect.top;
+    if (!top && this.settings.toolbarPosition) top = this.settings.toolbarPosition.y;
+    if (!Number.isFinite(top) || top <= 0) top = 24;
+
+    this.isDocked = true;
+    this.wrapper.classList.add('docked');
+    this.wrapper.style.transform = 'none';
+    this.wrapper.style.left = '0px';
+    this.wrapper.style.top = `${this.clampDockTop(top)}px`;
+    this.updateDockUI();
+  }
+
+  /** Restores the toolbar to the position it was docked from. */
+  private expandToolbar(): void {
+    this.showWrapper();
+
+    if (!this.isDocked) {
+      this.updateDockUI();
+      this.ensureVisibleInViewport();
+      return;
+    }
+
+    this.isDocked = false;
+    this.wrapper.classList.remove('docked');
+
+    if (this.settings.toolbarPosition) {
+      this.wrapper.style.transform = 'none';
+      this.wrapper.style.left = `${this.settings.toolbarPosition.x}px`;
+      this.wrapper.style.top = `${this.settings.toolbarPosition.y}px`;
+    } else {
+      this.wrapper.style.transform = 'translateX(-50%)';
+      this.wrapper.style.left = '50%';
+      this.wrapper.style.top = '24px';
+    }
+
+    this.updateDockUI();
+    this.ensureVisibleInViewport();
+  }
+
+  private clampDockTop(top: number): number {
+    const height = this.dockTab?.offsetHeight || 44;
+    return Math.max(10, Math.min(Math.max(10, window.innerHeight - height - 10), top));
+  }
+
+  private updateDockUI(): void {
+    this.wrapper.classList.toggle('docked', this.isDocked);
+    this.dockTab.setAttribute('aria-expanded', this.isDocked ? 'false' : 'true');
+    this.dockTab.setAttribute('aria-label', this.isDocked ? 'Open drawing toolbar' : 'Collapse drawing toolbar');
+    const dragHandle = this.toolbar.querySelector('.pa-drag-handle') as HTMLElement | null;
+    dragHandle?.setAttribute('aria-expanded', this.isDocked ? 'false' : 'true');
+  }
+
   public ensureVisibleInViewport(): void {
     if (!this.wrapper || this.wrapper.style.display === 'none') return;
+    if (this.isDocked) return;
     if (!this.settings.toolbarPosition) return;
 
     const rect = this.wrapper.getBoundingClientRect();
@@ -227,30 +327,12 @@ export class FloatingToolbar {
   }
 
   /**
-   * Collapses or expands the floating toolbar while keeping drawing mode (and
-   * the active tool) intact. Distinct from `toggleDrawingMode`, which enters or
-   * leaves drawing mode entirely.
+   * Docks the toolbar to the left edge, or restores it to the position it was
+   * docked from. The dock tab is the collapsed representation of the toolbar,
+   * so collapsing also parks drawing mode until the toolbar is restored.
    */
   public toggleToolbarVisibility(): void {
-    const isHidden = this.wrapper.style.display === 'none';
-
-    if (!isHidden) {
-      this.wrapper.style.display = 'none';
-      this.pillButton.classList.remove('active');
-      this.pillButton.setAttribute('aria-expanded', 'false');
-      this.colorPopover.classList.remove('open');
-      this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
-      return;
-    }
-
-    if (this.engine.getActiveMode()) {
-      this.wrapper.style.display = 'block';
-      this.pillButton.classList.add('active');
-      this.pillButton.setAttribute('aria-expanded', 'true');
-      this.ensureVisibleInViewport();
-    } else {
-      this.setDrawingMode(true);
-    }
+    this.toggleDrawingMode();
   }
 
   private buildToolbarContent(): void {
@@ -258,6 +340,7 @@ export class FloatingToolbar {
     dragHandle.className = 'pa-drag-handle';
     dragHandle.setAttribute('role', 'button');
     dragHandle.setAttribute('tabindex', '0');
+    dragHandle.setAttribute('aria-expanded', 'true');
     dragHandle.setAttribute('aria-label', 'Move toolbar position. Drag or use arrow keys.');
     dragHandle.title = 'Move toolbar position (Arrow keys or drag)';
     dragHandle.innerHTML = ICONS.dragHandle;
@@ -392,10 +475,15 @@ export class FloatingToolbar {
     anchorBtn.classList.toggle('active', isAnchoring);
     this.toolbar.appendChild(anchorBtn);
 
-    const minBtn = this.createActionButton('minimize', 'Minimize Toolbar', 'toggle-active', ICONS.minimize, () => {
-      this.setDrawingMode(false, true);
+    const dockBtn = this.createActionButton('dock', 'Dock to Left Edge', '', ICONS.minimize, () => {
+      this.setDrawingMode(false);
     });
-    this.toolbar.appendChild(minBtn);
+    this.toolbar.appendChild(dockBtn);
+
+    const closeBtn = this.createActionButton('hide', 'Hide Toolbar', '', ICONS.close, () => {
+      this.hideToolbar();
+    });
+    this.toolbar.appendChild(closeBtn);
   }
 
   public updateDomAnchoringUI(enabled: boolean): void {
@@ -613,40 +701,50 @@ export class FloatingToolbar {
     const dragHandle = this.toolbar.querySelector('.pa-drag-handle') as HTMLElement;
     if (!dragHandle) return;
 
+    let startX = 0;
+    let startY = 0;
+    let moved = false;
+
     dragHandle.addEventListener('pointerdown', (e: PointerEvent) => {
       if (e.button !== 0) return;
       this.isDragging = true;
+      moved = false;
+      startX = e.clientX;
+      startY = e.clientY;
       const rect = this.wrapper.getBoundingClientRect();
       this.dragOffset.x = e.clientX - rect.left;
       this.dragOffset.y = e.clientY - rect.top;
-      this.wrapper.style.transform = 'none';
       dragHandle.setPointerCapture(e.pointerId);
-      e.preventDefault();
     });
 
     dragHandle.addEventListener('pointermove', (e: PointerEvent) => {
       if (!this.isDragging) return;
+      if (!moved && Math.abs(e.clientX - startX) <= 4 && Math.abs(e.clientY - startY) <= 4) return;
+      if (!moved) {
+        moved = true;
+        this.wrapper.style.transform = 'none';
+      }
       const newX = Math.max(10, Math.min(window.innerWidth - this.wrapper.offsetWidth - 10, e.clientX - this.dragOffset.x));
       const newY = Math.max(10, Math.min(window.innerHeight - this.wrapper.offsetHeight - 10, e.clientY - this.dragOffset.y));
       this.wrapper.style.left = `${newX}px`;
       this.wrapper.style.top = `${newY}px`;
     });
 
-    const stopDrag = () => {
-      if (this.isDragging) {
-        this.isDragging = false;
-        const rect = this.wrapper.getBoundingClientRect();
-        this.settings.toolbarPosition = { x: rect.left, y: rect.top };
-        this.callbacks.onSettingsUpdate?.(this.settings);
-      }
+    const finishDrag = (commit: boolean) => {
+      if (!this.isDragging) return;
+      this.isDragging = false;
+      if (!commit || !moved) return;
+      const rect = this.wrapper.getBoundingClientRect();
+      this.settings.toolbarPosition = { x: rect.left, y: rect.top };
+      this.callbacks.onSettingsUpdate?.(this.settings);
     };
 
-    dragHandle.addEventListener('pointerup', stopDrag);
-    dragHandle.addEventListener('pointercancel', stopDrag);
+    dragHandle.addEventListener('pointerup', () => finishDrag(true));
+    dragHandle.addEventListener('pointercancel', () => finishDrag(false));
 
-    // Keyboard navigation alternative for dragging (WCAG 2.5.7)
+    // Keyboard alternative for repositioning (WCAG 2.5.7).
     dragHandle.addEventListener('keydown', (e: KeyboardEvent) => {
-      let moved = false;
+      let nextMoved = false;
       const rect = this.wrapper.getBoundingClientRect();
       let newX = rect.left;
       let newY = rect.top;
@@ -654,19 +752,19 @@ export class FloatingToolbar {
 
       if (e.key === 'ArrowUp') {
         newY = Math.max(10, newY - step);
-        moved = true;
+        nextMoved = true;
       } else if (e.key === 'ArrowDown') {
         newY = Math.min(window.innerHeight - this.wrapper.offsetHeight - 10, newY + step);
-        moved = true;
+        nextMoved = true;
       } else if (e.key === 'ArrowLeft') {
         newX = Math.max(10, newX - step);
-        moved = true;
+        nextMoved = true;
       } else if (e.key === 'ArrowRight') {
         newX = Math.min(window.innerWidth - this.wrapper.offsetWidth - 10, newX + step);
-        moved = true;
+        nextMoved = true;
       }
 
-      if (moved) {
+      if (nextMoved) {
         e.preventDefault();
         this.wrapper.style.transform = 'none';
         this.wrapper.style.left = `${newX}px`;
@@ -677,9 +775,12 @@ export class FloatingToolbar {
     });
   }
 
-  private bindPillEvents(): void {
-    this.pillButton.addEventListener('click', () => {
-      this.toggleDrawingMode(true);
+  private bindDockEvents(): void {
+    this.dockTab.addEventListener('click', () => {
+      this.setDrawingMode(true, true);
+    });
+    this.dockClose.addEventListener('click', () => {
+      this.hideToolbar();
     });
   }
 }

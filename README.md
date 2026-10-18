@@ -61,7 +61,7 @@ Page Anchor solves this with 5 dedicated performance strategies:
 | Action | Default Shortcut | Description |
 | :--- | :---: | :--- |
 | **Toggle Drawing Mode** | `Alt + Shift + D` | Turn drawing overlay on / off (Non-conflicting with browser address bar `Alt+D`) |
-| **Toggle Toolbar** | `Alt + Shift + T` | Collapse or expand floating toolbar |
+| **Toggle Toolbar** | `Alt + Shift + T` | Dock the toolbar to the left edge or restore it |
 | **Select / Move** | `V` | Select elements to reposition or delete (active in draw mode) |
 | **Pen Tool** | `P` | Freehand drawing tool (active in draw mode) |
 | **Highlighter** | `H` | Semi-transparent highlighter (active in draw mode) |
@@ -122,7 +122,7 @@ page-anchor/
 │   │   └── history.ts           # Bounded undo/redo stack
 │   ├── ui/
 │   │   ├── styles.ts            # Shadow DOM isolated CSS styles
-│   │   ├── toolbar.ts           # Floating draggable toolbar & anchor pill
+│   │   ├── toolbar.ts           # Floating draggable toolbar with left-edge dock
 │   │   └── text-editor.ts       # In-page text annotation overlay
 │   └── icons/
 │       └── svg-icons.ts         # Pure inline SVG icons (zero asset delay)

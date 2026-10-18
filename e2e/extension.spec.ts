@@ -53,10 +53,10 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     await page.goto(`http://localhost:${serverPort}/portal`);
     await page.waitForLoadState('domcontentloaded');
 
-    const pill = page.locator('#page-anchor-host .pa-anchor-pill');
-    await expect(pill).toBeVisible({ timeout: 10000 });
+    const dockTab = page.locator('#page-anchor-host .pa-dock-tab');
+    await expect(dockTab).toBeVisible({ timeout: 10000 });
 
-    await pill.click();
+    await dockTab.click();
 
     const toolbar = page.locator('#page-anchor-host .pa-toolbar');
     await expect(toolbar).toBeVisible();
@@ -70,7 +70,7 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     await page.mouse.move(380, 320, { steps: 5 });
     await page.mouse.up();
 
-    const badge = page.locator('#page-anchor-host .pa-pill-badge');
+    const badge = page.locator('#page-anchor-host .pa-dock-badge');
     await expect(badge).toHaveText('1');
 
     const penTool = page.locator('#page-anchor-host [data-tool="pen"]');

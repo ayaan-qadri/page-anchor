@@ -38,7 +38,7 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   {
     id: 'action-toggle-toolbar',
     name: 'Toggle Toolbar Visibility',
-    description: 'Collapse or expand the floating toolbar',
+    description: 'Dock the toolbar to the left edge or restore it',
     defaultKey: DEFAULT_SHORTCUTS['action-toggle-toolbar'],
   },
   {

@@ -256,21 +256,10 @@ export class PopupSettingsPanel {
     box.appendChild(
       this.checkField(
         'Keep toolbar open by default',
-        'Otherwise the drawing toolbar starts minimized',
+        'Otherwise the drawing toolbar starts docked to the left edge',
         !!this.settings.isToolbarOpen,
         (checked) => {
           this.settings.isToolbarOpen = checked;
-          this.persist();
-        },
-      ),
-    );
-    box.appendChild(
-      this.checkField(
-        'Show floating anchor pill',
-        'Quick access pill in the corner of each page',
-        this.settings.showFloatingPill !== false,
-        (checked) => {
-          this.settings.showFloatingPill = checked;
           this.persist();
         },
       ),

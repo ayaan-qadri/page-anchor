@@ -92,27 +92,128 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     expect(mockCallbacks.onToggleActive).toHaveBeenCalled();
   });
 
-  it('toggles drawing mode via anchor pill button click', () => {
-    const pill = container.querySelector('.pa-anchor-pill') as HTMLButtonElement;
+  it('opens the toolbar from the left-edge dock tab', () => {
+    const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
     toolbar.setDrawingMode(false);
+    expect(engine.getActiveMode()).toBe(false);
+    expect(wrapper.classList.contains('docked')).toBe(true);
 
-    pill.click();
+    const dockTab = container.querySelector('.pa-dock-tab') as HTMLButtonElement;
+    expect(dockTab).not.toBeNull();
+    dockTab.click();
+
+    expect(engine.getActiveMode()).toBe(true);
+    expect(wrapper.classList.contains('docked')).toBe(false);
+  });
+
+  it('docks to the left edge and restores the position it was docked from', () => {
+    const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
+    // Pretend the toolbar had been dragged to a known spot.
+    (toolbar as any).settings.toolbarPosition = { x: 320, y: 180 };
+    wrapper.style.transform = 'none';
+    wrapper.style.left = '320px';
+    wrapper.style.top = '180px';
+
+    toolbar.setDrawingMode(false, false);
+    expect(wrapper.classList.contains('docked')).toBe(true);
+    expect(wrapper.style.left).toBe('0px');
+
+    toolbar.setDrawingMode(true, false);
+    expect(wrapper.classList.contains('docked')).toBe(false);
+    expect(wrapper.style.left).toBe('320px');
+    expect(wrapper.style.top).toBe('180px');
+  });
+
+  it('docks the toolbar to the left edge via the dock button', () => {
+    const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
+    expect(wrapper.classList.contains('docked')).toBe(false);
+
+    const dockBtn = container.querySelector('[data-action="dock"]') as HTMLButtonElement;
+    expect(dockBtn).not.toBeNull();
+    dockBtn.click();
+
+    expect(wrapper.classList.contains('docked')).toBe(true);
+    expect(wrapper.style.left).toBe('0px');
+    expect(engine.getActiveMode()).toBe(false);
+
+    const dockTab = container.querySelector('.pa-dock-tab') as HTMLButtonElement;
+    dockTab.click();
+    expect(wrapper.classList.contains('docked')).toBe(false);
     expect(engine.getActiveMode()).toBe(true);
   });
 
-  it('collapses/expands the toolbar without leaving drawing mode', () => {
+  it('removes the toolbar and its dock via the close button', () => {
     const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
     toolbar.setDrawingMode(true, false);
-    expect(engine.getActiveMode()).toBe(true);
     expect(wrapper.style.display).toBe('block');
 
-    toolbar.toggleToolbarVisibility();
+    const closeBtn = container.querySelector('[data-action="hide"]') as HTMLButtonElement;
+    closeBtn.click();
+
     expect(wrapper.style.display).toBe('none');
-    // Still in drawing mode — only the bar is hidden
-    expect(engine.getActiveMode()).toBe(true);
+    expect(wrapper.classList.contains('docked')).toBe(false);
+    expect(engine.getActiveMode()).toBe(false);
+  });
 
-    toolbar.toggleToolbarVisibility();
+  it('removes the dock via the dock close button and can reopen afterwards', () => {
+    const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
+    toolbar.setDrawingMode(false, false);
+    expect(wrapper.classList.contains('docked')).toBe(true);
+
+    const dockClose = container.querySelector('.pa-dock-close') as HTMLButtonElement;
+    dockClose.click();
+    expect(wrapper.style.display).toBe('none');
+    expect(wrapper.classList.contains('docked')).toBe(false);
+
+    toolbar.setDrawingMode(true, false);
     expect(wrapper.style.display).toBe('block');
+  });
+
+  it('persists the hidden state so the dock does not return on reload', () => {
+    const closeBtn = container.querySelector('[data-action="hide"]') as HTMLButtonElement;
+    closeBtn.click();
+    expect((toolbar as any).settings.isToolbarHidden).toBe(true);
+    expect((toolbar as any).settings.isToolbarOpen).toBe(false);
+
+    toolbar.setDrawingMode(true, false);
+    expect((toolbar as any).settings.isToolbarHidden).toBe(false);
+  });
+
+  it('starts hidden (no dock) when the saved settings say it was hidden', () => {
+    const other = document.createElement('div');
+    document.body.appendChild(other);
+    const otherEngine = new CanvasEngine(other);
+    const otherToolbar = new FloatingToolbar(
+      other,
+      otherEngine,
+      new HistoryManager([]),
+      new TextEditorOverlay(other),
+      { ...DEFAULT_SETTINGS, isToolbarHidden: true }
+    );
+
+    const wrapper = other.querySelector('.pa-toolbar-wrapper') as HTMLElement;
+    expect(wrapper.style.display).toBe('none');
+    expect(wrapper.classList.contains('docked')).toBe(false);
+
+    otherToolbar.setDrawingMode(true, false);
+    expect(wrapper.style.display).toBe('block');
+
+    otherEngine.destroy();
+    other.remove();
+  });
+
+  it('reopens the docked toolbar from the dock tab after hiding and restoring', () => {
+    const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
+    toolbar.setDrawingMode(false, false);
+    expect(wrapper.classList.contains('docked')).toBe(true);
+
+    const closeBtn = container.querySelector('[data-action="hide"]') as HTMLButtonElement;
+    closeBtn.click();
+    expect(wrapper.style.display).toBe('none');
+
+    toolbar.setDrawingMode(true, false);
+    expect(wrapper.style.display).toBe('block');
+    expect(wrapper.classList.contains('docked')).toBe(false);
     expect(engine.getActiveMode()).toBe(true);
   });
 

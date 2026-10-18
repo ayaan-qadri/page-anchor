@@ -22,7 +22,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   strokeSimplification: true,
   toolbarPosition: null,
   isToolbarOpen: false,
-  showFloatingPill: true,
+  isToolbarHidden: false,
   areAnnotationsVisible: true,
   domAnchoringEnabled: true,
   orphanedAnchorMode: 'hide',

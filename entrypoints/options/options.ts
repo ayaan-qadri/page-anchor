@@ -284,7 +284,6 @@ function setupPersistenceForm() {
   const matchMode = document.getElementById('pref-url-match-mode') as HTMLSelectElement;
   const strokeSimplification = document.getElementById('pref-stroke-simplification') as HTMLInputElement;
   const toolbarOpenMode = document.getElementById('pref-toolbar-open') as HTMLInputElement;
-  const showPillMode = document.getElementById('pref-show-pill') as HTMLInputElement;
   const domAnchorMode = document.getElementById('pref-dom-anchoring') as HTMLInputElement;
   const orphanMode = document.getElementById('pref-orphan-mode') as HTMLSelectElement;
 
@@ -300,10 +299,6 @@ function setupPersistenceForm() {
 
   toolbarOpenMode.addEventListener('change', () => {
     currentSettings.isToolbarOpen = toolbarOpenMode.checked;
-  });
-
-  showPillMode.addEventListener('change', () => {
-    currentSettings.showFloatingPill = showPillMode.checked;
   });
 
   domAnchorMode?.addEventListener('change', () => {
@@ -345,14 +340,12 @@ function syncPersistenceFormValues(): void {
   const matchMode = document.getElementById('pref-url-match-mode') as HTMLSelectElement;
   const strokeSimplification = document.getElementById('pref-stroke-simplification') as HTMLInputElement;
   const toolbarOpenMode = document.getElementById('pref-toolbar-open') as HTMLInputElement;
-  const showPillMode = document.getElementById('pref-show-pill') as HTMLInputElement;
   const domAnchorMode = document.getElementById('pref-dom-anchoring') as HTMLInputElement;
   const orphanMode = document.getElementById('pref-orphan-mode') as HTMLSelectElement;
 
   matchMode.value = currentSettings.urlMatchMode;
   strokeSimplification.checked = currentSettings.strokeSimplification;
   toolbarOpenMode.checked = !!currentSettings.isToolbarOpen;
-  showPillMode.checked = currentSettings.showFloatingPill !== false;
   if (domAnchorMode) domAnchorMode.checked = currentSettings.domAnchoringEnabled ?? true;
   if (orphanMode) orphanMode.value = currentSettings.orphanedAnchorMode || 'hide';
 }

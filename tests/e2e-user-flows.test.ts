@@ -71,16 +71,16 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
     const shadow = host.shadowRoot!;
     expect(shadow).not.toBeNull();
 
-    const pill = shadow.querySelector('.pa-anchor-pill') as HTMLButtonElement;
-    expect(pill).not.toBeNull();
-    pill.click();
+    const dockTab = shadow.querySelector('.pa-dock-tab') as HTMLButtonElement;
+    expect(dockTab).not.toBeNull();
+    dockTab.click();
     await new Promise((r) => setTimeout(r, 20));
 
     const toolbar = shadow.querySelector('.pa-toolbar') as HTMLElement;
     expect(toolbar).not.toBeNull();
     const toolbarWrapper = shadow.querySelector('.pa-toolbar-wrapper') as HTMLElement;
-    expect(toolbarWrapper.style.display).toBe('block');
-    const badge = shadow.querySelector('.pa-pill-badge') as HTMLElement;
+    expect(toolbarWrapper.classList.contains('docked')).toBe(false);
+    const badge = shadow.querySelector('.pa-dock-badge') as HTMLElement;
     expect(badge).not.toBeNull();
 
     const activeCanvas = shadow.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
@@ -203,9 +203,9 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
 
     const host = document.getElementById('page-anchor-host') as HTMLElement;
     const shadow = host.shadowRoot!;
-    const pill = shadow?.querySelector('.pa-anchor-pill') as HTMLButtonElement;
+    const dockTab = shadow?.querySelector('.pa-dock-tab') as HTMLButtonElement;
 
-    pill.click();
+    dockTab.click();
     await new Promise((r) => setTimeout(r, 20));
 
     const toolbar = shadow.querySelector('.pa-toolbar') as HTMLElement;
@@ -225,7 +225,7 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
       new PointerEvent('pointerup', { clientX: 80, clientY: 80, pointerId: 1 })
     );
 
-    const badge = shadow.querySelector('.pa-pill-badge') as HTMLElement;
+    const badge = shadow.querySelector('.pa-dock-badge') as HTMLElement;
     expect(badge).not.toBeNull();
     expect(badge.textContent).toBe('1');
   });

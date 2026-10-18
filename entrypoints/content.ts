@@ -289,9 +289,6 @@ export default defineContentScript({
           shortcutManager.setShortcuts(settings.shortcuts);
           engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
           engine.setStrokeSimplification(settings.strokeSimplification);
-          if (settings.isToolbarOpen) {
-            toolbar.setDrawingMode(true, false);
-          }
         }
       } catch {}
 

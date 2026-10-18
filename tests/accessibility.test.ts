@@ -50,8 +50,6 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       expect(optionsHtml).toContain('id="pref-url-match-mode"');
       expect(optionsHtml).toContain('for="pref-toolbar-open"');
       expect(optionsHtml).toContain('id="pref-toolbar-open"');
-      expect(optionsHtml).toContain('for="pref-show-pill"');
-      expect(optionsHtml).toContain('id="pref-show-pill"');
       expect(optionsHtml).toContain('for="pref-stroke-simplification"');
       expect(optionsHtml).toContain('id="pref-stroke-simplification"');
     });
@@ -133,14 +131,29 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       expect(bar?.getAttribute('aria-label')).toBe('Drawing tools');
     });
 
-    it('should render the anchor pill as a native button with aria-expanded', () => {
-      const pill = container.querySelector('.pa-anchor-pill') as HTMLButtonElement;
-      expect(pill.tagName).toBe('BUTTON');
-      expect(pill.getAttribute('aria-label')).toBe('Toggle Page Anchor toolbar');
-      expect(pill.getAttribute('aria-expanded')).toBe('false');
+    it('should render the left-edge dock tab as a native button with aria-expanded', () => {
+      const dockTab = container.querySelector('.pa-dock-tab') as HTMLButtonElement;
+      expect(dockTab.tagName).toBe('BUTTON');
+      expect(dockTab.getAttribute('aria-label')).toBe('Open drawing toolbar');
+      expect(dockTab.getAttribute('aria-expanded')).toBe('false');
 
       toolbar.setDrawingMode(true, false);
-      expect(pill.getAttribute('aria-expanded')).toBe('true');
+      expect(dockTab.getAttribute('aria-expanded')).toBe('true');
+      expect(dockTab.getAttribute('aria-label')).toBe('Collapse drawing toolbar');
+    });
+
+    it('should expose labelled dock and hide controls on the toolbar and dock', () => {
+      const dockBtn = container.querySelector('[data-action="dock"]') as HTMLButtonElement;
+      expect(dockBtn.tagName).toBe('BUTTON');
+      expect(dockBtn.getAttribute('aria-label')).toContain('Dock to Left Edge');
+
+      const hideBtn = container.querySelector('[data-action="hide"]') as HTMLButtonElement;
+      expect(hideBtn.tagName).toBe('BUTTON');
+      expect(hideBtn.getAttribute('aria-label')).toContain('Hide Toolbar');
+
+      const dockClose = container.querySelector('.pa-dock-close') as HTMLButtonElement;
+      expect(dockClose.tagName).toBe('BUTTON');
+      expect(dockClose.getAttribute('aria-label')).toBe('Hide toolbar');
     });
 
     it('should render tool buttons with aria-pressed state matching active tool', () => {
@@ -180,7 +193,7 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       const handle = container.querySelector('.pa-drag-handle') as HTMLElement;
       expect(handle.getAttribute('role')).toBe('button');
       expect(handle.getAttribute('tabindex')).toBe('0');
-      expect(handle.getAttribute('aria-label')).toContain('Drag or use arrow keys');
+      expect(handle.getAttribute('aria-label')).toContain('arrow keys');
 
       const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
       wrapper.style.left = '100px';

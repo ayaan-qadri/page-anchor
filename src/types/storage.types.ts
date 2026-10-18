@@ -34,7 +34,7 @@ export interface ExtensionSettings {
   strokeSimplification: boolean;
   toolbarPosition: { x: number; y: number } | null;
   isToolbarOpen: boolean;
-  showFloatingPill: boolean;
+  isToolbarHidden: boolean;
   areAnnotationsVisible: boolean;
   domAnchoringEnabled: boolean;
   orphanedAnchorMode: OrphanedAnchorMode;
