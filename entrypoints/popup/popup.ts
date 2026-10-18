@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 import { loadSettings } from '../../src/core/storage';
 import { formatShortcutForDisplay } from '../../src/core/shortcuts';
+import { injectContentScript } from '../../src/core/inject';
 import { PopupSettingsPanel } from './popup-settings';
 
 export async function initPopup() {
@@ -81,37 +82,17 @@ export async function initPopup() {
   const tabId = tab.id;
   pageTitleEl.textContent = tab.title || tab.url || 'Webpage';
 
-  async function injectContentScript(): Promise<boolean> {
-    try {
-      if (ext.scripting?.executeScript) {
-        await ext.scripting.executeScript({
-          target: { tabId },
-          files: ['content-scripts/content.js'],
-        });
-        return true;
-      } else if (ext.tabs?.executeScript) {
-        await new Promise<void>((resolve, reject) => {
-          ext.tabs.executeScript(tabId, { file: 'content-scripts/content.js' }, () => {
-            if (ext.runtime?.lastError) reject(ext.runtime.lastError);
-            else resolve();
-          });
-        });
-        return true;
-      }
-    } catch {
-      return false;
-    }
-    return false;
+  async function injectIntoPage(): Promise<boolean> {
+    return injectContentScript(ext, tabId);
   }
 
-  try {
-    const res = await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_GET_STATUS' }) as any;
+  try {    const res = await ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_GET_STATUS' }) as any;
     if (res) {
       toggleSwitch.checked = !!res.active;
       countEl.textContent = `${res.count || 0} annotation${res.count === 1 ? '' : 's'} on page`;
     }
   } catch {
-    const injected = await injectContentScript();
+    const injected = await injectIntoPage();
     if (injected) {
       setTimeout(async () => {
         try {
@@ -138,7 +119,7 @@ export async function initPopup() {
       }
       announce(res?.active ? 'Drawing toolbar enabled' : 'Drawing toolbar disabled');
     } catch {
-      const injected = await injectContentScript();
+      const injected = await injectIntoPage();
       if (injected) {
         setTimeout(async () => {
           try {

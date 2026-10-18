@@ -4,9 +4,8 @@ import { SettingsModalCallbacks } from '../types/ui.types';
 import {
   SHORTCUT_DEFINITIONS,
   formatShortcutForDisplay,
-  normalizeKeyEvent,
-  getBrowserShortcutConflict,
 } from '../core/shortcuts';
+import { ShortcutRecorder } from './shortcut-recorder';
 import { DEFAULT_SETTINGS, saveSettings } from '../core/storage';
 import { ICONS } from '../icons/svg-icons';
 
@@ -18,7 +17,7 @@ export class SettingsModal {
   private settings: ExtensionSettings;
   private callbacks: SettingsModalCallbacks;
   private recordingAction: ShortcutAction | null = null;
-  private recordingKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private recorder = new ShortcutRecorder();
   private previousActiveElement: HTMLElement | null = null;
   private modalKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
 
@@ -330,50 +329,32 @@ export class SettingsModal {
   }
 
   private startRecording(actionId: ShortcutAction, btn: HTMLButtonElement): void {
-    if (this.recordingKeyHandler) {
-      window.removeEventListener('keydown', this.recordingKeyHandler, true);
-    }
-
     const def = SHORTCUT_DEFINITIONS.find((d) => d.id === actionId);
     const actionName = def ? def.name : actionId;
+    const idleLabel = (combo: string) =>
+      `Rebind shortcut for ${actionName}. Current shortcut is ${formatShortcutForDisplay(combo)}`;
 
     this.recordingAction = actionId;
     btn.classList.add('recording');
     btn.textContent = 'Press keys...';
     btn.setAttribute('aria-label', `Recording shortcut for ${actionName}. Press keys, or press Escape to cancel.`);
 
-    this.recordingKeyHandler = (e: KeyboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+    this.recorder.start((result) => {
+      this.recordingAction = null;
+      btn.classList.remove('recording');
 
-      if (e.key === 'Escape') {
+      if (result.type === 'cancel') {
         const prevKey = this.settings.shortcuts[actionId] || (def ? def.defaultKey : '');
         btn.textContent = formatShortcutForDisplay(prevKey);
-        btn.classList.remove('recording');
-        btn.setAttribute(
-          'aria-label',
-          `Rebind shortcut for ${actionName}. Current shortcut is ${formatShortcutForDisplay(prevKey)}`
-        );
-        if (this.recordingKeyHandler) {
-          window.removeEventListener('keydown', this.recordingKeyHandler, true);
-          this.recordingKeyHandler = null;
-        }
-        this.recordingAction = null;
+        btn.setAttribute('aria-label', idleLabel(prevKey));
         return;
       }
 
-      const combo = normalizeKeyEvent(e);
-      if (!combo) return;
-
+      const { combo, conflict } = result;
       this.settings.shortcuts[actionId] = combo;
       btn.textContent = formatShortcutForDisplay(combo);
-      btn.classList.remove('recording');
-      btn.setAttribute(
-        'aria-label',
-        `Rebind shortcut for ${actionName}. Current shortcut is ${formatShortcutForDisplay(combo)}`
-      );
+      btn.setAttribute('aria-label', idleLabel(combo));
 
-      const conflict = getBrowserShortcutConflict(combo);
       if (conflict) {
         btn.style.borderColor = 'var(--pa-warning)';
         btn.style.color = 'var(--pa-warning-soft)';
@@ -383,22 +364,12 @@ export class SettingsModal {
         btn.style.color = '';
         btn.title = 'Click to record new shortcut';
       }
-
-      if (this.recordingKeyHandler) {
-        window.removeEventListener('keydown', this.recordingKeyHandler, true);
-        this.recordingKeyHandler = null;
-      }
-      this.recordingAction = null;
-    };
-
-    window.addEventListener('keydown', this.recordingKeyHandler, true);
+    });
   }
 
   public close(): void {
-    if (this.recordingKeyHandler) {
-      window.removeEventListener('keydown', this.recordingKeyHandler, true);
-      this.recordingKeyHandler = null;
-    }
+    this.recorder.stop();
+    this.recordingAction = null;
     if (this.modalKeydownHandler) {
       window.removeEventListener('keydown', this.modalKeydownHandler, true);
       this.modalKeydownHandler = null;

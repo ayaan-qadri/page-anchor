@@ -247,13 +247,6 @@ export class CanvasEngine {
     this.renderBase();
   }
 
-  public removeElement(id: string): void {
-    this.elements = this.elements.filter((el) => el.id !== id);
-    this.selectedElements = this.selectedElements.filter((el) => el.id !== id);
-    this.callbacks.onElementsChange?.(this.elements);
-    this.renderBase();
-  }
-
   public clear(): void {
     this.elements = [];
     this.selectedElements = [];
@@ -285,16 +278,6 @@ export class CanvasEngine {
 
   public getSelectedElements(): AnchorElement[] {
     return [...this.selectedElements];
-  }
-
-  public getSelectedElement(): AnchorElement | null {
-    return this.selectedElements[0] || null;
-  }
-
-  public setSelectedElement(el: AnchorElement | null): void {
-    this.selectedElements = el ? [el] : [];
-    this.callbacks.onSelectionChange?.(el, this.selectedElements);
-    this.renderBase();
   }
 
   /**
@@ -448,7 +431,7 @@ export class CanvasEngine {
     }
 
     if (this.activeTool === 'eraser') {
-      this.eraseAtPoint(docPt);
+      this.eraseAtPoints([docPt]);
       return;
     }
 
@@ -491,9 +474,7 @@ export class CanvasEngine {
     const events = (coalesced && coalesced.length > 0 ? coalesced : [e]) as PointerEvent[];
 
     if (this.activeTool === 'eraser') {
-      for (const ev of events) {
-        this.eraseAtPoint(this.clientToDoc(ev.clientX, ev.clientY));
-      }
+      this.eraseAtPoints(events.map((ev) => this.clientToDoc(ev.clientX, ev.clientY)));
       return;
     }
 
@@ -649,23 +630,30 @@ export class CanvasEngine {
     }
   }
 
-  private eraseAtPoint(pt: Point): void {
+  /**
+   * Erases everything near any of the given points in one pass. Batching the
+   * coalesced pointer events avoids one history snapshot and canvas repaint
+   * per event while dragging the eraser.
+   */
+  private eraseAtPoints(points: Point[]): void {
     const prevCount = this.elements.length;
-    this.elements = this.elements.filter((el) => {
-      let testPt = pt;
-      if (this.isDomAnchoringEnabled && el.anchor) {
-        const eff = this.getElementEffectiveBBox(el);
-        if (eff.isOrphaned && this.orphanedAnchorMode === 'hide') {
-          return true;
-        }
-        testPt = { x: pt.x - eff.deltaX, y: pt.y - eff.deltaY };
-      }
-      return !isPointNearElement(testPt, el, 12);
-    });
+    this.elements = this.elements.filter((el) => !points.some((pt) => this.isPointErasing(el, pt)));
     if (this.elements.length !== prevCount) {
       this.callbacks.onElementsChange?.(this.elements);
       this.renderBase();
     }
+  }
+
+  private isPointErasing(el: AnchorElement, pt: Point): boolean {
+    let testPt = pt;
+    if (this.isDomAnchoringEnabled && el.anchor) {
+      const eff = this.getElementEffectiveBBox(el);
+      if (eff.isOrphaned && this.orphanedAnchorMode === 'hide') {
+        return false;
+      }
+      testPt = { x: pt.x - eff.deltaX, y: pt.y - eff.deltaY };
+    }
+    return isPointNearElement(testPt, el, 12);
   }
 
   private hitTest(pt: Point): AnchorElement | null {
@@ -708,10 +696,6 @@ export class CanvasEngine {
       el.endY += dy;
     }
     el.bbox = computeBoundingBox(el);
-    if (el.anchor) {
-      el.anchor.initialRect.left += dx;
-      el.anchor.initialRect.top += dy;
-    }
   }
 
   private clearActiveCanvas(): void {

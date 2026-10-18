@@ -388,6 +388,54 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       engine.destroy();
     });
 
+    it('drags an anchored element without the anchor cancelling the move', () => {
+      const engine = new CanvasEngine(container);
+      engine.setDomAnchoringEnabled(true);
+
+      const target = document.createElement('div');
+      target.id = 'drag-anchor-target';
+      target.getBoundingClientRect = () => ({
+        left: 100,
+        top: 200,
+        width: 400,
+        height: 50,
+        right: 500,
+        bottom: 250,
+        x: 100,
+        y: 200,
+        toJSON: () => {},
+      });
+      testDomContainer.appendChild(target);
+
+      const element: StrokeElement = {
+        id: 'stroke_drag',
+        type: 'pen',
+        points: [{ x: 110, y: 210 }],
+        strokeColor: '#ef4444',
+        strokeWidth: 4,
+        opacity: 1,
+        createdAt: 1000,
+        bbox: { minX: 110, minY: 210, maxX: 114, maxY: 214 },
+        anchor: createDOMAnchor(target),
+      };
+      engine.addElement(element);
+
+      (engine as any).moveElement(element, 5, 5);
+      const first = engine.getElementEffectiveBBox(element).bbox;
+      (engine as any).moveElement(element, 30, 40);
+      const second = engine.getElementEffectiveBBox(element).bbox;
+
+      // The anchor's original DOM rect must not move with the element, otherwise
+      // the resolved delta cancels the drag and the element appears frozen.
+      expect(element.anchor!.initialRect.left).toBe(100);
+      expect(element.anchor!.initialRect.top).toBe(200);
+      expect(second.minX - first.minX).toBe(30);
+      expect(second.minY - first.minY).toBe(40);
+      expect(engine.getElementEffectiveBBox(element).deltaX).toBe(0);
+
+      engine.destroy();
+    });
+
     it('handles orphaned mode settings (hide vs dimmed)', () => {
       const engine = new CanvasEngine(container);
 

@@ -87,6 +87,31 @@ describe('Shortcuts Engine: Keyboard Normalization & Dispatching', () => {
     manager.detach();
   });
 
+  it('does NOT trigger shortcuts for keys typed into an input inside the Shadow DOM', () => {
+    const manager = new ShortcutManager({
+      'tool-pen': 'p',
+    });
+
+    const mockCallback = vi.fn();
+    manager.addListener(mockCallback);
+    manager.attach();
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: 'open' });
+    const input = document.createElement('textarea');
+    shadow.appendChild(input);
+
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'p', bubbles: true, composed: true, cancelable: true })
+    );
+
+    expect(mockCallback).not.toHaveBeenCalled();
+
+    host.remove();
+    manager.detach();
+  });
+
   it('correctly identifies browser-reserved shortcuts across Chrome, Firefox, Safari, and Edge', async () => {
     const { isReservedBrowserShortcut, getBrowserShortcutConflict } = await import('../src/core/shortcuts');
     

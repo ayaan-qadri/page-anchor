@@ -201,5 +201,45 @@ describe('Storage Engine: Persistence with Mocked Chrome Storage', () => {
       expect(await importDataFromJson(oversized)).toBe(false);
       expect(mockStore).toEqual({});
     });
+
+    it('repairs or drops malformed elements instead of importing crash-prone data', async () => {
+      const backup = JSON.stringify({
+        'page_anchor_data:https://example.com/broken': {
+          url: 'https://example.com/broken',
+          normalizedUrl: 'https://example.com/broken',
+          pageTitle: 'Broken',
+          updatedAt: 1,
+          elements: [
+            { id: 'bad-text', type: 'text', x: 1, y: 2 },
+            {
+              id: 'bad-anchor',
+              type: 'pen',
+              points: [{ x: 1, y: 2 }],
+              anchor: { selector: 'x' },
+            },
+            { id: 'bad-type', type: 'lasso', x: 1 },
+            {
+              id: 'good',
+              type: 'pen',
+              points: [{ x: 1, y: 2 }, { x: 3, y: 4 }],
+              strokeColor: '#000',
+              strokeWidth: 2,
+              opacity: 1,
+              createdAt: 1,
+              bbox: { minX: 1, minY: 2, maxX: 3, maxY: 4 },
+            },
+          ],
+        },
+      });
+
+      expect(await importDataFromJson(backup)).toBe(true);
+
+      const loaded = await loadPageData('https://example.com/broken');
+      const ids = loaded!.elements.map((e) => e.id);
+      expect(ids).not.toContain('bad-text');
+      expect(ids).not.toContain('bad-type');
+      expect(ids).toContain('good');
+      expect(loaded!.elements.find((e) => e.id === 'bad-anchor')!.anchor).toBeUndefined();
+    });
   });
 });

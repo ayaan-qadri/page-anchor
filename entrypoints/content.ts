@@ -1,9 +1,9 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { CanvasEngine } from '../src/core/engine';
 import { HistoryManager } from '../src/core/history';
-import { ShortcutManager } from '../src/core/shortcuts';
+import { ShortcutManager, isEditableTarget } from '../src/core/shortcuts';
 import { clearPageData, loadPageData, loadSettings, savePageData, DEFAULT_SETTINGS } from '../src/core/storage';
-import { AnchorElement, ExtensionSettings } from '../src/core/types';
+import { AnchorElement, ExtensionSettings } from '../src/types';
 import { SHADOW_STYLES } from '../src/ui/styles';
 import { TextEditorOverlay } from '../src/ui/text-editor';
 import { FloatingToolbar } from '../src/ui/toolbar';
@@ -22,10 +22,11 @@ export default defineContentScript({
   runAt: 'document_end',
   main() {
     const existing = document.getElementById('page-anchor-host');
-    if (existing && existing.shadowRoot) return;
+    if (existing && existing.dataset.paMounted === 'true') return;
 
     const host = document.createElement('div');
     host.id = 'page-anchor-host';
+    host.dataset.paMounted = 'true';
     host.style.position = 'absolute';
     host.style.top = '0';
     host.style.left = '0';
@@ -34,6 +35,9 @@ export default defineContentScript({
     host.style.overflow = 'visible';
     host.style.zIndex = '2147483647';
 
+    // Open so browser-automation (Playwright's selector engine) and in-page
+    // debugging can reach the UI; closing it would block both, and the drawings
+    // themselves are already readable from the canvas by any page script.
     const shadowRoot = host.attachShadow({ mode: 'open' });
 
     const styleSheet = document.createElement('style');
@@ -73,9 +77,12 @@ export default defineContentScript({
 
     const triggerSave = (elements: AnchorElement[]) => {
       if (saveTimeout) clearTimeout(saveTimeout);
+      // Capture the page this change belongs to now: a SPA navigation during the
+      // debounce window must not save the old page's drawings under the new URL.
+      const url = currentLoadedUrl;
       saveTimeout = window.setTimeout(async () => {
         try {
-          await savePageData(currentLoadedUrl, elements, document.title, engine.getDomAnchoringEnabled());
+          await savePageData(url, elements, document.title, engine.getDomAnchoringEnabled());
           toolbar?.updateBadge();
         } catch {}
       }, 250);
@@ -153,31 +160,40 @@ export default defineContentScript({
     window.addEventListener('keydown', (e) => {
       if (!engine.getActiveMode()) return;
       if (e.key !== 'Backspace') return;
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+      if (isEditableTarget(e)) return;
       engine.deleteSelected();
     });
+
+    // Bumped on every navigation so a load that resolves after a newer
+    // navigation started can be discarded instead of overwriting fresh state.
+    let navToken = 0;
 
     const handleUrlChange = async () => {
       const newUrl = window.location.href;
       if (newUrl === currentLoadedUrl) return;
 
+      const token = ++navToken;
+      const prevUrl = currentLoadedUrl;
+
       ensureHostAttached();
 
-      if (engine && currentLoadedUrl) {
+      if (engine && prevUrl) {
         try {
-          await savePageData(currentLoadedUrl, engine.getElements(), document.title, engine.getDomAnchoringEnabled());
+          await savePageData(prevUrl, engine.getElements(), document.title, engine.getDomAnchoringEnabled());
         } catch {}
       }
 
-      currentLoadedUrl = newUrl;
+      if (token !== navToken) return;
 
       try {
-        const saved = await loadPageData(currentLoadedUrl);
+        const saved = await loadPageData(newUrl);
+        if (token !== navToken) return;
+
         const newElements = saved?.elements || [];
         const isAnchoring = saved?.domAnchoringEnabled !== undefined
           ? saved.domAnchoringEnabled
           : (settings.domAnchoringEnabled ?? true);
+        currentLoadedUrl = newUrl;
         engine.setDomAnchoringEnabled(isAnchoring);
         toolbar.updateDomAnchoringUI(isAnchoring);
 

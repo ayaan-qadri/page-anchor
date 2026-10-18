@@ -1,10 +1,11 @@
-import { AnchorElement } from '../types/engine.types';
+import { AnchorElement, DOMAnchor } from '../types/engine.types';
 import {
   ExtensionSettings,
   PageAnchorData,
   PageMetadataSummary,
   UrlMatchMode,
 } from '../types/storage.types';
+import { computeBoundingBox } from './geometry';
 import { DEFAULT_SHORTCUTS } from './shortcuts';
 
 export type { ExtensionSettings, PageAnchorData, PageMetadataSummary, UrlMatchMode };
@@ -81,9 +82,10 @@ const STORAGE_NAMESPACE = 'page_anchor_';
 
 const INDEX_KEY = `${STORAGE_NAMESPACE}index`;
 const SETTINGS_KEY = `${STORAGE_NAMESPACE}settings`;
+const DATA_KEY_PREFIX = `${STORAGE_NAMESPACE}data:`;
 
 function getStorageKey(normalizedUrl: string): string {
-  return `${STORAGE_NAMESPACE}data:${normalizedUrl}`;
+  return `${DATA_KEY_PREFIX}${normalizedUrl}`;
 }
 
 /**
@@ -224,7 +226,7 @@ export async function savePageData(
   const key = getStorageKey(normalized);
 
   if (elements.length === 0) {
-    await clearPageData(rawUrl);
+    await clearPageData(rawUrl, normalized);
     return;
   }
 
@@ -250,9 +252,12 @@ export async function savePageData(
   });
 }
 
-export async function clearPageData(rawUrl: string): Promise<void> {
-  const settings = await loadSettings();
-  const normalized = normalizeUrl(rawUrl, settings.urlMatchMode);
+export async function clearPageData(rawUrl: string, knownNormalizedUrl?: string): Promise<void> {
+  let normalized = knownNormalizedUrl;
+  if (!normalized) {
+    const settings = await loadSettings();
+    normalized = normalizeUrl(rawUrl, settings.urlMatchMode);
+  }
   const key = getStorageKey(normalized);
 
   await storageRemove(key);
@@ -300,6 +305,140 @@ export async function exportAllDataAsJson(): Promise<string> {
   return JSON.stringify(owned, null, 2);
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function num(value: unknown, fallback = 0): number {
+  return isFiniteNumber(value) ? value : fallback;
+}
+
+function isPoint(value: unknown): boolean {
+  return isPlainObject(value) && isFiniteNumber(value.x) && isFiniteNumber(value.y);
+}
+
+function sanitizeAnchor(raw: unknown): DOMAnchor | undefined {
+  if (!isPlainObject(raw) || typeof raw.selector !== 'string' || !isPlainObject(raw.initialRect)) {
+    return undefined;
+  }
+  const rect = raw.initialRect;
+  return {
+    selector: raw.selector,
+    fallbackSelectors: Array.isArray(raw.fallbackSelectors)
+      ? raw.fallbackSelectors.filter((s): s is string => typeof s === 'string')
+      : undefined,
+    textQuote:
+      isPlainObject(raw.textQuote) && typeof raw.textQuote.exact === 'string'
+        ? { exact: raw.textQuote.exact }
+        : undefined,
+    initialRect: {
+      left: num(rect.left),
+      top: num(rect.top),
+      width: num(rect.width),
+      height: num(rect.height),
+    },
+  };
+}
+
+/** Anything that would crash the canvas renderer (bad points/text/anchor) is dropped or repaired. */
+function sanitizeElement(raw: unknown): AnchorElement | null {
+  if (!isPlainObject(raw) || typeof raw.id !== 'string') return null;
+
+  const base = {
+    id: raw.id,
+    strokeColor: typeof raw.strokeColor === 'string' ? raw.strokeColor : '#ef4444',
+    strokeWidth: num(raw.strokeWidth, 2),
+    opacity: num(raw.opacity, 1),
+    createdAt: num(raw.createdAt),
+    anchor: sanitizeAnchor(raw.anchor),
+  };
+
+  const type = raw.type;
+  if (type === 'pen' || type === 'highlighter') {
+    const element = {
+      ...base,
+      type,
+      points: Array.isArray(raw.points) ? raw.points.filter(isPoint) : [],
+      bbox: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
+    } as AnchorElement;
+    element.bbox = computeBoundingBox(element);
+    return element;
+  }
+  if (type === 'text') {
+    if (typeof raw.text !== 'string') return null;
+    const element = {
+      ...base,
+      type,
+      x: num(raw.x),
+      y: num(raw.y),
+      text: raw.text,
+      fontSize: num(raw.fontSize, 18),
+      fontColor: typeof raw.fontColor === 'string' ? raw.fontColor : '#ffffff',
+      bbox: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
+    } as AnchorElement;
+    element.bbox = computeBoundingBox(element);
+    return element;
+  }
+  if (
+    type === 'rect' ||
+    type === 'circle' ||
+    type === 'line' ||
+    type === 'arrow' ||
+    type === 'double-arrow'
+  ) {
+    const element = {
+      ...base,
+      type,
+      startX: num(raw.startX),
+      startY: num(raw.startY),
+      endX: num(raw.endX),
+      endY: num(raw.endY),
+      bbox: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
+    } as AnchorElement;
+    element.bbox = computeBoundingBox(element);
+    return element;
+  }
+  return null;
+}
+
+function sanitizePageData(raw: Record<string, any>): PageAnchorData {
+  return {
+    url: typeof raw.url === 'string' ? raw.url : '',
+    normalizedUrl: typeof raw.normalizedUrl === 'string' ? raw.normalizedUrl : '',
+    pageTitle: typeof raw.pageTitle === 'string' ? raw.pageTitle : '',
+    updatedAt: num(raw.updatedAt),
+    elements: Array.isArray(raw.elements)
+      ? raw.elements.map(sanitizeElement).filter((e): e is AnchorElement => e !== null)
+      : [],
+    domAnchoringEnabled: typeof raw.domAnchoringEnabled === 'boolean' ? raw.domAnchoringEnabled : undefined,
+  };
+}
+
+function sanitizeSettings(raw: Record<string, any>): Record<string, any> {
+  const shortcuts: Record<string, string> = {};
+  if (isPlainObject(raw.shortcuts)) {
+    for (const [action, key] of Object.entries(raw.shortcuts)) {
+      if (typeof key === 'string') shortcuts[action] = key;
+    }
+  }
+  return { ...raw, shortcuts };
+}
+
+function sanitizeIndex(raw: Record<string, any>): Record<string, PageMetadataSummary> {
+  const index: Record<string, PageMetadataSummary> = {};
+  for (const [normalizedUrl, entry] of Object.entries(raw)) {
+    if (!isPlainObject(entry)) continue;
+    index[normalizedUrl] = {
+      normalizedUrl: typeof entry.normalizedUrl === 'string' ? entry.normalizedUrl : normalizedUrl,
+      url: typeof entry.url === 'string' ? entry.url : '',
+      pageTitle: typeof entry.pageTitle === 'string' ? entry.pageTitle : '',
+      updatedAt: num(entry.updatedAt),
+      elementCount: num(entry.elementCount),
+    };
+  }
+  return index;
+}
+
 /**
  * Restores a backup from `exportAllDataAsJson`. The file is untrusted, so it is
  * validated before anything is written; `false` means "invalid backup format".
@@ -320,9 +459,11 @@ export async function importDataFromJson(jsonStr: string): Promise<boolean> {
 
   const sanitized: Record<string, any> = {};
   for (const [key, value] of Object.entries(parsed)) {
-    if (key.startsWith(STORAGE_NAMESPACE) && isPlainObject(value)) {
-      sanitized[key] = value;
-    }
+    if (!key.startsWith(STORAGE_NAMESPACE) || !isPlainObject(value)) continue;
+    if (key === SETTINGS_KEY) sanitized[key] = sanitizeSettings(value);
+    else if (key === INDEX_KEY) sanitized[key] = sanitizeIndex(value);
+    else if (key.startsWith(DATA_KEY_PREFIX)) sanitized[key] = sanitizePageData(value);
+    else sanitized[key] = value;
   }
 
   if (Object.keys(sanitized).length === 0) return false;

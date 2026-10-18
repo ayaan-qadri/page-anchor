@@ -127,8 +127,8 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   },
   {
     id: 'action-export',
-    name: 'Export Image',
-    description: 'Export annotated page as PNG screenshot',
+    name: 'Export drawings',
+    description: 'Export your drawings as a transparent PNG',
     defaultKey: DEFAULT_SHORTCUTS['action-export'],
   },
   {
@@ -297,6 +297,26 @@ export function getBrowserShortcutConflict(combo: string): BrowserConflictInfo |
 }
 
 /**
+ * True when a keydown originated in a text field. `composedPath()` is required
+ * because an event raised inside the extension's Shadow DOM is re-targeted to
+ * the host element (a plain `<div>`) before it reaches a window listener, so
+ * checking `e.target` alone would miss the real input.
+ */
+export function isEditableTarget(e: KeyboardEvent): boolean {
+  const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+  const target = (path.find((n) => n instanceof HTMLElement) as HTMLElement | null) ??
+    (e.target as HTMLElement | null);
+  if (!target || typeof target.getAttribute !== 'function') return false;
+  const tagName = target.tagName?.toLowerCase();
+  return (
+    tagName === 'input' ||
+    tagName === 'textarea' ||
+    target.isContentEditable ||
+    target.getAttribute('contenteditable') === 'true'
+  );
+}
+
+/**
  * Robust shortcut listener and dispatcher.
  * Enforces active-mode tool silencing and form input suppression.
  */
@@ -345,18 +365,8 @@ export class ShortcutManager {
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
-    const target = e.target as HTMLElement | null;
-    if (target && typeof target.getAttribute === 'function') {
-      const tagName = target.tagName?.toLowerCase();
-      const isInput =
-        tagName === 'input' ||
-        tagName === 'textarea' ||
-        target.isContentEditable ||
-        target.getAttribute('contenteditable') === 'true';
-
-      if (isInput && e.key !== 'Escape') {
-        return;
-      }
+    if (isEditableTarget(e) && e.key !== 'Escape') {
+      return;
     }
 
     const pressedKey = normalizeKeyEvent(e);

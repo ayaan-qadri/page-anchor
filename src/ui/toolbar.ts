@@ -345,7 +345,7 @@ export class FloatingToolbar {
     });
     this.toolbar.appendChild(clearBtn);
 
-    const exportBtn = this.createActionButton('export', 'Export Snapshot', 'action-export', ICONS.download, () => {
+    const exportBtn = this.createActionButton('export', 'Export drawings (PNG)', 'action-export', ICONS.download, () => {
       this.callbacks.onExport?.();
     });
     this.toolbar.appendChild(exportBtn);

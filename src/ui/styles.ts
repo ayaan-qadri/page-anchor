@@ -120,12 +120,6 @@ export const SHADOW_STYLES = `
   box-shadow: inset 0 0 0 1px rgba(124, 165, 247, 0.45);
 }
 
-.pa-btn.active-warn {
-  background: rgba(229, 169, 74, 0.16);
-  color: var(--pa-warning-soft);
-  box-shadow: inset 0 0 0 1px rgba(229, 169, 74, 0.45);
-}
-
 .pa-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;

@@ -8,16 +8,15 @@ import {
   loadSettings,
   saveSettings,
 } from '../../src/core/storage';
-import { ExtensionSettings, ShortcutAction } from '../../src/core/types';
+import { ExtensionSettings, ShortcutAction } from '../../src/types';
 import {
   formatShortcutForDisplay,
-  normalizeKeyEvent,
   SHORTCUT_DEFINITIONS,
-  getBrowserShortcutConflict,
 } from '../../src/core/shortcuts';
+import { ShortcutRecorder } from '../../src/ui/shortcut-recorder';
 
 let currentSettings: ExtensionSettings;
-let recordingHandler: ((e: KeyboardEvent) => void) | null = null;
+const shortcutRecorder = new ShortcutRecorder();
 
 export async function initOptions() {
   currentSettings = await loadSettings();
@@ -146,10 +145,6 @@ function renderShortcuts() {
 }
 
 function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
-  if (recordingHandler) {
-    window.removeEventListener('keydown', recordingHandler, true);
-  }
-
   const def = SHORTCUT_DEFINITIONS.find((d) => d.id === actionId);
   const actionName = def ? def.name : actionId;
 
@@ -159,40 +154,30 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
   btn.setAttribute('aria-label', `Recording shortcut for ${actionName}. Press keys, or press Escape to cancel.`);
   announce(`Recording shortcut for ${actionName}. Press your desired key combination, or press Escape to cancel.`);
 
-  recordingHandler = (e: KeyboardEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  shortcutRecorder.start((result) => {
+    btn.classList.remove('recording', 'border-brand-danger', 'text-brand-danger-soft', 'animate-pulse');
 
-    if (e.key === 'Escape') {
+    if (result.type === 'cancel') {
       const prevKey = currentSettings.shortcuts[actionId] || (def ? def.defaultKey : '');
       btn.textContent = formatShortcutForDisplay(prevKey);
-      btn.classList.remove('recording', 'border-brand-danger', 'text-brand-danger-soft', 'animate-pulse');
       btn.classList.add('border-white/[0.1]', 'text-brand-accent-soft');
       btn.setAttribute(
         'aria-label',
         `Rebind shortcut for ${actionName}. Current shortcut is ${formatShortcutForDisplay(prevKey)}`
       );
-      if (recordingHandler) {
-        window.removeEventListener('keydown', recordingHandler, true);
-        recordingHandler = null;
-      }
       announce(`Shortcut recording for ${actionName} cancelled.`);
       return;
     }
 
-    const combo = normalizeKeyEvent(e);
-    if (!combo) return;
-
+    const { combo, conflict } = result;
     currentSettings.shortcuts[actionId] = combo;
     btn.textContent = formatShortcutForDisplay(combo);
-    btn.classList.remove('recording', 'border-brand-danger', 'text-brand-danger-soft', 'animate-pulse');
     btn.classList.add('border-white/[0.1]', 'text-brand-accent-soft');
     btn.setAttribute(
       'aria-label',
       `Rebind shortcut for ${actionName}. Current shortcut is ${formatShortcutForDisplay(combo)}`
     );
 
-    const conflict = getBrowserShortcutConflict(combo);
     if (conflict) {
       btn.classList.add('border-amber-500', 'text-amber-400');
       btn.classList.remove('border-white/[0.1]', 'text-brand-accent-soft');
@@ -204,14 +189,7 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
       btn.title = 'Click to record new keystroke';
       announce(`Shortcut for ${actionName} updated to ${combo}`);
     }
-
-    if (recordingHandler) {
-      window.removeEventListener('keydown', recordingHandler, true);
-      recordingHandler = null;
-    }
-  };
-
-  window.addEventListener('keydown', recordingHandler, true);
+  });
 }
 
 function setupDrawingForm() {
@@ -395,7 +373,7 @@ async function renderSavedPages() {
     deleteBtn.setAttribute('aria-label', `Delete saved drawings for ${page.pageTitle || page.url}`);
     deleteBtn.addEventListener('click', async () => {
       if (confirm(`Remove all drawings for "${page.pageTitle || page.url}"?`)) {
-        await clearPageData(page.url);
+        await clearPageData(page.url, page.normalizedUrl);
         await renderSavedPages();
         announce(`Deleted annotations for ${page.pageTitle || page.url}`);
       }

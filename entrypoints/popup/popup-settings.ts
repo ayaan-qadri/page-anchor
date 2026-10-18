@@ -7,13 +7,12 @@ import {
   loadSettings,
   saveSettings,
 } from '../../src/core/storage';
-import { ExtensionSettings, ShortcutAction } from '../../src/core/types';
+import { ExtensionSettings, ShortcutAction } from '../../src/types';
 import {
   SHORTCUT_DEFINITIONS,
   formatShortcutForDisplay,
-  getBrowserShortcutConflict,
-  normalizeKeyEvent,
 } from '../../src/core/shortcuts';
+import { ShortcutRecorder } from '../../src/ui/shortcut-recorder';
 
 /** Creates a typed element with optional class list and initial innerHTML. */
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -44,7 +43,7 @@ const BADGE_IDLE = 'border-white/[0.1] text-brand-accent-soft bg-white/[0.05] ho
  */
 export class PopupSettingsPanel {
   private settings!: ExtensionSettings;
-  private recordingHandler: ((e: KeyboardEvent) => void) | null = null;
+  private recorder = new ShortcutRecorder();
   private recordingButton: HTMLButtonElement | null = null;
   private savedPagesRoot!: HTMLElement;
   private shortcutsRoot!: HTMLElement;
@@ -70,10 +69,7 @@ export class PopupSettingsPanel {
 
   /** Cancels any in-flight shortcut recording and restores the idle badge state. */
   public dispose(): void {
-    if (this.recordingHandler) {
-      window.removeEventListener('keydown', this.recordingHandler, true);
-      this.recordingHandler = null;
-    }
+    this.recorder.stop();
     if (this.recordingButton) {
       const btn = this.recordingButton;
       const id = btn.dataset.shortcutId as ShortcutAction | undefined;
@@ -305,47 +301,33 @@ export class PopupSettingsPanel {
     badge.setAttribute('aria-label', `Recording shortcut for ${name}. Press keys, or Esc to cancel.`);
     this.announce(`Recording shortcut for ${name}. Press your keys, or Esc to cancel.`);
 
-    this.recordingHandler = (event: KeyboardEvent) => {
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (event.key === 'Escape') {
+    this.recorder.start((result) => {
+      if (result.type === 'cancel') {
         this.dispose();
         this.announce('Shortcut recording cancelled');
         return;
       }
 
-      const combo = normalizeKeyEvent(event);
-      if (!combo) return;
-
+      const { combo, conflict } = result;
       this.settings.shortcuts[actionId] = combo;
       this.persist();
 
-      const target = badge;
-      if (this.recordingHandler) {
-        window.removeEventListener('keydown', this.recordingHandler, true);
-        this.recordingHandler = null;
-      }
       this.recordingButton = null;
+      badge.classList.remove('recording', 'border-brand-danger', 'text-brand-danger-soft', 'animate-pulse');
+      badge.textContent = formatShortcutForDisplay(combo);
+      badge.setAttribute('aria-label', `Rebind ${name}. Current shortcut ${formatShortcutForDisplay(combo)}`);
 
-      target.classList.remove('recording', 'border-brand-danger', 'text-brand-danger-soft', 'animate-pulse');
-      target.textContent = formatShortcutForDisplay(combo);
-      target.setAttribute('aria-label', `Rebind ${name}. Current shortcut ${formatShortcutForDisplay(combo)}`);
-
-      const conflict = getBrowserShortcutConflict(combo);
       if (conflict) {
-        target.classList.remove(...BADGE_IDLE.split(' '));
-        target.classList.add('border-amber-500', 'text-amber-400');
-        target.title = `Warning: "${combo}" conflicts with ${conflict.browser} (${conflict.action}).`;
+        badge.classList.remove(...BADGE_IDLE.split(' '));
+        badge.classList.add('border-amber-500', 'text-amber-400');
+        badge.title = `Warning: "${combo}" conflicts with ${conflict.browser} (${conflict.action}).`;
         this.announce(`Shortcut set to ${combo}. Warning: conflicts with ${conflict.browser}`);
       } else {
-        target.classList.add(...BADGE_IDLE.split(' '));
-        target.title = 'Click to record a new keystroke';
+        badge.classList.add(...BADGE_IDLE.split(' '));
+        badge.title = 'Click to record a new keystroke';
         this.announce(`Shortcut for ${name} set to ${combo}`);
       }
-    };
-
-    window.addEventListener('keydown', this.recordingHandler, true);
+    });
   }
 
   private async renderSavedPages(): Promise<void> {
@@ -392,7 +374,7 @@ export class PopupSettingsPanel {
       del.setAttribute('aria-label', `Delete saved drawings for ${page.pageTitle || page.url}`);
       del.addEventListener('click', async () => {
         if (!confirm(`Remove all drawings for "${page.pageTitle || page.url}"?`)) return;
-        await clearPageData(page.url);
+        await clearPageData(page.url, page.normalizedUrl);
         await this.refreshSavedPages();
         this.announce(`Deleted drawings for ${page.pageTitle || page.url}`);
       });

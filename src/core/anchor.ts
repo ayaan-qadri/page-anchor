@@ -246,8 +246,10 @@ export interface ResolvedAnchor {
 
 /**
  * Resolves the live location of an anchored DOM element.
+ * `allowTextWalk` can be turned off to skip the whole-document text search,
+ * which is the expensive part when many anchors miss their selectors.
  */
-export function resolveAnchor(anchor: DOMAnchor): ResolvedAnchor {
+export function resolveAnchor(anchor: DOMAnchor, allowTextWalk = true): ResolvedAnchor {
   if (typeof document === 'undefined') {
     return { element: null, deltaX: 0, deltaY: 0, status: 'orphaned' };
   }
@@ -280,7 +282,7 @@ export function resolveAnchor(anchor: DOMAnchor): ResolvedAnchor {
   }
 
   // 3. W3C Text Quote search across page if DOM structure mutated
-  if (!matchedElement && anchor.textQuote?.exact && document.body) {
+  if (allowTextWalk && !matchedElement && anchor.textQuote?.exact && document.body) {
     const snippet = anchor.textQuote.exact.slice(0, 30);
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     let node: Node | null;
@@ -325,6 +327,7 @@ export function resolveAnchor(anchor: DOMAnchor): ResolvedAnchor {
  */
 export class DOMAnchorManager {
   private cache = new Map<string, ResolvedAnchor>();
+  private textWalkAt = new Map<string, number>();
   private mutationObserver: MutationObserver | null = null;
   private resizeListener: (() => void) | null = null;
   private onPositionsChanged?: () => void;
@@ -386,7 +389,16 @@ export class DOMAnchorManager {
       return cached;
     }
 
-    const resolved = resolveAnchor(anchor);
+    // The whole-document text search is only worth running about once a second
+    // per selector; a page that mutates every 50ms would otherwise re-walk it
+    // for every still-broken anchor on every render.
+    const now = Date.now();
+    const allowTextWalk = now - (this.textWalkAt.get(anchor.selector) ?? 0) >= 1000;
+    if (allowTextWalk) {
+      this.textWalkAt.set(anchor.selector, now);
+    }
+
+    const resolved = resolveAnchor(anchor, allowTextWalk);
     this.cache.set(key, resolved);
     return resolved;
   }
@@ -409,5 +421,6 @@ export class DOMAnchorManager {
       this.resizeListener = null;
     }
     this.cache.clear();
+    this.textWalkAt.clear();
   }
 }

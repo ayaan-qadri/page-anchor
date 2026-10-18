@@ -75,7 +75,7 @@ Page Anchor solves this with 5 dedicated performance strategies:
 | **Redo** | `Ctrl + Y` | Redo undone action |
 | **Delete Selected** | `Delete` | Remove selected element (`Backspace` also works as a fixed convenience key) |
 | **Clear Page** | `Alt + Shift + X` | Clear all drawings on current page |
-| **Export Snapshot** | `Alt + Shift + E` | Download PNG screenshot |
+| **Export drawings** | `Alt + Shift + E` | Download your drawings as a transparent PNG |
 
 > **Browser Safety Guarantee**: 
 > - Global toggles use `Alt + Shift` combinations to ensure zero conflicts with reserved browser shortcuts (e.g. `Alt + D` for the Chrome/Edge address bar, `Ctrl + D` for bookmarks, or `Ctrl + Alt` European `AltGr` characters like `€`).
