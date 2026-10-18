@@ -14,9 +14,7 @@ import {
   Redo2,
   Trash2,
   Download,
-  Settings,
   Minimize2,
-  X,
   GripVertical,
   Eye,
   EyeOff,
@@ -87,12 +85,10 @@ export const ICONS: Record<string, string> = {
   redo: toSvg(Redo2),
   trash: toSvg(Trash2),
   download: toSvg(Download),
-  settings: toSvg(Settings),
 
   eye: toSvg(Eye),
   eyeOff: toSvg(EyeOff),
   minimize: toSvg(Minimize2),
-  close: toSvg(X),
   dragHandle: dragHandleSvg(),
   selectAll: toSvg(BoxSelect),
 };

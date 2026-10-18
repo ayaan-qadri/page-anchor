@@ -106,6 +106,8 @@ describe('Popup settings panel', () => {
     const panel = mountPanel();
     await panel.mount();
 
+    root.querySelector<HTMLButtonElement>('button[aria-label="Open keyboard shortcut settings"]')!.click();
+
     const badge = root.querySelector<HTMLButtonElement>('button[data-shortcut-id="tool-pen"]')!;
     badge.click();
     expect(badge.textContent).toBe('Press keys…');
@@ -113,13 +115,15 @@ describe('Popup settings panel', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', altKey: true, bubbles: true, cancelable: true }));
     await flush();
 
-    expect(badge.textContent).toBe('⌥ Alt+g');
+    expect(badge.textContent).toBe('Alt + G');
     expect(storage.store[SETTINGS_KEY].shortcuts['tool-pen']).toBe('Alt+g');
   });
 
   it('cancels recording on Escape without changing the shortcut', async () => {
     const panel = mountPanel();
     await panel.mount();
+
+    root.querySelector<HTMLButtonElement>('button[aria-label="Open keyboard shortcut settings"]')!.click();
 
     const badge = root.querySelector<HTMLButtonElement>('button[data-shortcut-id="tool-pen"]')!;
     const original = badge.textContent;
@@ -130,6 +134,22 @@ describe('Popup settings panel', () => {
 
     expect(badge.textContent).toBe(original);
     expect(storage.api.set).not.toHaveBeenCalled();
+  });
+
+  it('shows shortcuts behind a drill-down card and returns via back', async () => {
+    const panel = mountPanel();
+    await panel.mount();
+
+    // The default view stays short: the list itself is not rendered up front.
+    expect(root.querySelector('button[data-shortcut-id="tool-pen"]')).toBeNull();
+
+    root.querySelector<HTMLButtonElement>('button[aria-label="Open keyboard shortcut settings"]')!.click();
+    expect(root.querySelector('button[data-shortcut-id="tool-pen"]')).not.toBeNull();
+
+    root.querySelector<HTMLButtonElement>('button[aria-label="Back to settings"]')!.click();
+    await flush();
+    expect(root.querySelector('button[data-shortcut-id="tool-pen"]')).toBeNull();
+    expect(Array.from(root.querySelectorAll('h3')).map((h) => h.textContent)).toContain('Keyboard shortcuts');
   });
 
   it('lists saved pages and removes one when its delete button is used', async () => {

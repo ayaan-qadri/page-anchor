@@ -6,7 +6,7 @@ import {
   UrlMatchMode,
 } from '../types/storage.types';
 import { computeBoundingBox } from './geometry';
-import { DEFAULT_SHORTCUTS } from './shortcuts';
+import { DEFAULT_SHORTCUTS, canonicalizeShortcut } from './shortcuts';
 
 export type { ExtensionSettings, PageAnchorData, PageMetadataSummary, UrlMatchMode };
 export { DEFAULT_SHORTCUTS };
@@ -195,6 +195,18 @@ function migrateSettings(stored: Record<string, any>): Record<string, any> {
   return migrated;
 }
 
+/**
+ * Collapses legacy modifier tokens in every stored binding onto the neutral
+ * `Mod`, so shortcuts recorded before the cross-platform rename keep matching.
+ */
+function canonicalizeShortcuts(shortcuts: Record<string, any>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [action, key] of Object.entries(shortcuts)) {
+    if (typeof key === 'string') out[action] = canonicalizeShortcut(key);
+  }
+  return out;
+}
+
 export async function loadSettings(): Promise<ExtensionSettings> {
   const result = await storageGet(SETTINGS_KEY);
   const stored = result?.[SETTINGS_KEY] as Record<string, any> | undefined;
@@ -209,10 +221,10 @@ export async function loadSettings(): Promise<ExtensionSettings> {
   return {
     ...DEFAULT_SETTINGS,
     ...migrated,
-    shortcuts: {
+    shortcuts: canonicalizeShortcuts({
       ...DEFAULT_SETTINGS.shortcuts,
       ...(migrated.shortcuts || {}),
-    },
+    }),
   };
 }
 
@@ -432,7 +444,7 @@ function sanitizeSettings(raw: Record<string, any>): Record<string, any> {
   const shortcuts: Record<string, string> = {};
   if (isPlainObject(raw.shortcuts)) {
     for (const [action, key] of Object.entries(raw.shortcuts)) {
-      if (typeof key === 'string') shortcuts[action] = key;
+      if (typeof key === 'string') shortcuts[action] = canonicalizeShortcut(key);
     }
   }
   return { ...migrateSettings(raw), shortcuts };

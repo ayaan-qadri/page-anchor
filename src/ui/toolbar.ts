@@ -4,7 +4,6 @@ import { ToolType } from '../types/engine.types';
 import { ExtensionSettings } from '../types/storage.types';
 import { ToolbarCallbacks } from '../types/ui.types';
 import { ICONS } from '../icons/svg-icons';
-import { SettingsModal } from './settings-modal';
 import { TextEditorOverlay } from './text-editor';
 import { formatShortcutForDisplay } from '../core/shortcuts';
 import { saveSettings } from '../core/storage';
@@ -349,17 +348,6 @@ export class FloatingToolbar {
       this.callbacks.onExport?.();
     });
     this.toolbar.appendChild(exportBtn);
-
-    const settingsBtn = this.createActionButton('settings', 'Shortcuts & Settings', '', ICONS.settings, () => {
-      const modal = new SettingsModal(this.container, this.settings, {
-        onSave: (newSettings) => {
-          this.setSettings(newSettings);
-          this.callbacks.onSettingsUpdate?.(newSettings);
-        },
-      });
-      modal.open();
-    });
-    this.toolbar.appendChild(settingsBtn);
 
     const isVisible = this.engine.getAnnotationsVisible();
     const eyeBtn = this.createActionButton(

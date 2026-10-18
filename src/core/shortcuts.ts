@@ -20,12 +20,12 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
   'tool-double-arrow': 'd',
   'tool-text': 't',
   'tool-eraser': 'e',
-  'action-undo': 'Ctrl+z',
-  'action-redo': 'Ctrl+y',
+  'action-undo': 'Mod+z',
+  'action-redo': 'Mod+y',
   'action-delete': 'Delete',
   'action-clear': 'Alt+Shift+X',
   'action-export': 'Alt+Shift+E',
-  'action-select-all': 'Ctrl+a',
+  'action-select-all': 'Mod+a',
 };
 
 export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
@@ -139,16 +139,50 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   },
 ];
 
+/**
+ * True on Apple platforms, where the primary modifier is Command rather than
+ * Control and the Alt key is labelled Option. `navigator.platform` is
+ * deprecated, so the modern `userAgentData.platform` is preferred when present.
+ */
+export function isMacPlatform(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+  const source = nav.userAgentData?.platform || nav.platform || nav.userAgent || '';
+  return /mac|iphone|ipad|ipod/i.test(source);
+}
+
+/**
+ * Rewrites a keystroke into canonical tokens. The primary modifier is stored as
+ * `Mod` so one binding means Command on Apple and Control elsewhere; `Alt` is
+ * the Alt/Option key. Legacy `Ctrl`/`Cmd` tokens from older builds collapse into
+ * `Mod` so existing bindings keep working after the rename.
+ */
+export function canonicalizeShortcut(keyCombo: string): string {
+  if (!keyCombo) return keyCombo;
+  return keyCombo
+    .split('+')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const lower = part.toLowerCase();
+      if (lower === 'ctrl' || lower === 'cmd') return 'Mod';
+      if (lower === 'opt' || lower === 'option') return 'Alt';
+      return part;
+    })
+    .join('+');
+}
+
 export function normalizeKeyEvent(e: KeyboardEvent): string {
   const parts: string[] = [];
+  const isMac = isMacPlatform();
 
-  const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
-
-  if (e.ctrlKey && !isMac) parts.push('Ctrl');
-  if (e.metaKey) parts.push(isMac ? 'Cmd' : 'Meta');
-  if (e.ctrlKey && isMac) parts.push('Ctrl');
+  // Primary modifier: Command on Apple, Control elsewhere.
+  if (isMac ? e.metaKey : e.ctrlKey) parts.push('Mod');
+  if (!isMac && e.metaKey) parts.push('Meta');
   if (e.altKey) parts.push('Alt');
   if (e.shiftKey) parts.push('Shift');
+  // Control stays addressable on Apple for the rare Control-based binding.
+  if (isMac && e.ctrlKey) parts.push('Ctrl');
 
   let key = e.key;
   if (['Control', 'Shift', 'Alt', 'Meta'].includes(key)) {
@@ -163,13 +197,26 @@ export function normalizeKeyEvent(e: KeyboardEvent): string {
   return parts.join('+');
 }
 
+function formatModifierName(part: string, isMac: boolean): string {
+  const lower = part.toLowerCase();
+  if (lower === 'mod') return isMac ? 'Cmd' : 'Ctrl';
+  if (lower === 'cmd') return 'Cmd';
+  if (lower === 'meta') return 'Meta';
+  if (lower === 'ctrl') return 'Ctrl';
+  if (lower === 'alt' || lower === 'opt' || lower === 'option') return isMac ? 'Option' : 'Alt';
+  if (lower === 'shift') return 'Shift';
+  return part.length === 1 ? part.toUpperCase() : part;
+}
+
 export function formatShortcutForDisplay(keyCombo: string): string {
   if (!keyCombo) return 'None';
+  const isMac = isMacPlatform();
   return keyCombo
-    .replace('Ctrl', '⌃ Ctrl')
-    .replace('Cmd', '⌘ Cmd')
-    .replace('Alt', '⌥ Alt')
-    .replace('Shift', '⇧ Shift');
+    .split('+')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => formatModifierName(part, isMac))
+    .join(' + ');
 }
 
 /**
@@ -275,13 +322,16 @@ export function isReservedBrowserShortcut(combo: string): boolean {
 
 /**
  * Retrieves the specific browser and conflicting action for a given shortcut key combo.
- * Seamlessly normalizes 'opt' / 'option' to 'alt' across macOS and Windows.
+ * Seamlessly normalizes 'opt' / 'option' to 'alt' across macOS and Windows, and
+ * resolves the neutral `Mod` token to Command on Apple and Control elsewhere.
  */
 export function getBrowserShortcutConflict(combo: string): BrowserConflictInfo | null {
   if (!combo) return null;
+  const primary = isMacPlatform() ? 'cmd' : 'ctrl';
   const normalized = combo
     .toLowerCase()
     .trim()
+    .replace(/\bmod\b/g, primary)
     .replace(/\bopt\b/g, 'alt')
     .replace(/\boption\b/g, 'alt');
   return BROWSER_RESERVED_CONFLICTS[normalized] || null;

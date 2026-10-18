@@ -1,20 +1,26 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   DEFAULT_SHORTCUTS,
   SHORTCUT_DEFINITIONS,
   formatShortcutForDisplay,
+  getBrowserShortcutConflict,
   normalizeKeyEvent,
   ShortcutManager,
 } from '../src/core/shortcuts';
 
 describe('Shortcuts Engine: Keyboard Normalization & Dispatching', () => {
+  // Deterministic, non-Apple baseline for the cross-platform assertions below.
+  beforeEach(() => {
+    Object.defineProperty(navigator, 'platform', { value: 'Win32', configurable: true });
+  });
+
   it('normalizes single keys and combined modifier keys consistently', () => {
     expect(normalizeKeyEvent({ key: 'p', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false } as KeyboardEvent)).toBe('p');
     expect(normalizeKeyEvent({ key: 'P', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false } as KeyboardEvent)).toBe('p');
 
     expect(normalizeKeyEvent({ key: 'd', altKey: true, ctrlKey: false, shiftKey: false, metaKey: false } as KeyboardEvent)).toBe('Alt+d');
-    expect(normalizeKeyEvent({ key: 'z', ctrlKey: true, altKey: false, shiftKey: false, metaKey: false } as KeyboardEvent)).toBe('Ctrl+z');
-    expect(normalizeKeyEvent({ key: 'Z', ctrlKey: true, shiftKey: true, altKey: false, metaKey: false } as KeyboardEvent)).toBe('Ctrl+Shift+z');
+    expect(normalizeKeyEvent({ key: 'z', ctrlKey: true, altKey: false, shiftKey: false, metaKey: false } as KeyboardEvent)).toBe('Mod+z');
+    expect(normalizeKeyEvent({ key: 'Z', ctrlKey: true, shiftKey: true, altKey: false, metaKey: false } as KeyboardEvent)).toBe('Mod+Shift+z');
 
     expect(normalizeKeyEvent({ key: 'Escape', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false } as KeyboardEvent)).toBe('Esc');
     expect(normalizeKeyEvent({ key: ' ', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false } as KeyboardEvent)).toBe('Space');
@@ -24,8 +30,10 @@ describe('Shortcuts Engine: Keyboard Normalization & Dispatching', () => {
   });
 
   it('formats shortcuts cleanly for UI labels', () => {
-    expect(formatShortcutForDisplay('Alt+D')).toContain('Alt');
-    expect(formatShortcutForDisplay('Ctrl+Z')).toContain('Ctrl');
+    expect(formatShortcutForDisplay('Alt+D')).toBe('Alt + D');
+    expect(formatShortcutForDisplay('Ctrl+z')).toBe('Ctrl + Z');
+    expect(formatShortcutForDisplay('Mod+z')).toBe('Ctrl + Z');
+    expect(formatShortcutForDisplay('v')).toBe('V');
     expect(formatShortcutForDisplay('')).toBe('None');
   });
 
@@ -138,6 +146,7 @@ describe('Shortcuts Engine: Keyboard Normalization & Dispatching', () => {
     expect(isReservedBrowserShortcut('ctrl+w')).toBe(true);
     expect(isReservedBrowserShortcut('f12')).toBe(true);
     expect(isReservedBrowserShortcut('ctrl+l')).toBe(true);
+    expect(isReservedBrowserShortcut('Mod+t')).toBe(true);
 
     expect(isReservedBrowserShortcut('Alt+Shift+D')).toBe(false);
     expect(isReservedBrowserShortcut('Alt+Shift+T')).toBe(false);
@@ -193,5 +202,26 @@ describe('Shortcuts Engine: Keyboard Normalization & Dispatching', () => {
     expect(mockCallback).toHaveBeenCalledWith('tool-pen', expect.any(KeyboardEvent));
 
     manager.detach();
+  });
+
+  describe('Apple platform mapping', () => {
+    beforeEach(() => {
+      Object.defineProperty(navigator, 'platform', { value: 'MacIntel', configurable: true });
+    });
+
+    it('records the Command key as the neutral Mod token', () => {
+      expect(
+        normalizeKeyEvent({ key: 'z', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false } as KeyboardEvent)
+      ).toBe('Mod+z');
+    });
+
+    it('renders Mod and Alt with Apple names', () => {
+      expect(formatShortcutForDisplay('Mod+z')).toBe('Cmd + Z');
+      expect(formatShortcutForDisplay('Alt+Shift+D')).toBe('Option + Shift + D');
+    });
+
+    it('flags Cmd-based browser conflicts via the Mod token', () => {
+      expect(getBrowserShortcutConflict('Mod+t')).not.toBeNull();
+    });
   });
 });

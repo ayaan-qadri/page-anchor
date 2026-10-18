@@ -16,10 +16,12 @@ import {
 import { ShortcutRecorder } from '../../src/ui/shortcut-recorder';
 
 let currentSettings: ExtensionSettings;
+let saveStatusEl: HTMLElement | null = null;
 const shortcutRecorder = new ShortcutRecorder();
 
 export async function initOptions() {
   currentSettings = await loadSettings();
+  saveStatusEl = document.getElementById('save-status');
 
   setupTabs();
   renderShortcuts();
@@ -28,8 +30,15 @@ export async function initOptions() {
   await renderSavedPages();
   setupBackupRestore();
 
+  // Any edit to a preference flips the header into an "unsaved" state so the
+  // Save button never feels like a shot in the dark.
+  const content = document.getElementById('main-settings-content');
+  content?.addEventListener('input', markDirty);
+  content?.addEventListener('change', markDirty);
+
   document.getElementById('btn-save')?.addEventListener('click', async () => {
     await saveCurrentSettings();
+    markSaved();
     showToast('Settings saved successfully!');
   });
 
@@ -37,8 +46,24 @@ export async function initOptions() {
     if (confirm('Reset all shortcuts to factory defaults?')) {
       currentSettings.shortcuts = { ...DEFAULT_SETTINGS.shortcuts };
       renderShortcuts();
+      markDirty();
+      announce('Shortcuts reset to defaults. Save to apply.');
     }
   });
+}
+
+/** Marks the settings as having unsaved edits (drives the header status). */
+function markDirty() {
+  if (!saveStatusEl) return;
+  saveStatusEl.dataset.state = 'dirty';
+  saveStatusEl.textContent = 'Unsaved changes';
+}
+
+/** Marks the settings as in sync with storage. */
+function markSaved() {
+  if (!saveStatusEl) return;
+  saveStatusEl.dataset.state = 'saved';
+  saveStatusEl.textContent = 'All changes saved';
 }
 
 function announce(msg: string) {
@@ -114,18 +139,19 @@ function renderShortcuts() {
 
   SHORTCUT_DEFINITIONS.forEach((def) => {
     const item = document.createElement('div');
-    item.className = 'pa-shortcut-item flex items-center justify-between p-3.5 bg-white/[0.03] hover:border-white/[0.14] border border-white/[0.07] rounded-[10px] transition-colors';
+    item.className = 'pa-row';
 
     const info = document.createElement('div');
-    info.className = 'pa-item-info flex flex-col gap-0.5';
+    info.className = 'pa-row-text';
     info.innerHTML = `
-      <div class="pa-item-title font-semibold text-brand-text text-sm">${def.name}</div>
-      <div class="pa-item-desc text-xs text-brand-muted">${def.description}</div>
+      <span class="pa-row-title">${def.name}</span>
+      <span class="pa-row-desc">${def.description}</span>
     `;
 
     const keyVal = currentSettings.shortcuts[def.id] || def.defaultKey;
     const badge = document.createElement('button');
-    badge.className = 'pa-key-badge bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.1] rounded-lg px-3.5 py-1.5 text-brand-accent-soft font-mono font-semibold text-xs cursor-pointer transition-all min-w-[100px] text-center focus-visible:outline-2 focus-visible:outline-brand-ring';
+    badge.type = 'button';
+    badge.className = 'pa-key-badge';
     badge.textContent = formatShortcutForDisplay(keyVal);
     badge.title = 'Click to record new keystroke (Esc to cancel)';
     badge.setAttribute(
@@ -148,19 +174,20 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
   const def = SHORTCUT_DEFINITIONS.find((d) => d.id === actionId);
   const actionName = def ? def.name : actionId;
 
-  btn.classList.add('recording', 'border-brand-danger', 'text-brand-danger-soft', 'animate-pulse');
-  btn.classList.remove('bg-white/[0.05]', 'hover:bg-white/[0.08]', 'border-white/[0.1]', 'text-brand-accent-soft');
+  const clearConflict = () => btn.classList.remove('border-amber-500', 'text-amber-400');
+
+  btn.classList.add('recording');
   btn.textContent = 'Press keys...';
   btn.setAttribute('aria-label', `Recording shortcut for ${actionName}. Press keys, or press Escape to cancel.`);
   announce(`Recording shortcut for ${actionName}. Press your desired key combination, or press Escape to cancel.`);
 
   shortcutRecorder.start((result) => {
-    btn.classList.remove('recording', 'border-brand-danger', 'text-brand-danger-soft', 'animate-pulse');
+    btn.classList.remove('recording');
 
     if (result.type === 'cancel') {
       const prevKey = currentSettings.shortcuts[actionId] || (def ? def.defaultKey : '');
       btn.textContent = formatShortcutForDisplay(prevKey);
-      btn.classList.add('border-white/[0.1]', 'text-brand-accent-soft');
+      clearConflict();
       btn.setAttribute(
         'aria-label',
         `Rebind shortcut for ${actionName}. Current shortcut is ${formatShortcutForDisplay(prevKey)}`
@@ -172,20 +199,19 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
     const { combo, conflict } = result;
     currentSettings.shortcuts[actionId] = combo;
     btn.textContent = formatShortcutForDisplay(combo);
-    btn.classList.add('border-white/[0.1]', 'text-brand-accent-soft');
     btn.setAttribute(
       'aria-label',
       `Rebind shortcut for ${actionName}. Current shortcut is ${formatShortcutForDisplay(combo)}`
     );
+    markDirty();
 
     if (conflict) {
+      clearConflict();
       btn.classList.add('border-amber-500', 'text-amber-400');
-      btn.classList.remove('border-white/[0.1]', 'text-brand-accent-soft');
       btn.title = `Warning: "${combo}" conflicts with ${conflict.browser} (${conflict.action}). Key may be intercepted by the browser.`;
       announce(`Shortcut set to ${combo}. Warning: conflicts with ${conflict.browser}`);
     } else {
-      btn.classList.remove('border-amber-500', 'text-amber-400');
-      btn.classList.add('border-white/[0.1]', 'text-brand-accent-soft');
+      clearConflict();
       btn.title = 'Click to record new keystroke';
       announce(`Shortcut for ${actionName} updated to ${combo}`);
     }
@@ -320,17 +346,17 @@ async function renderSavedPages() {
   if (countBadge) countBadge.textContent = `${pages.length}`;
 
   if (pages.length === 0) {
-    listContainer.innerHTML = `<div style="color: var(--color-brand-muted); font-size: 13px; padding: 10px 0;">No saved annotations yet. Draw on any web page to see it anchored here!</div>`;
+    listContainer.innerHTML = `<div class="pa-empty">No saved annotations yet. Draw on any web page and it will appear here.</div>`;
     return;
   }
 
   listContainer.innerHTML = '';
   pages.forEach((page) => {
     const item = document.createElement('div');
-    item.className = 'pa-saved-item flex items-center justify-between gap-3 p-3.5 bg-white/[0.03] border border-white/[0.07] rounded-[10px]';
+    item.className = 'pa-row';
 
     const info = document.createElement('div');
-    info.className = 'pa-saved-info flex flex-col gap-0.5 max-w-[70%]';
+    info.className = 'pa-row-text';
 
     const dateStr = new Date(page.updatedAt).toLocaleDateString(undefined, {
       month: 'short',
@@ -342,12 +368,12 @@ async function renderSavedPages() {
     const title = page.pageTitle || 'Untitled Page';
 
     const titleEl = document.createElement('div');
-    titleEl.className = 'pa-saved-title font-semibold text-brand-text text-sm';
+    titleEl.className = 'pa-saved-title pa-row-title';
     titleEl.textContent = title;
 
     // Only http(s) URLs become links; a stored URL can come from an untrusted backup.
     const urlEl = document.createElement(isSafeHttpUrl(page.url) ? 'a' : 'span');
-    urlEl.className = 'pa-saved-url text-xs text-brand-accent-soft hover:underline truncate';
+    urlEl.className = 'pa-saved-url';
     urlEl.textContent = page.url;
     if (urlEl instanceof HTMLAnchorElement) {
       urlEl.href = page.url;
@@ -357,7 +383,7 @@ async function renderSavedPages() {
     }
 
     const metaEl = document.createElement('div');
-    metaEl.className = 'pa-saved-meta text-[11px] text-brand-faint';
+    metaEl.className = 'pa-saved-meta pa-row-desc';
     metaEl.textContent = `${page.elementCount} elements • Last updated ${dateStr}`;
 
     info.appendChild(titleEl);
@@ -365,7 +391,7 @@ async function renderSavedPages() {
     info.appendChild(metaEl);
 
     const actions = document.createElement('div');
-    actions.className = 'pa-saved-actions flex items-center gap-2.5';
+    actions.className = 'pa-saved-actions pa-row-control';
 
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'pa-btn-danger';
@@ -423,6 +449,7 @@ function setupBackupRestore() {
         syncDrawingFormValues();
         syncPersistenceFormValues();
         await renderSavedPages();
+        markSaved();
       } else {
         if (statusSpan) statusSpan.textContent = 'Invalid backup format.';
         announce('Failed to restore backup: Invalid format.');

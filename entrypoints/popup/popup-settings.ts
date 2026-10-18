@@ -14,6 +14,11 @@ import {
 } from '../../src/core/shortcuts';
 import { ShortcutRecorder } from '../../src/ui/shortcut-recorder';
 
+const CHEVRON_RIGHT =
+  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6"/></svg>';
+const CHEVRON_LEFT =
+  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg>';
+
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className?: string,
@@ -25,20 +30,15 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-const ROW =
-  'flex items-center justify-between gap-3 p-3 bg-white/[0.03] border border-white/[0.07] rounded-[10px]';
-const LABEL = 'text-[12px] font-semibold text-brand-text';
-const HINT = 'text-[11px] text-brand-faint leading-snug';
-const SELECT =
-  'w-full bg-white/[0.04] border border-white/[0.09] hover:border-white/[0.16] text-brand-text text-[12px] px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-brand-ring [&>option]:bg-brand-surface [&>option]:text-brand-text';
-const RANGE = 'w-full accent-brand-accent cursor-pointer';
-const CHECKBOX = 'w-4 h-4 accent-brand-accent cursor-pointer shrink-0';
-const BADGE_IDLE = 'border-white/[0.1] text-brand-accent-soft bg-white/[0.05] hover:bg-white/[0.08]';
+/** A card groups related rows under one hairline-divided surface. */
+function card(): HTMLElement {
+  return el('div', 'pa-ps-card');
+}
 
 /**
- * Renders the full settings surface inside the extension popup, mirroring the
- * Form Secretary pattern: the popup swaps to a scrollable settings panel
- * instead of opening a separate tab. Changes are saved as they are made.
+ * Renders the full settings surface inside the extension popup: the popup
+ * swaps to a scrollable settings panel instead of opening a separate tab.
+ * Changes are saved as they are made, so there is no save button.
  */
 export class PopupSettingsPanel {
   private settings!: ExtensionSettings;
@@ -73,15 +73,7 @@ export class PopupSettingsPanel {
       const id = btn.dataset.shortcutId as ShortcutAction | undefined;
       const def = SHORTCUT_DEFINITIONS.find((d) => d.id === id);
       const key = (id && this.settings?.shortcuts[id]) || def?.defaultKey || '';
-      btn.classList.remove(
-        'recording',
-        'border-brand-danger',
-        'text-brand-danger-soft',
-        'animate-pulse',
-        'border-amber-500',
-        'text-amber-400',
-      );
-      btn.classList.add(...BADGE_IDLE.split(' '));
+      btn.classList.remove('recording', 'conflict');
       if (key) btn.textContent = formatShortcutForDisplay(key);
       this.recordingButton = null;
     }
@@ -93,58 +85,58 @@ export class PopupSettingsPanel {
     });
   }
 
-  private section(title: string, subtitle?: string): HTMLElement {
-    const wrap = el('section', 'pa-ps-section flex flex-col gap-2.5');
+  private section(title: string): HTMLElement {
+    const wrap = el('section', 'pa-ps-section');
     const head = el('div', 'flex flex-col gap-0.5');
-    head.appendChild(
-      el('h3', 'text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-faint', title),
-    );
-    if (subtitle) head.appendChild(el('p', HINT, subtitle));
+    head.appendChild(el('h3', 'pa-ps-title', title));
     wrap.appendChild(head);
     return wrap;
   }
 
   private renderDrawingDefaults(): void {
     const section = this.section('Drawing defaults');
+    const box = card();
 
-    section.appendChild(
+    box.appendChild(
       this.colorField('Pen colour', this.settings.defaultStrokeColor, (value) => {
         this.settings.defaultStrokeColor = value;
         this.persist();
       }),
     );
-    section.appendChild(
+    box.appendChild(
       this.rangeField('Pen width', 1, 30, this.settings.defaultStrokeWidth, 'px', (value) => {
         this.settings.defaultStrokeWidth = value;
         this.persist();
       }),
     );
-    section.appendChild(
+    box.appendChild(
       this.colorField('Highlighter colour', this.settings.defaultHighlighterColor, (value) => {
         this.settings.defaultHighlighterColor = value;
         this.persist();
       }),
     );
-    section.appendChild(
+    box.appendChild(
       this.rangeField('Highlighter width', 8, 50, this.settings.defaultHighlighterWidth, 'px', (value) => {
         this.settings.defaultHighlighterWidth = value;
         this.persist();
       }),
     );
-    section.appendChild(
+    box.appendChild(
       this.rangeField('Text note size', 12, 36, this.settings.defaultFontSize, 'px', (value) => {
         this.settings.defaultFontSize = value;
         this.persist();
       }),
     );
 
+    section.appendChild(box);
     this.root.appendChild(section);
   }
 
   private renderPersistence(): void {
     const section = this.section('Persistence & matching');
+    const box = card();
 
-    section.appendChild(
+    box.appendChild(
       this.selectField(
         'URL matching',
         this.settings.urlMatchMode,
@@ -160,7 +152,7 @@ export class PopupSettingsPanel {
       ),
     );
 
-    section.appendChild(
+    box.appendChild(
       this.selectField(
         'When an anchored element is missing',
         this.settings.orphanedAnchorMode || 'hide',
@@ -175,7 +167,7 @@ export class PopupSettingsPanel {
       ),
     );
 
-    section.appendChild(
+    box.appendChild(
       this.checkField(
         'Smart element anchoring',
         'Follow elements as the page moves, instead of fixed pixels',
@@ -186,7 +178,7 @@ export class PopupSettingsPanel {
         },
       ),
     );
-    section.appendChild(
+    box.appendChild(
       this.checkField(
         'Keep toolbar open by default',
         'Otherwise the drawing toolbar starts minimized',
@@ -197,7 +189,7 @@ export class PopupSettingsPanel {
         },
       ),
     );
-    section.appendChild(
+    box.appendChild(
       this.checkField(
         'Show floating anchor pill',
         'Quick access pill in the corner of each page',
@@ -208,7 +200,7 @@ export class PopupSettingsPanel {
         },
       ),
     );
-    section.appendChild(
+    box.appendChild(
       this.checkField(
         'Simplify stroke points',
         'Compress freehand strokes to save memory on busy pages',
@@ -220,21 +212,61 @@ export class PopupSettingsPanel {
       ),
     );
 
+    section.appendChild(box);
     this.root.appendChild(section);
   }
 
   private renderShortcuts(): void {
-    const section = this.section('Keyboard shortcuts', 'Click a key to rebind. Press Esc to cancel.');
+    const section = this.section('Keyboard shortcuts');
+    const box = card();
 
-    this.shortcutsRoot = el('div', 'flex flex-col gap-1.5');
+    const nav = el('button', 'pa-ps-nav-row');
+    nav.type = 'button';
+    nav.setAttribute('aria-label', 'Open keyboard shortcut settings');
+
+    const info = el('div', 'pa-ps-row-text');
+    info.appendChild(el('span', 'pa-ps-row-title', 'Customize shortcuts'));
+    info.appendChild(
+      el('span', 'pa-ps-row-desc', `Rebind the ${SHORTCUT_DEFINITIONS.length} shortcuts for tools and actions`),
+    );
+    nav.appendChild(info);
+    nav.appendChild(el('span', 'pa-ps-nav-chevron', CHEVRON_RIGHT));
+    nav.addEventListener('click', () => this.openShortcutEditor());
+
+    box.appendChild(nav);
+    section.appendChild(box);
+    this.root.appendChild(section);
+  }
+
+  /**
+   * Swaps the panel to the full shortcut list. The list lives one level deep
+   * so the default settings view stays short instead of scrolling past 18 rows.
+   */
+  private openShortcutEditor(): void {
+    this.dispose();
+
+    this.root.replaceChildren();
+    const section = el('section', 'pa-ps-section');
+
+    const head = el('div', 'pa-ps-subhead');
+    const back = el('button', 'pa-ps-back', CHEVRON_LEFT);
+    back.type = 'button';
+    back.setAttribute('aria-label', 'Back to settings');
+    back.addEventListener('click', async () => {
+      await this.mount();
+      this.root
+        .querySelector<HTMLButtonElement>('[aria-label="Open keyboard shortcut settings"]')
+        ?.focus();
+    });
+    head.appendChild(back);
+    head.appendChild(el('h3', 'pa-ps-title', 'Keyboard shortcuts'));
+    section.appendChild(head);
+
+    this.shortcutsRoot = card();
     this.buildShortcutRows();
     section.appendChild(this.shortcutsRoot);
 
-    const reset = el(
-      'button',
-      'self-start text-[11px] font-semibold text-brand-muted hover:text-brand-text underline decoration-white/20 hover:decoration-white/40 transition-colors cursor-pointer',
-      'Reset shortcuts to default',
-    );
+    const reset = el('button', 'pa-ps-link-btn', 'Reset shortcuts to default');
     reset.type = 'button';
     reset.addEventListener('click', () => {
       this.settings.shortcuts = { ...DEFAULT_SETTINGS.shortcuts };
@@ -245,27 +277,22 @@ export class PopupSettingsPanel {
     section.appendChild(reset);
 
     this.root.appendChild(section);
+    back.focus();
   }
 
   private buildShortcutRows(): void {
     this.shortcutsRoot.replaceChildren();
 
     SHORTCUT_DEFINITIONS.forEach((def) => {
-      const row = el(
-        'div',
-        'flex items-center justify-between gap-3 py-2 px-2.5 bg-white/[0.03] border border-white/[0.07] rounded-lg',
-      );
+      const row = el('div', 'pa-ps-row');
 
-      const info = el('div', 'flex flex-col gap-0.5 min-w-0');
-      info.appendChild(el('div', 'text-[12px] font-medium text-brand-text truncate', def.name));
-      info.appendChild(el('div', 'text-[10px] text-brand-faint truncate', def.description));
+      const info = el('div', 'pa-ps-row-text');
+      info.appendChild(el('div', 'pa-ps-row-title', def.name));
+      info.appendChild(el('div', 'pa-ps-row-desc', def.description));
       row.appendChild(info);
 
       const key = this.settings.shortcuts[def.id] || def.defaultKey;
-      const badge = el(
-        'button',
-        `pa-ps-key shrink-0 min-w-[84px] px-2.5 py-1 rounded-md border text-[11px] font-mono font-semibold text-center transition-colors cursor-pointer ${BADGE_IDLE}`,
-      );
+      const badge = el('button', 'pa-ps-key');
       badge.type = 'button';
       badge.dataset.shortcutId = def.id;
       badge.textContent = formatShortcutForDisplay(key);
@@ -292,8 +319,8 @@ export class PopupSettingsPanel {
 
     this.recordingButton = badge;
     badge.dataset.shortcutId = actionId;
-    badge.classList.remove('border-white/[0.1]', 'text-brand-accent-soft', 'bg-white/[0.05]', 'hover:bg-white/[0.08]');
-    badge.classList.add('recording', 'border-brand-danger', 'text-brand-danger-soft', 'animate-pulse');
+    badge.classList.remove('conflict');
+    badge.classList.add('recording');
     badge.textContent = 'Press keys…';
     badge.setAttribute('aria-label', `Recording shortcut for ${name}. Press keys, or Esc to cancel.`);
     this.announce(`Recording shortcut for ${name}. Press your keys, or Esc to cancel.`);
@@ -310,17 +337,16 @@ export class PopupSettingsPanel {
       this.persist();
 
       this.recordingButton = null;
-      badge.classList.remove('recording', 'border-brand-danger', 'text-brand-danger-soft', 'animate-pulse');
+      badge.classList.remove('recording');
       badge.textContent = formatShortcutForDisplay(combo);
       badge.setAttribute('aria-label', `Rebind ${name}. Current shortcut ${formatShortcutForDisplay(combo)}`);
 
       if (conflict) {
-        badge.classList.remove(...BADGE_IDLE.split(' '));
-        badge.classList.add('border-amber-500', 'text-amber-400');
+        badge.classList.add('conflict');
         badge.title = `Warning: "${combo}" conflicts with ${conflict.browser} (${conflict.action}).`;
         this.announce(`Shortcut set to ${combo}. Warning: conflicts with ${conflict.browser}`);
       } else {
-        badge.classList.add(...BADGE_IDLE.split(' '));
+        badge.classList.remove('conflict');
         badge.title = 'Click to record a new keystroke';
         this.announce(`Shortcut for ${name} set to ${combo}`);
       }
@@ -329,7 +355,7 @@ export class PopupSettingsPanel {
 
   private async renderSavedPages(): Promise<void> {
     const section = this.section('Saved pages');
-    this.savedPagesRoot = el('div', 'flex flex-col gap-1.5');
+    this.savedPagesRoot = card();
     section.appendChild(this.savedPagesRoot);
     this.root.appendChild(section);
     await this.refreshSavedPages();
@@ -340,33 +366,26 @@ export class PopupSettingsPanel {
     this.savedPagesRoot.replaceChildren();
 
     if (pages.length === 0) {
-      this.savedPagesRoot.appendChild(
-        el('p', HINT, 'Nothing saved yet. Draw on any page and it will appear here.'),
-      );
+      const empty = el('div', 'pa-ps-row');
+      empty.appendChild(el('span', 'pa-ps-row-desc', 'Nothing saved yet. Draw on any page and it will appear here.'));
+      this.savedPagesRoot.appendChild(empty);
       return;
     }
 
     pages.forEach((page) => {
-      const row = el(
-        'div',
-        'flex items-center justify-between gap-2.5 p-2.5 bg-white/[0.03] border border-white/[0.07] rounded-lg',
-      );
+      const row = el('div', 'pa-ps-row');
 
-      const info = el('div', 'flex flex-col gap-0.5 min-w-0');
+      const info = el('div', 'pa-ps-row-text');
       info.appendChild(
-        el('div', 'text-[12px] font-medium text-brand-text truncate', page.pageTitle || 'Untitled page'),
+        el('div', 'pa-ps-row-title', page.pageTitle || 'Untitled page'),
       );
-      info.appendChild(el('div', 'text-[10px] text-brand-faint truncate', page.url));
+      info.appendChild(el('div', 'pa-ps-row-desc', page.url));
       info.appendChild(
-        el('div', 'text-[10px] text-brand-faint', `${page.elementCount} element${page.elementCount === 1 ? '' : 's'}`),
+        el('div', 'pa-ps-row-desc', `${page.elementCount} element${page.elementCount === 1 ? '' : 's'}`),
       );
       row.appendChild(info);
 
-      const del = el(
-        'button',
-        'shrink-0 px-2 py-1 rounded-md border border-brand-danger/35 bg-brand-danger/10 text-brand-danger-soft text-[11px] font-semibold cursor-pointer hover:bg-brand-danger/20 transition-colors',
-        'Delete',
-      );
+      const del = el('button', 'pa-ps-delete', 'Delete');
       del.type = 'button';
       del.setAttribute('aria-label', `Delete saved drawings for ${page.pageTitle || page.url}`);
       del.addEventListener('click', async () => {
@@ -383,12 +402,10 @@ export class PopupSettingsPanel {
 
   private renderBackup(): void {
     const section = this.section('Backup & restore');
+    const box = card();
+    const actions = el('div', 'pa-ps-actions');
 
-    const exportBtn = el(
-      'button',
-      'w-full px-3 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.09] text-[12px] font-semibold text-brand-text transition-colors cursor-pointer',
-      'Download backup (.json)',
-    );
+    const exportBtn = el('button', 'pa-ps-btn', 'Download backup (.json)');
     exportBtn.type = 'button';
     exportBtn.addEventListener('click', async () => {
       const json = await exportAllDataAsJson();
@@ -401,7 +418,7 @@ export class PopupSettingsPanel {
       URL.revokeObjectURL(url);
       this.announce('Backup downloaded');
     });
-    section.appendChild(exportBtn);
+    actions.appendChild(exportBtn);
 
     this.fileInput = el('input', 'hidden');
     this.fileInput.type = 'file';
@@ -410,22 +427,20 @@ export class PopupSettingsPanel {
     this.fileInput.addEventListener('change', () => {
       void this.importBackup();
     });
-    section.appendChild(this.fileInput);
+    actions.appendChild(this.fileInput);
 
-    const importBtn = el(
-      'button',
-      'w-full px-3 py-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] border border-dashed border-white/[0.14] text-[12px] font-semibold text-brand-muted transition-colors cursor-pointer',
-      'Restore from backup',
-    );
+    const importBtn = el('button', 'pa-ps-btn dashed', 'Restore from backup');
     importBtn.type = 'button';
     importBtn.addEventListener('click', () => this.fileInput.click());
-    section.appendChild(importBtn);
+    actions.appendChild(importBtn);
 
-    this.statusEl = el('p', 'text-[11px] text-brand-accent-soft min-h-[14px]');
+    this.statusEl = el('p', 'pa-ps-status');
     this.statusEl.setAttribute('role', 'status');
     this.statusEl.setAttribute('aria-live', 'polite');
-    section.appendChild(this.statusEl);
+    actions.appendChild(this.statusEl);
 
+    box.appendChild(actions);
+    section.appendChild(box);
     this.root.appendChild(section);
   }
 
@@ -449,18 +464,15 @@ export class PopupSettingsPanel {
   }
 
   private colorField(label: string, value: string, onChange: (value: string) => void): HTMLElement {
-    const row = el('div', ROW);
+    const row = el('div', 'pa-ps-row');
 
-    const info = el('div', 'flex flex-col gap-0.5');
-    info.appendChild(el('span', LABEL, label));
-    const hex = el('span', 'font-mono text-[11px] text-brand-faint', value);
+    const info = el('div', 'pa-ps-row-text');
+    info.appendChild(el('span', 'pa-ps-row-title', label));
+    const hex = el('span', 'pa-ps-hex', value);
     info.appendChild(hex);
     row.appendChild(info);
 
-    const input = el(
-      'input',
-      'w-8 h-8 p-0.5 rounded-lg border border-white/[0.12] bg-white/[0.03] cursor-pointer',
-    );
+    const input = el('input', 'pa-ps-swatch');
     input.type = 'color';
     input.value = value;
     input.setAttribute('aria-label', label);
@@ -481,15 +493,15 @@ export class PopupSettingsPanel {
     unit: string,
     onChange: (value: number) => void,
   ): HTMLElement {
-    const wrap = el('div', 'flex flex-col gap-2');
+    const field = el('div', 'pa-ps-field');
 
-    const head = el('div', 'flex items-center justify-between');
-    head.appendChild(el('span', LABEL, label));
-    const readout = el('span', 'font-mono text-[11px] text-brand-accent-soft', `${value}${unit}`);
+    const head = el('div', 'pa-ps-field-head');
+    head.appendChild(el('span', 'pa-ps-row-title', label));
+    const readout = el('span', 'pa-ps-readout', `${value}${unit}`);
     head.appendChild(readout);
-    wrap.appendChild(head);
+    field.appendChild(head);
 
-    const input = el('input', RANGE);
+    const input = el('input', 'pa-ps-range');
     input.type = 'range';
     input.min = `${min}`;
     input.max = `${max}`;
@@ -499,9 +511,9 @@ export class PopupSettingsPanel {
       readout.textContent = `${input.value}${unit}`;
     });
     input.addEventListener('change', () => onChange(parseInt(input.value, 10)));
-    wrap.appendChild(input);
+    field.appendChild(input);
 
-    return wrap;
+    return field;
   }
 
   private checkField(
@@ -510,19 +522,28 @@ export class PopupSettingsPanel {
     checked: boolean,
     onChange: (checked: boolean) => void,
   ): HTMLElement {
-    const row = el('label', `${ROW} cursor-pointer`);
+    const row = el('div', 'pa-ps-row');
 
-    const info = el('div', 'flex flex-col gap-0.5 pr-2');
-    info.appendChild(el('span', LABEL, label));
-    info.appendChild(el('span', HINT, hint));
+    const info = el('div', 'pa-ps-row-text');
+    info.appendChild(el('span', 'pa-ps-row-title', label));
+    info.appendChild(el('span', 'pa-ps-row-desc', hint));
     row.appendChild(info);
 
-    const input = el('input', CHECKBOX);
+    const control = el('div', 'pa-ps-control');
+    const switchLabel = el('label', 'pa-ps-switch');
+    const input = el('input');
     input.type = 'checkbox';
     input.checked = checked;
     input.setAttribute('aria-label', label);
     input.addEventListener('change', () => onChange(input.checked));
-    row.appendChild(input);
+
+    const track = el('span', 'pa-ps-switch-track');
+    track.setAttribute('aria-hidden', 'true');
+
+    switchLabel.appendChild(input);
+    switchLabel.appendChild(track);
+    control.appendChild(switchLabel);
+    row.appendChild(control);
 
     return row;
   }
@@ -533,10 +554,10 @@ export class PopupSettingsPanel {
     options: Array<[string, string]>,
     onChange: (value: string) => void,
   ): HTMLElement {
-    const wrap = el('div', 'flex flex-col gap-1.5');
-    wrap.appendChild(el('span', LABEL, label));
+    const field = el('div', 'pa-ps-field');
+    field.appendChild(el('span', 'pa-ps-row-title', label));
 
-    const select = el('select', SELECT);
+    const select = el('select', 'pa-ps-select');
     select.setAttribute('aria-label', label);
     options.forEach(([optionValue, optionLabel]) => {
       const option = el('option', undefined, optionLabel);
@@ -545,8 +566,8 @@ export class PopupSettingsPanel {
       select.appendChild(option);
     });
     select.addEventListener('change', () => onChange(select.value));
-    wrap.appendChild(select);
+    field.appendChild(select);
 
-    return wrap;
+    return field;
   }
 }

@@ -191,15 +191,7 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     expect(mockCallbacks.onExport).toHaveBeenCalled();
   });
 
-  it('opens and closes settings modal from settings button', () => {
-    const settingsBtn = container.querySelector('[data-action="settings"]') as HTMLButtonElement;
-    settingsBtn.click();
-
-    const backdrop = container.querySelector('.pa-modal-backdrop') as HTMLElement;
-    expect(backdrop).not.toBeNull();
-
-    const closeBtn = backdrop.querySelector('.pa-modal-close') as HTMLButtonElement;
-    closeBtn.click();
-    expect(container.querySelector('.pa-modal-backdrop')).toBeNull();
+  it('does not expose a settings action in the drawing toolbar', () => {
+    expect(container.querySelector('[data-action="settings"]')).toBeNull();
   });
 });

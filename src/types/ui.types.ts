@@ -9,11 +9,6 @@ export interface ToolbarCallbacks {
   onToggleDomAnchoring?: (enabled: boolean) => void;
 }
 
-export interface SettingsModalCallbacks {
-  onSave?: (settings: ExtensionSettings) => void;
-  onClose?: () => void;
-}
-
 export interface TextEditorCallbacks {
   onCommit?: (text: string, element: TextElement) => void;
   onCancel?: () => void;

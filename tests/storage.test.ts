@@ -180,6 +180,28 @@ describe('Storage Engine: Persistence with Mocked Chrome Storage', () => {
       const settings = await loadSettings();
       expect(settings.strokeSimplification).toBe(false);
     });
+
+    it('collapses legacy Ctrl/Cmd modifier tokens onto the neutral Mod', async () => {
+      mockStore['page_anchor_settings'] = {
+        shortcuts: { 'action-undo': 'Ctrl+z', 'action-redo': 'Cmd+y', 'tool-pen': 'p' },
+      };
+
+      const settings = await loadSettings();
+      expect(settings.shortcuts['action-undo']).toBe('Mod+z');
+      expect(settings.shortcuts['action-redo']).toBe('Mod+y');
+      expect(settings.shortcuts['tool-pen']).toBe('p');
+    });
+
+    it('canonicalizes shortcut tokens in imported backups', async () => {
+      const backup = JSON.stringify({
+        page_anchor_settings: { shortcuts: { 'action-select-all': 'Ctrl+a' } },
+      });
+
+      expect(await importDataFromJson(backup)).toBe(true);
+
+      const settings = await loadSettings();
+      expect(settings.shortcuts['action-select-all']).toBe('Mod+a');
+    });
   });
 
   describe('Backup Import Boundary Validation', () => {

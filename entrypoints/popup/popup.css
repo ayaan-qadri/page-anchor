@@ -2,9 +2,11 @@
 @import "../../src/styles/tailwind.css";
 
 /*
- * Every visual in this popup is a Tailwind utility. The only rules that live
- * here are document-wide guarantees, which cannot be expressed as utilities
- * because they apply to elements the markup does not own (`*`, focus states).
+ * Every visual in this popup is a Tailwind utility, except the settings
+ * components below. They are grouped here because the settings panel builds
+ * its markup in TypeScript, so a shared class keeps the rows consistent and
+ * the render code readable. Document-wide guarantees (`*`, focus states) also
+ * live here, since utilities cannot target elements the markup does not own.
  */
 @layer base {
   /* WCAG 2.4.7 — one consistent, visible indicator on every focusable control. */
@@ -22,5 +24,387 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+  }
+}
+
+@layer components {
+  /* ── Settings panel ──────────────────────────────────────────── */
+  .pa-ps-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .pa-ps-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-brand-faint);
+  }
+
+  .pa-ps-card {
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.022);
+    overflow: hidden;
+  }
+
+  /* A whole card that acts as one drill-down control (e.g. Keyboard shortcuts). */
+  .pa-ps-nav-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 11px 12px;
+    background: transparent;
+    border: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.13s ease;
+  }
+
+  .pa-ps-nav-row:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .pa-ps-nav-chevron {
+    flex: none;
+    display: flex;
+    color: var(--color-brand-faint);
+  }
+
+  /* Header for a drill-down sub-view, holding the back control and its title. */
+  .pa-ps-subhead {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pa-ps-back {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    margin-left: -4px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--color-brand-muted);
+    cursor: pointer;
+    transition: background-color 0.13s ease, color 0.13s ease;
+  }
+
+  .pa-ps-back:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--color-brand-text);
+  }
+
+  .pa-ps-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+  }
+
+  .pa-ps-card > * + * {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .pa-ps-row-text {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .pa-ps-row-title {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-brand-text);
+  }
+
+  .pa-ps-row-desc {
+    margin-top: 1px;
+    font-size: 10.5px;
+    line-height: 1.4;
+    color: var(--color-brand-faint);
+  }
+
+  .pa-ps-control {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .pa-ps-field {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 10px 12px;
+  }
+
+  .pa-ps-field-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .pa-ps-select {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    padding: 7px 30px 7px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.04);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%2399a1b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 9px center;
+    color: var(--color-brand-text);
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.13s ease, background-color 0.13s ease;
+  }
+
+  .pa-ps-select:hover {
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+
+  .pa-ps-select option {
+    background: var(--color-brand-surface);
+    color: var(--color-brand-text);
+  }
+
+  .pa-ps-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 34px;
+    height: 20px;
+    cursor: pointer;
+  }
+
+  .pa-ps-switch input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .pa-ps-switch-track {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.16);
+    transition: background-color 0.16s ease;
+  }
+
+  .pa-ps-switch-track::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #ffffff;
+    transition: transform 0.16s ease;
+  }
+
+  .pa-ps-switch input:checked + .pa-ps-switch-track {
+    background: var(--color-brand-accent);
+  }
+
+  .pa-ps-switch input:checked + .pa-ps-switch-track::after {
+    transform: translateX(14px);
+  }
+
+  .pa-ps-switch input:focus-visible + .pa-ps-switch-track {
+    outline: 2px solid var(--color-brand-ring);
+    outline-offset: 2px;
+  }
+
+  .pa-ps-range {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    cursor: pointer;
+  }
+
+  .pa-ps-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--color-brand-accent-soft);
+    border: 2px solid var(--color-brand-bg);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+  }
+
+  .pa-ps-range::-moz-range-thumb {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--color-brand-accent-soft);
+    border: 2px solid var(--color-brand-bg);
+    cursor: pointer;
+  }
+
+  .pa-ps-readout {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-brand-accent-soft);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pa-ps-hex {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-brand-faint);
+  }
+
+  .pa-ps-swatch {
+    width: 30px;
+    height: 30px;
+    padding: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    cursor: pointer;
+  }
+
+  .pa-ps-key {
+    flex: none;
+    min-width: 86px;
+    padding: 5px 9px;
+    border-radius: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-brand-accent-soft);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    text-align: center;
+    cursor: pointer;
+    transition: background-color 0.13s ease, border-color 0.13s ease, color 0.13s ease;
+  }
+
+  .pa-ps-key:hover {
+    background: rgba(255, 255, 255, 0.09);
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+
+  .pa-ps-key.recording {
+    background: rgba(224, 87, 107, 0.12);
+    border-color: var(--color-brand-danger);
+    color: var(--color-brand-danger-soft);
+    animation: paPsPulse 1.3s ease-in-out infinite;
+  }
+
+  .pa-ps-key.conflict {
+    border-color: var(--color-brand-warning);
+    color: var(--color-brand-warning-soft);
+  }
+
+  @keyframes paPsPulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.62;
+    }
+  }
+
+  .pa-ps-delete {
+    flex: none;
+    padding: 5px 9px;
+    border-radius: 7px;
+    border: 1px solid rgba(224, 87, 107, 0.35);
+    background: rgba(224, 87, 107, 0.1);
+    color: var(--color-brand-danger-soft);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.13s ease, border-color 0.13s ease;
+  }
+
+  .pa-ps-delete:hover {
+    background: rgba(224, 87, 107, 0.2);
+    border-color: rgba(224, 87, 107, 0.5);
+  }
+
+  .pa-ps-link-btn {
+    align-self: flex-start;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-brand-muted);
+    text-decoration: underline;
+    text-decoration-color: rgba(255, 255, 255, 0.2);
+    text-underline-offset: 2px;
+    cursor: pointer;
+    transition: color 0.13s ease, text-decoration-color 0.13s ease;
+  }
+
+  .pa-ps-link-btn:hover {
+    color: var(--color-brand-text);
+    text-decoration-color: rgba(255, 255, 255, 0.4);
+  }
+
+  .pa-ps-btn {
+    width: 100%;
+    padding: 9px 12px;
+    border-radius: 9px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--color-brand-text);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.13s ease, border-color 0.13s ease;
+  }
+
+  .pa-ps-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+
+  .pa-ps-btn.dashed {
+    background: rgba(255, 255, 255, 0.03);
+    border-style: dashed;
+    border-color: rgba(255, 255, 255, 0.14);
+    color: var(--color-brand-muted);
+  }
+
+  .pa-ps-btn.dashed:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--color-brand-text);
+  }
+
+  .pa-ps-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .pa-ps-status {
+    min-height: 14px;
+    font-size: 11px;
+    color: var(--color-brand-accent-soft);
   }
 }

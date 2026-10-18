@@ -81,7 +81,8 @@ Page Anchor solves this with 5 dedicated performance strategies:
 > **Browser Safety Guarantee**: 
 > - Global toggles use `Alt + Shift` combinations to ensure zero conflicts with reserved browser shortcuts (e.g. `Alt + D` for the Chrome/Edge address bar, `Ctrl + D` for bookmarks, or `Ctrl + Alt` European `AltGr` characters like `€`).
 > - Single-letter shortcuts (`P`, `T`, `E`, etc.) are strictly active **only when Drawing Mode is active**. When drawing mode is off, all normal webpage typing and website shortcuts (YouTube, GitHub, Twitter) are 100% undisturbed.
-> - All shortcuts can be customized in the in-page **Settings Modal** (gear icon) or the dedicated **Extension Options** page, with automatic conflict warnings if a browser-reserved key is chosen.
+> - **Platform-aware modifiers**: the primary modifier is neutral — `Ctrl` on Windows/Linux and `Cmd` on macOS — and the `Alt` key is shown as `Option` on Apple hardware. Bindings saved by earlier versions are migrated automatically.
+> - All shortcuts can be customized from the extension **popup Settings** panel or the dedicated **Extension Options** page, with automatic conflict warnings if a browser-reserved key is chosen.
 
 ---
 
@@ -122,8 +123,7 @@ page-anchor/
 │   ├── ui/
 │   │   ├── styles.ts            # Shadow DOM isolated CSS styles
 │   │   ├── toolbar.ts           # Floating draggable toolbar & anchor pill
-│   │   ├── text-editor.ts       # In-page text annotation overlay
-│   │   └── settings-modal.ts    # Interactive settings & shortcut modal
+│   │   └── text-editor.ts       # In-page text annotation overlay
 │   └── icons/
 │       └── svg-icons.ts         # Pure inline SVG icons (zero asset delay)
 ├── public/                      # Extension icons (16, 32, 48, 128) — generated

@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { FloatingToolbar } from '../src/ui/toolbar';
-import { SettingsModal } from '../src/ui/settings-modal';
 import { TextEditorOverlay } from '../src/ui/text-editor';
 import { CanvasEngine } from '../src/core/engine';
 import { HistoryManager } from '../src/core/history';
@@ -189,59 +188,6 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
 
       handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
       handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-    });
-  });
-
-  describe('Settings Modal Focus Trap & Dialog Semantics (WCAG 2.1.2)', () => {
-    let container: HTMLElement;
-    let modal: SettingsModal;
-
-    beforeEach(() => {
-      container = document.createElement('div');
-      document.body.appendChild(container);
-      modal = new SettingsModal(container, DEFAULT_SETTINGS);
-    });
-
-    afterEach(() => {
-      modal.close();
-      container.remove();
-    });
-
-    it('should render dialog role, aria-modal, and labelledby', () => {
-      modal.open();
-      const dialogEl = container.querySelector('.pa-modal');
-      expect(dialogEl?.getAttribute('role')).toBe('dialog');
-      expect(dialogEl?.getAttribute('aria-modal')).toBe('true');
-      expect(dialogEl?.getAttribute('aria-labelledby')).toBe('pa-settings-modal-title');
-    });
-
-    it('should close modal when Escape key is pressed and return focus', () => {
-      const triggerBtn = document.createElement('button');
-      document.body.appendChild(triggerBtn);
-      triggerBtn.focus();
-
-      modal.open();
-      expect(container.querySelector('.pa-modal')).not.toBeNull();
-
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-      expect(container.querySelector('.pa-modal')).toBeNull();
-
-      triggerBtn.remove();
-    });
-
-    it('keeps a visible focus indicator on modal select controls (WCAG 2.4.7)', () => {
-      modal.open();
-
-      const selects = container.querySelectorAll<HTMLSelectElement>('.pa-modal select');
-      expect(selects.length).toBeGreaterThan(0);
-
-      // An inline `outline: none` would beat the shadow sheet's `:focus-visible` ring.
-      selects.forEach((select) => {
-        expect(select.getAttribute('style') ?? '').not.toContain('outline');
-      });
-
-      const shadowStyles = fs.readFileSync(path.resolve(__dirname, '../src/ui/styles.ts'), 'utf-8');
-      expect(shadowStyles).toContain(':focus-visible');
     });
   });
 
