@@ -37,10 +37,6 @@
             <svg class="pa-tab-icon flex-none opacity-85 group-aria-selected:text-brand-accent-soft group-aria-selected:opacity-100" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>
             <span>Keyboard shortcuts</span>
           </button>
-          <button role="tab" id="tab-btn-drawing" class="pa-tab-btn group flex items-center gap-2.5 w-full px-2.75 py-2.25 border-none rounded-[10px] bg-transparent text-brand-muted text-[13px] font-medium text-left cursor-pointer transition-colors duration-130 hover:text-brand-text hover:bg-white/4.5 aria-selected:text-brand-text aria-selected:bg-brand-blue/16 max-[820px]:w-auto max-[820px]:flex-none max-[820px]:whitespace-nowrap" data-tab="drawing" aria-selected="false" aria-controls="tab-drawing" tabindex="-1">
-            <svg class="pa-tab-icon flex-none opacity-85 group-aria-selected:text-brand-accent-soft group-aria-selected:opacity-100" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-            <span>Drawing defaults</span>
-          </button>
           <button role="tab" id="tab-btn-persistence" class="pa-tab-btn group flex items-center gap-2.5 w-full px-2.75 py-2.25 border-none rounded-[10px] bg-transparent text-brand-muted text-[13px] font-medium text-left cursor-pointer transition-colors duration-130 hover:text-brand-text hover:bg-white/4.5 aria-selected:text-brand-text aria-selected:bg-brand-blue/16 max-[820px]:w-auto max-[820px]:flex-none max-[820px]:whitespace-nowrap" data-tab="persistence" aria-selected="false" aria-controls="tab-persistence" tabindex="-1">
             <svg class="pa-tab-icon flex-none opacity-85 group-aria-selected:text-brand-accent-soft group-aria-selected:opacity-100" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
             <span>Persistence &amp; matching</span>
@@ -68,90 +64,6 @@
           </div>
           <div class="pa-pane-footer flex justify-start">
             <button id="btn-reset-shortcuts" class="pa-btn inline-flex items-center justify-center gap-1.75 px-3.5 py-2 rounded-[9px] border border-white/10 bg-white/6 text-brand-text text-[12.5px] font-semibold cursor-pointer transition-colors duration-130 hover:bg-white/10 hover:border-white/18">Reset shortcuts to default</button>
-          </div>
-        </section>
-
-        <section role="tabpanel" id="tab-drawing" class="pa-tab-pane hidden" aria-labelledby="tab-btn-drawing" tabindex="0" hidden>
-          <div class="pa-pane-head">
-            <h2 class="text-[17px] font-semibold tracking-[-0.015em] text-brand-text">Drawing defaults</h2>
-            <p class="mt-1 text-[13px] text-brand-muted max-w-[60ch]">Starting values for each tool. You can still change them any time from the toolbar.</p>
-          </div>
-
-          <div class="pa-card border border-white/[0.07] rounded-[14px] bg-white/[0.022] overflow-hidden">
-            <div class="pa-card-head px-4.5 pt-3.75 pb-3.25 border-b border-white/6">
-              <h3 class="text-[13.5px] font-semibold text-brand-text">Pen</h3>
-              <p class="mt-0.75 text-[12.5px] text-brand-muted max-w-[62ch]">Freehand drawing tool.</p>
-            </div>
-            <div class="pa-rows flex flex-col [&>*+*]:border-t [&>*+*]:border-white/6">
-              <div class="pa-row flex items-center justify-between gap-6 px-4.5 py-3.5 max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3">
-                <div class="pa-row-text flex-[1_1_auto] min-w-0">
-                  <label class="pa-row-title block text-[13px] font-medium text-brand-text" for="pref-pen-color">Stroke colour</label>
-                  <p class="pa-row-desc mt-0.5 text-xs leading-[1.45] text-brand-muted">Default colour for freehand lines and shapes.</p>
-                </div>
-                <div class="pa-row-control flex-none flex items-center gap-2.5 max-[820px]:justify-start">
-                  <span id="pref-pen-color-text" class="pa-hex font-mono text-xs text-brand-muted">#ef4444</span>
-                  <input type="color" id="pref-pen-color" class="w-8.5 h-8.5 p-0.75 border border-white/12 rounded-[9px] bg-white/3 cursor-pointer" aria-label="Default pen stroke colour" />
-                </div>
-              </div>
-              <div class="pa-row flex items-center justify-between gap-6 px-4.5 py-3.5 max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3">
-                <div class="pa-row-text flex-[1_1_auto] min-w-0">
-                  <label class="pa-row-title block text-[13px] font-medium text-brand-text" for="pref-pen-width">Stroke width</label>
-                  <p class="pa-row-desc mt-0.5 text-xs leading-[1.45] text-brand-muted">Thickness of the freehand line.</p>
-                </div>
-                <div class="pa-row-control flex-none flex items-center gap-3 max-[820px]:justify-start">
-                  <span id="pref-pen-width-val" class="pa-readout min-w-11 text-right font-mono text-xs font-semibold text-brand-accent-soft tabular-nums">4px</span>
-                  <input type="range" id="pref-pen-width" min="1" max="30" value="4" class="pa-range appearance-none w-55 max-w-[42vw] h-1.5 rounded-full bg-white/12 cursor-pointer max-[820px]:w-full max-[820px]:max-w-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-brand-accent-soft [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-brand-bg [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(0,0,0,0.5)] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-brand-accent-soft [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-brand-bg [&::-moz-range-thumb]:cursor-pointer" aria-label="Default pen stroke width" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="pa-card border border-white/[0.07] rounded-[14px] bg-white/[0.022] overflow-hidden">
-            <div class="pa-card-head px-4.5 pt-3.75 pb-3.25 border-b border-white/6">
-              <h3 class="text-[13.5px] font-semibold text-brand-text">Highlighter</h3>
-              <p class="mt-0.75 text-[12.5px] text-brand-muted max-w-[62ch]">Translucent marker for emphasis.</p>
-            </div>
-            <div class="pa-rows flex flex-col [&>*+*]:border-t [&>*+*]:border-white/6">
-              <div class="pa-row flex items-center justify-between gap-6 px-4.5 py-3.5 max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3">
-                <div class="pa-row-text flex-[1_1_auto] min-w-0">
-                  <label class="pa-row-title block text-[13px] font-medium text-brand-text" for="pref-highlighter-color">Highlighter colour</label>
-                  <p class="pa-row-desc mt-0.5 text-xs leading-[1.45] text-brand-muted">Tint applied by the highlighter.</p>
-                </div>
-                <div class="pa-row-control flex-none flex items-center gap-2.5 max-[820px]:justify-start">
-                  <span id="pref-highlighter-color-text" class="pa-hex font-mono text-xs text-brand-muted">#facc15</span>
-                  <input type="color" id="pref-highlighter-color" class="w-8.5 h-8.5 p-0.75 border border-white/12 rounded-[9px] bg-white/3 cursor-pointer" aria-label="Default highlighter colour" />
-                </div>
-              </div>
-              <div class="pa-row flex items-center justify-between gap-6 px-4.5 py-3.5 max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3">
-                <div class="pa-row-text flex-[1_1_auto] min-w-0">
-                  <label class="pa-row-title block text-[13px] font-medium text-brand-text" for="pref-highlighter-width">Highlighter width</label>
-                  <p class="pa-row-desc mt-0.5 text-xs leading-[1.45] text-brand-muted">Thickness of highlighted strokes.</p>
-                </div>
-                <div class="pa-row-control flex-none flex items-center gap-3 max-[820px]:justify-start">
-                  <span id="pref-highlighter-width-val" class="pa-readout min-w-11 text-right font-mono text-xs font-semibold text-brand-accent-soft tabular-nums">20px</span>
-                  <input type="range" id="pref-highlighter-width" min="8" max="50" value="20" class="pa-range appearance-none w-55 max-w-[42vw] h-1.5 rounded-full bg-white/12 cursor-pointer max-[820px]:w-full max-[820px]:max-w-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-brand-accent-soft [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-brand-bg [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(0,0,0,0.5)] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-brand-accent-soft [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-brand-bg [&::-moz-range-thumb]:cursor-pointer" aria-label="Default highlighter width" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="pa-card border border-white/[0.07] rounded-[14px] bg-white/[0.022] overflow-hidden">
-            <div class="pa-card-head px-4.5 pt-3.75 pb-3.25 border-b border-white/6">
-              <h3 class="text-[13.5px] font-semibold text-brand-text">Text notes</h3>
-              <p class="mt-0.75 text-[12.5px] text-brand-muted max-w-[62ch]">Typed annotations placed on the page.</p>
-            </div>
-            <div class="pa-rows flex flex-col [&>*+*]:border-t [&>*+*]:border-white/6">
-              <div class="pa-row flex items-center justify-between gap-6 px-4.5 py-3.5 max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3">
-                <div class="pa-row-text flex-[1_1_auto] min-w-0">
-                  <label class="pa-row-title block text-[13px] font-medium text-brand-text" for="pref-font-size">Font size</label>
-                  <p class="pa-row-desc mt-0.5 text-xs leading-[1.45] text-brand-muted">Base size for new text notes.</p>
-                </div>
-                <div class="pa-row-control flex-none flex items-center gap-3 max-[820px]:justify-start">
-                  <span id="pref-font-size-val" class="pa-readout min-w-11 text-right font-mono text-xs font-semibold text-brand-accent-soft tabular-nums">18px</span>
-                  <input type="range" id="pref-font-size" min="12" max="36" value="18" class="pa-range appearance-none w-55 max-w-[42vw] h-1.5 rounded-full bg-white/12 cursor-pointer max-[820px]:w-full max-[820px]:max-w-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-brand-accent-soft [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-brand-bg [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(0,0,0,0.5)] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-brand-accent-soft [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-brand-bg [&::-moz-range-thumb]:cursor-pointer" aria-label="Default text note font size" />
-                </div>
-              </div>
-            </div>
           </div>
         </section>
 

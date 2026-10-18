@@ -134,24 +134,8 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
     expect(badge.title).toContain('conflicts with');
   });
 
-  it('updates form settings for pen, highlighter, font, and URL persistence', async () => {
+  it('updates persistence form settings and saves them', async () => {
     await initOptions();
-
-    const penColor = document.getElementById('pref-pen-color') as HTMLInputElement;
-    penColor.value = '#10b981';
-    penColor.dispatchEvent(new Event('input'));
-
-    const penWidth = document.getElementById('pref-pen-width') as HTMLInputElement;
-    penWidth.value = '12';
-    penWidth.dispatchEvent(new Event('input'));
-
-    const highlighterColor = document.getElementById('pref-highlighter-color') as HTMLInputElement;
-    highlighterColor.value = '#ec4899';
-    highlighterColor.dispatchEvent(new Event('input'));
-
-    const fontSize = document.getElementById('pref-font-size') as HTMLInputElement;
-    fontSize.value = '22';
-    fontSize.dispatchEvent(new Event('input'));
 
     const urlMatchMode = document.getElementById('pref-url-match-mode') as HTMLSelectElement;
     urlMatchMode.value = 'domain';
@@ -160,6 +144,14 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
     const orphanMode = document.getElementById('pref-orphan-mode') as HTMLSelectElement;
     orphanMode.value = 'dimmed';
     orphanMode.dispatchEvent(new Event('change'));
+
+    const toolbarOpen = document.getElementById('pref-toolbar-open') as HTMLInputElement;
+    toolbarOpen.checked = true;
+    toolbarOpen.dispatchEvent(new Event('change'));
+
+    const strokeSimplification = document.getElementById('pref-stroke-simplification') as HTMLInputElement;
+    strokeSimplification.checked = false;
+    strokeSimplification.dispatchEvent(new Event('change'));
 
     const saveBtn = document.getElementById('btn-save') as HTMLButtonElement;
     saveBtn.click();

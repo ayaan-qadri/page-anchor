@@ -321,4 +321,63 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
   it('does not expose a settings action in the drawing toolbar', () => {
     expect(container.querySelector('[data-action="settings"]')).toBeNull();
   });
+
+  it('keeps the drawing defaults in the toolbar popover and persists changes', () => {
+    const colorBtn = container.querySelector('.pa-color-preview-btn') as HTMLButtonElement;
+    colorBtn.click();
+    expect(colorBtn.getAttribute('aria-expanded')).toBe('true');
+
+    for (const setting of [
+      'defaultStrokeColor',
+      'defaultStrokeWidth',
+      'defaultHighlighterColor',
+      'defaultHighlighterWidth',
+      'defaultFontSize',
+    ]) {
+      expect(container.querySelector(`[data-setting="${setting}"]`)).not.toBeNull();
+    }
+
+    const penWidth = container.querySelector<HTMLInputElement>('input[data-setting="defaultStrokeWidth"]')!;
+    penWidth.value = '9';
+    penWidth.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect((toolbar as any).settings.defaultStrokeWidth).toBe(9);
+    expect(mockCallbacks.onSettingsUpdate).toHaveBeenCalled();
+
+    const swatch = container.querySelector<HTMLButtonElement>('.pa-color-swatch')!;
+    swatch.click();
+    expect((toolbar as any).settings.defaultStrokeColor).toBe(swatch.dataset.color);
+    expect(colorBtn.style.backgroundColor).toBeTruthy();
+  });
+
+  it('keeps the popover open while changing a value and closes on an outside press', () => {
+    const colorBtn = container.querySelector('.pa-color-preview-btn') as HTMLButtonElement;
+    colorBtn.click();
+    expect(colorBtn.getAttribute('aria-expanded')).toBe('true');
+
+    const swatch = container.querySelector<HTMLButtonElement>('.pa-color-swatch')!;
+    swatch.dispatchEvent(new Event('pointerdown', { bubbles: true, composed: true }));
+    expect(colorBtn.getAttribute('aria-expanded')).toBe('true');
+
+    const slider = container.querySelector<HTMLInputElement>('input[data-setting="defaultStrokeWidth"]')!;
+    slider.dispatchEvent(new Event('pointerdown', { bubbles: true, composed: true }));
+    expect(colorBtn.getAttribute('aria-expanded')).toBe('true');
+
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true, composed: true }));
+    expect(colorBtn.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('resets the drawing defaults back to factory values from the popover', () => {
+    const penWidth = container.querySelector<HTMLInputElement>('input[data-setting="defaultStrokeWidth"]')!;
+    penWidth.value = '9';
+    penWidth.dispatchEvent(new Event('change', { bubbles: true }));
+    expect((toolbar as any).settings.defaultStrokeWidth).toBe(9);
+
+    const reset = container.querySelector<HTMLButtonElement>('.pa-popover-reset')!;
+    reset.click();
+
+    expect((toolbar as any).settings.defaultStrokeWidth).toBe(DEFAULT_SETTINGS.defaultStrokeWidth);
+    expect((toolbar as any).settings.defaultFontSize).toBe(DEFAULT_SETTINGS.defaultFontSize);
+    expect(penWidth.value).toBe(`${DEFAULT_SETTINGS.defaultStrokeWidth}`);
+  });
 });

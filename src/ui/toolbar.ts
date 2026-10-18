@@ -6,7 +6,7 @@ import { ToolbarCallbacks } from '../types/ui.types';
 import { ICONS } from '../icons/svg-icons';
 import { TextEditorOverlay } from './text-editor';
 import { formatShortcutForDisplay } from '../core/shortcuts';
-import { saveSettings } from '../core/storage';
+import { DEFAULT_SETTINGS, saveSettings } from '../core/storage';
 
 export type { ToolbarCallbacks };
 
@@ -39,8 +39,6 @@ export class FloatingToolbar {
   private dockClose: HTMLButtonElement;
   private colorPopover: HTMLElement;
   private colorPreviewBtn: HTMLElement;
-  private strokeSlider: HTMLInputElement;
-  private strokeSizeLabel: HTMLElement;
 
   private isDragging = false;
   private dragOffset = { x: 0, y: 0 };
@@ -85,10 +83,8 @@ export class FloatingToolbar {
     this.colorPopover = document.createElement('div');
     this.colorPopover.className = 'pa-popover';
     this.colorPopover.setAttribute('role', 'dialog');
-    this.colorPopover.setAttribute('aria-label', 'Stroke color and width settings');
+    this.colorPopover.setAttribute('aria-label', 'Drawing defaults');
 
-    this.strokeSlider = document.createElement('input');
-    this.strokeSizeLabel = document.createElement('span');
     this.colorPreviewBtn = document.createElement('button');
     (this.colorPreviewBtn as HTMLButtonElement).type = 'button';
 
@@ -125,6 +121,7 @@ export class FloatingToolbar {
 
     this.initDragEvents();
     this.bindDockEvents();
+    this.applyDrawingDefaults();
     this.updateActiveToolUI();
     this.updateHistoryButtons();
     this.updateBadge();
@@ -148,6 +145,8 @@ export class FloatingToolbar {
 
   public setSettings(settings: ExtensionSettings): void {
     this.settings = settings;
+    this.applyDrawingDefaults();
+    this.syncDrawingDefaultControls();
     this.updateTooltips();
     if (settings.areAnnotationsVisible !== undefined) {
       this.engine.setAnnotationsVisible(settings.areAnnotationsVisible);
@@ -379,14 +378,13 @@ export class FloatingToolbar {
 
     this.colorPreviewBtn.className = 'pa-color-preview-btn';
     this.colorPreviewBtn.style.backgroundColor = this.settings.defaultStrokeColor;
-    this.colorPreviewBtn.title = 'Colors & Stroke Size';
-    this.colorPreviewBtn.setAttribute('aria-label', 'Stroke color and width settings');
+    this.colorPreviewBtn.title = 'Drawing defaults';
+    this.colorPreviewBtn.setAttribute('aria-label', 'Drawing defaults');
     this.colorPreviewBtn.setAttribute('aria-haspopup', 'dialog');
     this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
     this.colorPreviewBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const isOpen = this.colorPopover.classList.toggle('open');
-      this.colorPreviewBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      this.toggleColorPopover();
     });
     this.toolbar.appendChild(this.colorPreviewBtn);
 
@@ -498,11 +496,27 @@ export class FloatingToolbar {
     }
   }
 
+  private toggleColorPopover(): void {
+    const isOpen = this.colorPopover.classList.toggle('open');
+    this.colorPreviewBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    if (isOpen) this.positionColorPopover();
+  }
+
+  /** Flips the popover below the toolbar when there is not enough room above. */
+  private positionColorPopover(): void {
+    const roomAbove = this.wrapper.getBoundingClientRect().top;
+    const height = this.colorPopover.offsetHeight;
+    this.colorPopover.classList.toggle('below', roomAbove < height + 16);
+  }
+
   private buildColorPopover(): void {
+    const body = document.createElement('div');
+    body.className = 'pa-popover-body';
+
     const grid = document.createElement('div');
     grid.className = 'pa-color-grid';
     grid.setAttribute('role', 'group');
-    grid.setAttribute('aria-label', 'Preset stroke colors');
+    grid.setAttribute('aria-label', 'Preset pen colors');
 
     PRESET_COLORS.forEach((color) => {
       const swatch = document.createElement('button');
@@ -510,95 +524,233 @@ export class FloatingToolbar {
       const isActive = color === this.settings.defaultStrokeColor;
       swatch.className = `pa-color-swatch ${isActive ? 'active' : ''}`;
       swatch.style.backgroundColor = color;
+      swatch.dataset.color = color;
       swatch.setAttribute('aria-label', `Color ${color}`);
       swatch.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       swatch.addEventListener('click', () => {
-        this.applyColor(color);
-        grid.querySelectorAll('.pa-color-swatch').forEach((s) => {
-          s.classList.remove('active');
-          s.setAttribute('aria-pressed', 'false');
-        });
-        swatch.classList.add('active');
-        swatch.setAttribute('aria-pressed', 'true');
+        this.updateDrawingDefaults({ defaultStrokeColor: color });
       });
       grid.appendChild(swatch);
     });
-    this.colorPopover.appendChild(grid);
+    body.appendChild(grid);
 
-    const customRow = document.createElement('div');
-    customRow.style.display = 'flex';
-    customRow.style.alignItems = 'center';
-    customRow.style.justifyContent = 'space-between';
-    customRow.style.fontSize = '12px';
-    customRow.style.color = 'var(--pa-muted)';
+    body.appendChild(
+      this.buildColorRow('Pen colour', 'defaultStrokeColor', this.settings.defaultStrokeColor)
+    );
+    body.appendChild(
+      this.buildSliderField('Pen width', 'defaultStrokeWidth', 1, 30, this.settings.defaultStrokeWidth)
+    );
 
-    const customLabel = document.createElement('label');
-    customLabel.htmlFor = 'pa-custom-color-picker';
-    customLabel.textContent = 'Custom Color';
+    body.appendChild(this.buildPopoverDivider());
 
-    const colorInput = document.createElement('input');
-    colorInput.type = 'color';
-    colorInput.id = 'pa-custom-color-picker';
-    colorInput.value = this.settings.defaultStrokeColor;
-    colorInput.setAttribute('aria-label', 'Custom Color Picker');
-    colorInput.style.cursor = 'pointer';
-    colorInput.style.border = 'none';
-    colorInput.style.background = 'none';
-    colorInput.style.width = '28px';
-    colorInput.style.height = '28px';
+    body.appendChild(
+      this.buildColorRow('Highlighter colour', 'defaultHighlighterColor', this.settings.defaultHighlighterColor)
+    );
+    body.appendChild(
+      this.buildSliderField('Highlighter width', 'defaultHighlighterWidth', 8, 50, this.settings.defaultHighlighterWidth)
+    );
 
-    colorInput.addEventListener('input', () => {
-      this.applyColor(colorInput.value);
-    });
+    body.appendChild(this.buildPopoverDivider());
 
-    customRow.appendChild(customLabel);
-    customRow.appendChild(colorInput);
-    this.colorPopover.appendChild(customRow);
+    body.appendChild(
+      this.buildSliderField('Text note size', 'defaultFontSize', 12, 36, this.settings.defaultFontSize)
+    );
 
-    const sliderGroup = document.createElement('div');
-    sliderGroup.className = 'pa-slider-group';
+    const footer = document.createElement('div');
+    footer.className = 'pa-popover-footer';
+    footer.appendChild(this.buildResetButton());
 
-    const sliderHeader = document.createElement('div');
-    sliderHeader.className = 'pa-slider-label';
-    sliderHeader.innerHTML = `<span>Stroke Width</span>`;
-    this.strokeSizeLabel.textContent = `${this.settings.defaultStrokeWidth}px`;
-    sliderHeader.appendChild(this.strokeSizeLabel);
+    this.colorPopover.appendChild(body);
+    this.colorPopover.appendChild(footer);
 
-    this.strokeSlider.type = 'range';
-    this.strokeSlider.className = 'pa-slider';
-    this.strokeSlider.min = '1';
-    this.strokeSlider.max = '36';
-    this.strokeSlider.value = `${this.settings.defaultStrokeWidth}`;
-    this.strokeSlider.setAttribute('aria-label', 'Stroke width in pixels');
-    this.strokeSlider.setAttribute('aria-valuemin', '1');
-    this.strokeSlider.setAttribute('aria-valuemax', '36');
-    this.strokeSlider.setAttribute('aria-valuenow', `${this.settings.defaultStrokeWidth}`);
-    this.strokeSlider.setAttribute('aria-valuetext', `${this.settings.defaultStrokeWidth} pixels`);
-
-    this.strokeSlider.addEventListener('input', () => {
-      const val = parseInt(this.strokeSlider.value, 10);
-      this.strokeSizeLabel.textContent = `${val}px`;
-      this.strokeSlider.setAttribute('aria-valuenow', `${val}`);
-      this.strokeSlider.setAttribute('aria-valuetext', `${val} pixels`);
-      this.engine.setStrokeWidth(val);
-      this.engine.setHighlighterWidth(val * 3);
-    });
-
-    sliderGroup.appendChild(sliderHeader);
-    sliderGroup.appendChild(this.strokeSlider);
-    this.colorPopover.appendChild(sliderGroup);
-
-    window.addEventListener('click', (e) => {
-      if (!this.wrapper.contains(e.target as Node)) {
-        this.colorPopover.classList.remove('open');
-        this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
-      }
-    });
+    // Close only on a press that starts outside the toolbar. `composedPath()`
+    // is required because events from inside the shadow root are retargeted to
+    // the host at the window, which would make a `contains(target)` check fail
+    // for every in-popover interaction. Listening on `pointerdown` (not `click`)
+    // keeps the popover open when a slider drag ends outside of it.
+    window.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (!e.composedPath().includes(this.wrapper)) {
+          this.closeColorPopover();
+        }
+      },
+      true
+    );
   }
 
-  private applyColor(color: string): void {
-    this.engine.setStrokeColor(color);
-    this.colorPreviewBtn.style.backgroundColor = color;
+  private closeColorPopover(): void {
+    this.colorPopover.classList.remove('open');
+    this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  /** A label + native color input pair inside the popover. */
+  private buildColorRow(
+    label: string,
+    setting: 'defaultStrokeColor' | 'defaultHighlighterColor',
+    value: string
+  ): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'pa-popover-row';
+
+    const name = document.createElement('span');
+    name.className = 'pa-popover-label';
+    name.textContent = label;
+
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.className = 'pa-popover-color';
+    input.dataset.setting = setting;
+    input.value = value;
+    input.setAttribute('aria-label', label);
+    input.addEventListener('input', () => {
+      if (setting === 'defaultStrokeColor') {
+        this.engine.setStrokeColor(input.value);
+        this.colorPreviewBtn.style.backgroundColor = input.value;
+      } else {
+        this.engine.setHighlighterColor(input.value);
+      }
+    });
+    input.addEventListener('change', () => {
+      this.updateDrawingDefaults({ [setting]: input.value } as Partial<ExtensionSettings>);
+    });
+
+    row.appendChild(name);
+    row.appendChild(input);
+    return row;
+  }
+
+  /** A labelled slider with a live pixel readout inside the popover. */
+  private buildSliderField(
+    label: string,
+    setting: 'defaultStrokeWidth' | 'defaultHighlighterWidth' | 'defaultFontSize',
+    min: number,
+    max: number,
+    value: number
+  ): HTMLElement {
+    const group = document.createElement('div');
+    group.className = 'pa-slider-group';
+
+    const header = document.createElement('div');
+    header.className = 'pa-slider-label';
+    const name = document.createElement('span');
+    name.textContent = label;
+    const readout = document.createElement('span');
+    readout.className = 'pa-slider-readout';
+    readout.textContent = `${value}px`;
+    header.appendChild(name);
+    header.appendChild(readout);
+
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.className = 'pa-slider';
+    input.dataset.setting = setting;
+    input.min = `${min}`;
+    input.max = `${max}`;
+    input.value = `${value}`;
+    input.setAttribute('aria-label', label);
+    input.setAttribute('aria-valuemin', `${min}`);
+    input.setAttribute('aria-valuemax', `${max}`);
+    input.setAttribute('aria-valuenow', `${value}`);
+    input.setAttribute('aria-valuetext', `${value} pixels`);
+
+    const apply = (commit: boolean) => {
+      const val = parseInt(input.value, 10);
+      readout.textContent = `${val}px`;
+      input.setAttribute('aria-valuenow', `${val}`);
+      input.setAttribute('aria-valuetext', `${val} pixels`);
+      if (setting === 'defaultStrokeWidth') this.engine.setStrokeWidth(val);
+      else if (setting === 'defaultHighlighterWidth') this.engine.setHighlighterWidth(val);
+      else this.engine.setFontSize(val);
+      if (commit) this.updateDrawingDefaults({ [setting]: val } as Partial<ExtensionSettings>);
+    };
+
+    input.addEventListener('input', () => apply(false));
+    input.addEventListener('change', () => apply(true));
+
+    group.appendChild(header);
+    group.appendChild(input);
+    return group;
+  }
+
+  private buildPopoverDivider(): HTMLElement {
+    const divider = document.createElement('div');
+    divider.className = 'pa-popover-divider';
+    divider.setAttribute('aria-hidden', 'true');
+    return divider;
+  }
+
+  /** A button that restores every drawing default to its factory value. */
+  private buildResetButton(): HTMLElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'pa-popover-reset';
+    button.textContent = 'Reset to defaults';
+    button.setAttribute('aria-label', 'Reset drawing defaults to factory values');
+    button.addEventListener('click', () => this.resetDrawingDefaults());
+    return button;
+  }
+
+  /** Restores the five drawing defaults and repaints the popover controls. */
+  private resetDrawingDefaults(): void {
+    this.updateDrawingDefaults({
+      defaultStrokeColor: DEFAULT_SETTINGS.defaultStrokeColor,
+      defaultStrokeWidth: DEFAULT_SETTINGS.defaultStrokeWidth,
+      defaultHighlighterColor: DEFAULT_SETTINGS.defaultHighlighterColor,
+      defaultHighlighterWidth: DEFAULT_SETTINGS.defaultHighlighterWidth,
+      defaultFontSize: DEFAULT_SETTINGS.defaultFontSize,
+    });
+    this.syncDrawingDefaultControls();
+  }
+
+  /** Pushes the stored drawing defaults into the engine. */
+  private applyDrawingDefaults(): void {
+    this.engine.setStrokeColor(this.settings.defaultStrokeColor);
+    this.engine.setStrokeWidth(this.settings.defaultStrokeWidth);
+    this.engine.setHighlighterColor(this.settings.defaultHighlighterColor);
+    this.engine.setHighlighterWidth(this.settings.defaultHighlighterWidth);
+    this.engine.setFontSize(this.settings.defaultFontSize);
+  }
+
+  /**
+   * Applies a change made from the toolbar: updates the engine immediately,
+   * notifies the host, and persists it so it carries across pages and sessions.
+   */
+  private updateDrawingDefaults(patch: Partial<ExtensionSettings>): void {
+    Object.assign(this.settings, patch);
+    this.applyDrawingDefaults();
+    this.refreshPenColorControls();
+    this.callbacks.onSettingsUpdate?.(this.settings);
+    saveSettings(patch).catch(() => {});
+  }
+
+  /** Repaints the popover controls from `this.settings` (no rebinding). */
+  private syncDrawingDefaultControls(): void {
+    this.colorPopover.querySelectorAll<HTMLInputElement>('input[data-setting]').forEach((input) => {
+      const key = input.dataset.setting as keyof ExtensionSettings;
+      const value = this.settings[key];
+      if (typeof value === 'number') {
+        input.value = `${value}`;
+        input.setAttribute('aria-valuenow', `${value}`);
+        input.setAttribute('aria-valuetext', `${value} pixels`);
+        const readout = input.closest('.pa-slider-group')?.querySelector<HTMLElement>('.pa-slider-readout');
+        if (readout) readout.textContent = `${value}px`;
+      } else if (typeof value === 'string') {
+        input.value = value;
+      }
+    });
+    this.refreshPenColorControls();
+  }
+
+  /** Keeps the pen preview button and preset swatches in step with the pen colour. */
+  private refreshPenColorControls(): void {
+    const pen = this.settings.defaultStrokeColor;
+    this.colorPreviewBtn.style.backgroundColor = pen;
+    this.colorPopover.querySelectorAll<HTMLButtonElement>('.pa-color-swatch').forEach((swatch) => {
+      const isActive = swatch.dataset.color === pen;
+      swatch.classList.toggle('active', isActive);
+      swatch.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
   }
 
   private createToolButton(

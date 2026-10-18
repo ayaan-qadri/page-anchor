@@ -40,7 +40,6 @@ export async function initOptions() {
 
   setupTabs();
   renderShortcuts();
-  setupDrawingForm();
   setupPersistenceForm();
   await renderSavedPages();
   setupBackupRestore();
@@ -238,48 +237,6 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
   });
 }
 
-function setupDrawingForm() {
-  const penColor = document.getElementById('pref-pen-color') as HTMLInputElement;
-  const penColorText = document.getElementById('pref-pen-color-text') as HTMLElement;
-  const penWidth = document.getElementById('pref-pen-width') as HTMLInputElement;
-  const penWidthVal = document.getElementById('pref-pen-width-val') as HTMLElement;
-
-  const highlighterColor = document.getElementById('pref-highlighter-color') as HTMLInputElement;
-  const highlighterColorText = document.getElementById('pref-highlighter-color-text') as HTMLElement;
-  const highlighterWidth = document.getElementById('pref-highlighter-width') as HTMLInputElement;
-  const highlighterWidthVal = document.getElementById('pref-highlighter-width-val') as HTMLElement;
-
-  const fontSize = document.getElementById('pref-font-size') as HTMLInputElement;
-  const fontSizeVal = document.getElementById('pref-font-size-val') as HTMLElement;
-
-  syncDrawingFormValues();
-
-  penColor.addEventListener('input', () => {
-    penColorText.textContent = penColor.value;
-    currentSettings.defaultStrokeColor = penColor.value;
-  });
-
-  penWidth.addEventListener('input', () => {
-    penWidthVal.textContent = `${penWidth.value}px`;
-    currentSettings.defaultStrokeWidth = parseInt(penWidth.value, 10);
-  });
-
-  highlighterColor.addEventListener('input', () => {
-    highlighterColorText.textContent = highlighterColor.value;
-    currentSettings.defaultHighlighterColor = highlighterColor.value;
-  });
-
-  highlighterWidth.addEventListener('input', () => {
-    highlighterWidthVal.textContent = `${highlighterWidth.value}px`;
-    currentSettings.defaultHighlighterWidth = parseInt(highlighterWidth.value, 10);
-  });
-
-  fontSize.addEventListener('input', () => {
-    fontSizeVal.textContent = `${fontSize.value}px`;
-    currentSettings.defaultFontSize = parseInt(fontSize.value, 10);
-  });
-}
-
 function setupPersistenceForm() {
   const matchMode = document.getElementById('pref-url-match-mode') as HTMLSelectElement;
   const strokeSimplification = document.getElementById('pref-stroke-simplification') as HTMLInputElement;
@@ -308,31 +265,6 @@ function setupPersistenceForm() {
   orphanMode?.addEventListener('change', () => {
     currentSettings.orphanedAnchorMode = orphanMode.value as 'hide' | 'dimmed';
   });
-}
-
-/** Refreshes drawing-default form controls from `currentSettings` (no rebinding). */
-function syncDrawingFormValues(): void {
-  const penColor = document.getElementById('pref-pen-color') as HTMLInputElement;
-  const penColorText = document.getElementById('pref-pen-color-text') as HTMLElement;
-  const penWidth = document.getElementById('pref-pen-width') as HTMLInputElement;
-  const penWidthVal = document.getElementById('pref-pen-width-val') as HTMLElement;
-  const highlighterColor = document.getElementById('pref-highlighter-color') as HTMLInputElement;
-  const highlighterColorText = document.getElementById('pref-highlighter-color-text') as HTMLElement;
-  const highlighterWidth = document.getElementById('pref-highlighter-width') as HTMLInputElement;
-  const highlighterWidthVal = document.getElementById('pref-highlighter-width-val') as HTMLElement;
-  const fontSize = document.getElementById('pref-font-size') as HTMLInputElement;
-  const fontSizeVal = document.getElementById('pref-font-size-val') as HTMLElement;
-
-  penColor.value = currentSettings.defaultStrokeColor;
-  penColorText.textContent = currentSettings.defaultStrokeColor;
-  penWidth.value = `${currentSettings.defaultStrokeWidth}`;
-  penWidthVal.textContent = `${currentSettings.defaultStrokeWidth}px`;
-  highlighterColor.value = currentSettings.defaultHighlighterColor;
-  highlighterColorText.textContent = currentSettings.defaultHighlighterColor;
-  highlighterWidth.value = `${currentSettings.defaultHighlighterWidth}`;
-  highlighterWidthVal.textContent = `${currentSettings.defaultHighlighterWidth}px`;
-  fontSize.value = `${currentSettings.defaultFontSize}`;
-  fontSizeVal.textContent = `${currentSettings.defaultFontSize}px`;
 }
 
 /** Refreshes persistence form controls from `currentSettings` (no rebinding). */
@@ -462,7 +394,6 @@ function setupBackupRestore() {
         announce('Backup restored successfully!');
         currentSettings = await loadSettings();
         renderShortcuts();
-        syncDrawingFormValues();
         syncPersistenceFormValues();
         await renderSavedPages();
         markSaved();

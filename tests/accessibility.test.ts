@@ -36,16 +36,6 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
 
     it('should ensure all form controls have explicitly associated labels or aria-labels', () => {
       const optionsHtml = fs.readFileSync(path.resolve(__dirname, '../entrypoints/options/index.html'), 'utf-8');
-      expect(optionsHtml).toContain('for="pref-pen-color"');
-      expect(optionsHtml).toContain('id="pref-pen-color"');
-      expect(optionsHtml).toContain('for="pref-pen-width"');
-      expect(optionsHtml).toContain('id="pref-pen-width"');
-      expect(optionsHtml).toContain('for="pref-highlighter-color"');
-      expect(optionsHtml).toContain('id="pref-highlighter-color"');
-      expect(optionsHtml).toContain('for="pref-highlighter-width"');
-      expect(optionsHtml).toContain('id="pref-highlighter-width"');
-      expect(optionsHtml).toContain('for="pref-font-size"');
-      expect(optionsHtml).toContain('id="pref-font-size"');
       expect(optionsHtml).toContain('for="pref-url-match-mode"');
       expect(optionsHtml).toContain('id="pref-url-match-mode"');
       expect(optionsHtml).toContain('for="pref-toolbar-open"');

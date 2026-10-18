@@ -34,9 +34,7 @@ const ROW_TITLE = 'pa-ps-row-title block text-xs font-medium text-brand-text';
 const ROW_DESC = 'pa-ps-row-desc mt-px text-[10.5px] leading-[1.4] text-brand-faint';
 const CONTROL = 'pa-ps-control flex-none flex items-center gap-2';
 const FIELD = 'pa-ps-field flex flex-col gap-1.75 px-3 py-2.5';
-const FIELD_HEAD = 'pa-ps-field-head flex items-center justify-between gap-2.5';
 const FIELD_LABEL = 'pa-ps-row-title text-xs font-medium text-brand-text';
-const FIELD_READOUT = 'pa-ps-readout font-mono text-[11px] font-semibold text-brand-accent-soft tabular-nums';
 const NAV_ROW =
   'pa-ps-nav-row flex items-center justify-between gap-3 w-full px-3 py-2.75 bg-transparent border-none ' +
   'text-inherit text-left cursor-pointer transition-colors duration-130 hover:bg-white/4';
@@ -59,18 +57,6 @@ const SWITCH_TRACK =
   'after:bg-white after:transition-transform after:duration-160 ' +
   'peer-checked:bg-brand-accent peer-checked:after:translate-x-3.5 ' +
   'peer-focus-visible:outline-2 peer-focus-visible:outline-brand-ring peer-focus-visible:outline-offset-2';
-const RANGE =
-  'pa-ps-range appearance-none w-full h-1.25 rounded-full bg-white/12 cursor-pointer ' +
-  '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.75 [&::-webkit-slider-thumb]:h-3.75 ' +
-  '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-brand-accent-soft ' +
-  '[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-brand-bg ' +
-  '[&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(0,0,0,0.5)] [&::-webkit-slider-thumb]:cursor-pointer ' +
-  '[&::-moz-range-thumb]:w-3.25 [&::-moz-range-thumb]:h-3.25 [&::-moz-range-thumb]:rounded-full ' +
-  '[&::-moz-range-thumb]:bg-brand-accent-soft [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-brand-bg ' +
-  '[&::-moz-range-thumb]:cursor-pointer';
-const HEX = 'pa-ps-hex font-mono text-[10.5px] text-brand-faint';
-const SWATCH =
-  'pa-ps-swatch w-7.5 h-7.5 p-0.5 border border-white/12 rounded-lg bg-white/3 cursor-pointer';
 const KEY =
   'pa-ps-key flex-none min-w-21.5 px-2.25 py-1.25 rounded-[7px] border border-white/10 bg-white/5 ' +
   'text-brand-accent-soft text-[11px] font-semibold whitespace-nowrap text-center cursor-pointer ' +
@@ -133,7 +119,6 @@ export class PopupSettingsPanel {
     this.dispose();
     this.settings = await loadSettings();
     this.root.replaceChildren();
-    this.renderDrawingDefaults();
     this.renderPersistence();
     this.renderShortcuts();
     await this.renderSavedPages();
@@ -166,45 +151,6 @@ export class PopupSettingsPanel {
     head.appendChild(el('h3', SECTION_TITLE, title));
     wrap.appendChild(head);
     return wrap;
-  }
-
-  private renderDrawingDefaults(): void {
-    const section = this.section('Drawing defaults');
-    const box = card();
-
-    box.appendChild(
-      this.colorField('Pen colour', this.settings.defaultStrokeColor, (value) => {
-        this.settings.defaultStrokeColor = value;
-        this.persist();
-      }),
-    );
-    box.appendChild(
-      this.rangeField('Pen width', 1, 30, this.settings.defaultStrokeWidth, 'px', (value) => {
-        this.settings.defaultStrokeWidth = value;
-        this.persist();
-      }),
-    );
-    box.appendChild(
-      this.colorField('Highlighter colour', this.settings.defaultHighlighterColor, (value) => {
-        this.settings.defaultHighlighterColor = value;
-        this.persist();
-      }),
-    );
-    box.appendChild(
-      this.rangeField('Highlighter width', 8, 50, this.settings.defaultHighlighterWidth, 'px', (value) => {
-        this.settings.defaultHighlighterWidth = value;
-        this.persist();
-      }),
-    );
-    box.appendChild(
-      this.rangeField('Text note size', 12, 36, this.settings.defaultFontSize, 'px', (value) => {
-        this.settings.defaultFontSize = value;
-        this.persist();
-      }),
-    );
-
-    section.appendChild(box);
-    this.root.appendChild(section);
   }
 
   private renderPersistence(): void {
@@ -585,59 +531,6 @@ export class PopupSettingsPanel {
     } catch {
       this.statusEl.textContent = 'Could not read that file.';
     }
-  }
-
-  private colorField(label: string, value: string, onChange: (value: string) => void): HTMLElement {
-    const row = el('div', ROW);
-
-    const info = el('div', ROW_TEXT);
-    info.appendChild(el('span', ROW_TITLE, label));
-    const hex = el('span', HEX, value);
-    info.appendChild(hex);
-    row.appendChild(info);
-
-    const input = el('input', SWATCH);
-    input.type = 'color';
-    input.value = value;
-    input.setAttribute('aria-label', label);
-    input.addEventListener('input', () => {
-      hex.textContent = input.value;
-      onChange(input.value);
-    });
-    row.appendChild(input);
-
-    return row;
-  }
-
-  private rangeField(
-    label: string,
-    min: number,
-    max: number,
-    value: number,
-    unit: string,
-    onChange: (value: number) => void,
-  ): HTMLElement {
-    const field = el('div', FIELD);
-
-    const head = el('div', FIELD_HEAD);
-    head.appendChild(el('span', FIELD_LABEL, label));
-    const readout = el('span', FIELD_READOUT, `${value}${unit}`);
-    head.appendChild(readout);
-    field.appendChild(head);
-
-    const input = el('input', RANGE);
-    input.type = 'range';
-    input.min = `${min}`;
-    input.max = `${max}`;
-    input.value = `${value}`;
-    input.setAttribute('aria-label', label);
-    input.addEventListener('input', () => {
-      readout.textContent = `${input.value}${unit}`;
-    });
-    input.addEventListener('change', () => onChange(parseInt(input.value, 10)));
-    field.appendChild(input);
-
-    return field;
   }
 
   private checkField(

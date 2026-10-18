@@ -72,7 +72,6 @@ describe('Popup settings panel', () => {
 
     const headings = Array.from(root.querySelectorAll('h3')).map((h) => h.textContent);
     expect(headings).toEqual([
-      'Drawing defaults',
       'Persistence & matching',
       'Keyboard shortcuts',
       'Saved pages',
