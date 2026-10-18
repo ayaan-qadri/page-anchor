@@ -18,6 +18,78 @@ const CHEVRON_RIGHT =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6"/></svg>';
 const CHEVRON_LEFT =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg>';
+const CHEVRON_DOWN =
+  '<svg class="pointer-events-none absolute right-[9px] top-1/2 -translate-y-1/2 text-brand-muted" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>';
+
+/* Tailwind recipes for the settings surface, which is assembled in TypeScript. */
+const SECTION = 'pa-ps-section flex flex-col gap-2';
+const SECTION_TITLE = 'pa-ps-title text-[11px] font-semibold tracking-[0.08em] uppercase text-brand-faint';
+const CARD =
+  'pa-ps-card border border-white/[0.07] rounded-xl bg-white/[0.022] overflow-hidden ' +
+  '[&>*+*]:border-t [&>*+*]:border-white/[0.06]';
+const ROW = 'pa-ps-row flex items-center justify-between gap-3 px-3 py-2.5';
+const ROW_TEXT = 'pa-ps-row-text flex-[1_1_auto] min-w-0';
+const ROW_TITLE = 'pa-ps-row-title block text-xs font-medium text-brand-text';
+const ROW_DESC = 'pa-ps-row-desc mt-px text-[10.5px] leading-[1.4] text-brand-faint';
+const CONTROL = 'pa-ps-control flex-none flex items-center gap-2';
+const FIELD = 'pa-ps-field flex flex-col gap-[7px] px-3 py-2.5';
+const FIELD_HEAD = 'pa-ps-field-head flex items-center justify-between gap-2.5';
+const FIELD_LABEL = 'pa-ps-row-title text-xs font-medium text-brand-text';
+const FIELD_READOUT = 'pa-ps-readout font-mono text-[11px] font-semibold text-brand-accent-soft tabular-nums';
+const NAV_ROW =
+  'pa-ps-nav-row flex items-center justify-between gap-3 w-full px-3 py-[11px] bg-transparent border-none ' +
+  'text-inherit text-left cursor-pointer transition-colors duration-[130ms] hover:bg-white/[0.04]';
+const NAV_CHEVRON = 'pa-ps-nav-chevron flex-none flex text-brand-faint';
+const SUBHEAD = 'pa-ps-subhead flex items-center gap-1.5';
+const BACK =
+  'pa-ps-back flex items-center justify-center w-6 h-6 -ml-1 border-none rounded-[7px] bg-transparent ' +
+  'text-brand-muted cursor-pointer transition-colors duration-[130ms] hover:bg-white/[0.06] hover:text-brand-text';
+const LINK_BTN =
+  'pa-ps-link-btn self-start text-[11px] font-semibold text-brand-muted underline decoration-white/20 ' +
+  'underline-offset-2 cursor-pointer transition-colors duration-[130ms] hover:text-brand-text hover:decoration-white/40';
+const SELECT =
+  'pa-ps-select w-full appearance-none pl-2.5 pr-[30px] py-[7px] border border-white/10 rounded-lg ' +
+  'bg-white/[0.04] text-brand-text text-xs cursor-pointer transition-colors duration-[130ms] hover:border-white/[0.18]';
+const SWITCH = 'pa-ps-switch relative inline-flex items-center w-[34px] h-5 cursor-pointer';
+const SWITCH_INPUT = 'absolute inset-0 w-full h-full m-0 opacity-0 cursor-pointer peer';
+const SWITCH_TRACK =
+  'pa-ps-switch-track absolute inset-0 rounded-full bg-white/[0.16] transition-colors duration-[160ms] ' +
+  "after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:w-3.5 after:h-3.5 after:rounded-full " +
+  'after:bg-white after:transition-transform after:duration-[160ms] ' +
+  'peer-checked:bg-brand-accent peer-checked:after:translate-x-3.5 ' +
+  'peer-focus-visible:outline-2 peer-focus-visible:outline-brand-ring peer-focus-visible:outline-offset-2';
+const RANGE =
+  'pa-ps-range appearance-none w-full h-[5px] rounded-full bg-white/[0.12] cursor-pointer ' +
+  '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-[15px] [&::-webkit-slider-thumb]:h-[15px] ' +
+  '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-brand-accent-soft ' +
+  '[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-brand-bg ' +
+  '[&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(0,0,0,0.5)] [&::-webkit-slider-thumb]:cursor-pointer ' +
+  '[&::-moz-range-thumb]:w-[13px] [&::-moz-range-thumb]:h-[13px] [&::-moz-range-thumb]:rounded-full ' +
+  '[&::-moz-range-thumb]:bg-brand-accent-soft [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-brand-bg ' +
+  '[&::-moz-range-thumb]:cursor-pointer';
+const HEX = 'pa-ps-hex font-mono text-[10.5px] text-brand-faint';
+const SWATCH =
+  'pa-ps-swatch w-[30px] h-[30px] p-0.5 border border-white/[0.12] rounded-lg bg-white/[0.03] cursor-pointer';
+const KEY =
+  'pa-ps-key flex-none min-w-[86px] px-[9px] py-[5px] rounded-[7px] border border-white/10 bg-white/5 ' +
+  'text-brand-accent-soft text-[11px] font-semibold whitespace-nowrap text-center cursor-pointer ' +
+  'transition-colors duration-[130ms] hover:bg-white/[0.09] hover:border-white/[0.18] ' +
+  'data-[capturing=true]:bg-brand-danger/[0.12] data-[capturing=true]:border-brand-danger ' +
+  'data-[capturing=true]:text-brand-danger-soft data-[capturing=true]:animate-pulse ' +
+  'data-[conflict=true]:border-brand-warning data-[conflict=true]:text-brand-warning-soft';
+const DELETE =
+  'pa-ps-delete flex-none px-[9px] py-[5px] rounded-[7px] border border-brand-danger/35 bg-brand-danger/10 ' +
+  'text-brand-danger-soft text-[11px] font-semibold cursor-pointer transition-colors duration-[130ms] ' +
+  'hover:bg-brand-danger/20 hover:border-brand-danger/50';
+const BTN =
+  'pa-ps-btn w-full px-3 py-[9px] rounded-[9px] border border-white/10 bg-white/[0.06] text-brand-text ' +
+  'text-xs font-semibold cursor-pointer transition-colors duration-[130ms] hover:bg-white/10 hover:border-white/[0.18]';
+const BTN_DASHED =
+  'pa-ps-btn dashed w-full px-3 py-[9px] rounded-[9px] border border-dashed border-white/[0.14] ' +
+  'bg-white/[0.03] text-brand-muted text-xs font-semibold cursor-pointer transition-colors duration-[130ms] ' +
+  'hover:bg-white/[0.06] hover:text-brand-text';
+const ACTIONS = 'pa-ps-actions flex flex-col gap-2 p-3';
+const STATUS = 'pa-ps-status min-h-[14px] text-[11px] text-brand-accent-soft';
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -32,7 +104,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
 
 /** A card groups related rows under one hairline-divided surface. */
 function card(): HTMLElement {
-  return el('div', 'pa-ps-card');
+  return el('div', CARD);
 }
 
 /**
@@ -73,7 +145,8 @@ export class PopupSettingsPanel {
       const id = btn.dataset.shortcutId as ShortcutAction | undefined;
       const def = SHORTCUT_DEFINITIONS.find((d) => d.id === id);
       const key = (id && this.settings?.shortcuts[id]) || def?.defaultKey || '';
-      btn.classList.remove('recording', 'conflict');
+      delete btn.dataset.capturing;
+      delete btn.dataset.conflict;
       if (key) btn.textContent = formatShortcutForDisplay(key);
       this.recordingButton = null;
     }
@@ -86,9 +159,9 @@ export class PopupSettingsPanel {
   }
 
   private section(title: string): HTMLElement {
-    const wrap = el('section', 'pa-ps-section');
+    const wrap = el('section', SECTION);
     const head = el('div', 'flex flex-col gap-0.5');
-    head.appendChild(el('h3', 'pa-ps-title', title));
+    head.appendChild(el('h3', SECTION_TITLE, title));
     wrap.appendChild(head);
     return wrap;
   }
@@ -220,17 +293,17 @@ export class PopupSettingsPanel {
     const section = this.section('Keyboard shortcuts');
     const box = card();
 
-    const nav = el('button', 'pa-ps-nav-row');
+    const nav = el('button', NAV_ROW);
     nav.type = 'button';
     nav.setAttribute('aria-label', 'Open keyboard shortcut settings');
 
-    const info = el('div', 'pa-ps-row-text');
-    info.appendChild(el('span', 'pa-ps-row-title', 'Customize shortcuts'));
+    const info = el('div', ROW_TEXT);
+    info.appendChild(el('span', ROW_TITLE, 'Customize shortcuts'));
     info.appendChild(
-      el('span', 'pa-ps-row-desc', `Rebind the ${SHORTCUT_DEFINITIONS.length} shortcuts for tools and actions`),
+      el('span', ROW_DESC, `Rebind the ${SHORTCUT_DEFINITIONS.length} shortcuts for tools and actions`),
     );
     nav.appendChild(info);
-    nav.appendChild(el('span', 'pa-ps-nav-chevron', CHEVRON_RIGHT));
+    nav.appendChild(el('span', NAV_CHEVRON, CHEVRON_RIGHT));
     nav.addEventListener('click', () => this.openShortcutEditor());
 
     box.appendChild(nav);
@@ -246,10 +319,10 @@ export class PopupSettingsPanel {
     this.dispose();
 
     this.root.replaceChildren();
-    const section = el('section', 'pa-ps-section');
+    const section = el('section', SECTION);
 
-    const head = el('div', 'pa-ps-subhead');
-    const back = el('button', 'pa-ps-back', CHEVRON_LEFT);
+    const head = el('div', SUBHEAD);
+    const back = el('button', BACK, CHEVRON_LEFT);
     back.type = 'button';
     back.setAttribute('aria-label', 'Back to settings');
     back.addEventListener('click', async () => {
@@ -259,14 +332,14 @@ export class PopupSettingsPanel {
         ?.focus();
     });
     head.appendChild(back);
-    head.appendChild(el('h3', 'pa-ps-title', 'Keyboard shortcuts'));
+    head.appendChild(el('h3', SECTION_TITLE, 'Keyboard shortcuts'));
     section.appendChild(head);
 
     this.shortcutsRoot = card();
     this.buildShortcutRows();
     section.appendChild(this.shortcutsRoot);
 
-    const reset = el('button', 'pa-ps-link-btn', 'Reset shortcuts to default');
+    const reset = el('button', LINK_BTN, 'Reset shortcuts to default');
     reset.type = 'button';
     reset.addEventListener('click', () => {
       this.settings.shortcuts = { ...DEFAULT_SETTINGS.shortcuts };
@@ -284,15 +357,15 @@ export class PopupSettingsPanel {
     this.shortcutsRoot.replaceChildren();
 
     SHORTCUT_DEFINITIONS.forEach((def) => {
-      const row = el('div', 'pa-ps-row');
+      const row = el('div', ROW);
 
-      const info = el('div', 'pa-ps-row-text');
-      info.appendChild(el('div', 'pa-ps-row-title', def.name));
-      info.appendChild(el('div', 'pa-ps-row-desc', def.description));
+      const info = el('div', ROW_TEXT);
+      info.appendChild(el('div', ROW_TITLE, def.name));
+      info.appendChild(el('div', ROW_DESC, def.description));
       row.appendChild(info);
 
       const key = this.settings.shortcuts[def.id] || def.defaultKey;
-      const badge = el('button', 'pa-ps-key');
+      const badge = el('button', KEY);
       badge.type = 'button';
       badge.dataset.shortcutId = def.id;
       badge.textContent = formatShortcutForDisplay(key);
@@ -319,8 +392,8 @@ export class PopupSettingsPanel {
 
     this.recordingButton = badge;
     badge.dataset.shortcutId = actionId;
-    badge.classList.remove('conflict');
-    badge.classList.add('recording');
+    delete badge.dataset.conflict;
+    badge.dataset.capturing = 'true';
     badge.textContent = 'Press keys…';
     badge.setAttribute('aria-label', `Recording shortcut for ${name}. Press keys, or Esc to cancel.`);
     this.announce(`Recording shortcut for ${name}. Press your keys, or Esc to cancel.`);
@@ -337,16 +410,16 @@ export class PopupSettingsPanel {
       this.persist();
 
       this.recordingButton = null;
-      badge.classList.remove('recording');
+      delete badge.dataset.capturing;
       badge.textContent = formatShortcutForDisplay(combo);
       badge.setAttribute('aria-label', `Rebind ${name}. Current shortcut ${formatShortcutForDisplay(combo)}`);
 
       if (conflict) {
-        badge.classList.add('conflict');
+        badge.dataset.conflict = 'true';
         badge.title = `Warning: "${combo}" conflicts with ${conflict.browser} (${conflict.action}).`;
         this.announce(`Shortcut set to ${combo}. Warning: conflicts with ${conflict.browser}`);
       } else {
-        badge.classList.remove('conflict');
+        delete badge.dataset.conflict;
         badge.title = 'Click to record a new keystroke';
         this.announce(`Shortcut for ${name} set to ${combo}`);
       }
@@ -366,26 +439,26 @@ export class PopupSettingsPanel {
     this.savedPagesRoot.replaceChildren();
 
     if (pages.length === 0) {
-      const empty = el('div', 'pa-ps-row');
-      empty.appendChild(el('span', 'pa-ps-row-desc', 'Nothing saved yet. Draw on any page and it will appear here.'));
+      const empty = el('div', ROW);
+      empty.appendChild(el('span', ROW_DESC, 'Nothing saved yet. Draw on any page and it will appear here.'));
       this.savedPagesRoot.appendChild(empty);
       return;
     }
 
     pages.forEach((page) => {
-      const row = el('div', 'pa-ps-row');
+      const row = el('div', ROW);
 
-      const info = el('div', 'pa-ps-row-text');
+      const info = el('div', ROW_TEXT);
       info.appendChild(
-        el('div', 'pa-ps-row-title', page.pageTitle || 'Untitled page'),
+        el('div', ROW_TITLE, page.pageTitle || 'Untitled page'),
       );
-      info.appendChild(el('div', 'pa-ps-row-desc', page.url));
+      info.appendChild(el('div', ROW_DESC, page.url));
       info.appendChild(
-        el('div', 'pa-ps-row-desc', `${page.elementCount} element${page.elementCount === 1 ? '' : 's'}`),
+        el('div', ROW_DESC, `${page.elementCount} element${page.elementCount === 1 ? '' : 's'}`),
       );
       row.appendChild(info);
 
-      const del = el('button', 'pa-ps-delete', 'Delete');
+      const del = el('button', DELETE, 'Delete');
       del.type = 'button';
       del.setAttribute('aria-label', `Delete saved drawings for ${page.pageTitle || page.url}`);
       del.addEventListener('click', async () => {
@@ -403,9 +476,9 @@ export class PopupSettingsPanel {
   private renderBackup(): void {
     const section = this.section('Backup & restore');
     const box = card();
-    const actions = el('div', 'pa-ps-actions');
+    const actions = el('div', ACTIONS);
 
-    const exportBtn = el('button', 'pa-ps-btn', 'Download backup (.json)');
+    const exportBtn = el('button', BTN, 'Download backup (.json)');
     exportBtn.type = 'button';
     exportBtn.addEventListener('click', async () => {
       const json = await exportAllDataAsJson();
@@ -429,12 +502,12 @@ export class PopupSettingsPanel {
     });
     actions.appendChild(this.fileInput);
 
-    const importBtn = el('button', 'pa-ps-btn dashed', 'Restore from backup');
+    const importBtn = el('button', BTN_DASHED, 'Restore from backup');
     importBtn.type = 'button';
     importBtn.addEventListener('click', () => this.fileInput.click());
     actions.appendChild(importBtn);
 
-    this.statusEl = el('p', 'pa-ps-status');
+    this.statusEl = el('p', STATUS);
     this.statusEl.setAttribute('role', 'status');
     this.statusEl.setAttribute('aria-live', 'polite');
     actions.appendChild(this.statusEl);
@@ -464,15 +537,15 @@ export class PopupSettingsPanel {
   }
 
   private colorField(label: string, value: string, onChange: (value: string) => void): HTMLElement {
-    const row = el('div', 'pa-ps-row');
+    const row = el('div', ROW);
 
-    const info = el('div', 'pa-ps-row-text');
-    info.appendChild(el('span', 'pa-ps-row-title', label));
-    const hex = el('span', 'pa-ps-hex', value);
+    const info = el('div', ROW_TEXT);
+    info.appendChild(el('span', ROW_TITLE, label));
+    const hex = el('span', HEX, value);
     info.appendChild(hex);
     row.appendChild(info);
 
-    const input = el('input', 'pa-ps-swatch');
+    const input = el('input', SWATCH);
     input.type = 'color';
     input.value = value;
     input.setAttribute('aria-label', label);
@@ -493,15 +566,15 @@ export class PopupSettingsPanel {
     unit: string,
     onChange: (value: number) => void,
   ): HTMLElement {
-    const field = el('div', 'pa-ps-field');
+    const field = el('div', FIELD);
 
-    const head = el('div', 'pa-ps-field-head');
-    head.appendChild(el('span', 'pa-ps-row-title', label));
-    const readout = el('span', 'pa-ps-readout', `${value}${unit}`);
+    const head = el('div', FIELD_HEAD);
+    head.appendChild(el('span', FIELD_LABEL, label));
+    const readout = el('span', FIELD_READOUT, `${value}${unit}`);
     head.appendChild(readout);
     field.appendChild(head);
 
-    const input = el('input', 'pa-ps-range');
+    const input = el('input', RANGE);
     input.type = 'range';
     input.min = `${min}`;
     input.max = `${max}`;
@@ -522,22 +595,22 @@ export class PopupSettingsPanel {
     checked: boolean,
     onChange: (checked: boolean) => void,
   ): HTMLElement {
-    const row = el('div', 'pa-ps-row');
+    const row = el('div', ROW);
 
-    const info = el('div', 'pa-ps-row-text');
-    info.appendChild(el('span', 'pa-ps-row-title', label));
-    info.appendChild(el('span', 'pa-ps-row-desc', hint));
+    const info = el('div', ROW_TEXT);
+    info.appendChild(el('span', ROW_TITLE, label));
+    info.appendChild(el('span', ROW_DESC, hint));
     row.appendChild(info);
 
-    const control = el('div', 'pa-ps-control');
-    const switchLabel = el('label', 'pa-ps-switch');
-    const input = el('input');
+    const control = el('div', CONTROL);
+    const switchLabel = el('label', SWITCH);
+    const input = el('input', SWITCH_INPUT);
     input.type = 'checkbox';
     input.checked = checked;
     input.setAttribute('aria-label', label);
     input.addEventListener('change', () => onChange(input.checked));
 
-    const track = el('span', 'pa-ps-switch-track');
+    const track = el('span', SWITCH_TRACK);
     track.setAttribute('aria-hidden', 'true');
 
     switchLabel.appendChild(input);
@@ -554,10 +627,11 @@ export class PopupSettingsPanel {
     options: Array<[string, string]>,
     onChange: (value: string) => void,
   ): HTMLElement {
-    const field = el('div', 'pa-ps-field');
-    field.appendChild(el('span', 'pa-ps-row-title', label));
+    const field = el('div', FIELD);
+    field.appendChild(el('span', FIELD_LABEL, label));
 
-    const select = el('select', 'pa-ps-select');
+    const wrap = el('div', 'relative');
+    const select = el('select', SELECT);
     select.setAttribute('aria-label', label);
     options.forEach(([optionValue, optionLabel]) => {
       const option = el('option', undefined, optionLabel);
@@ -566,7 +640,9 @@ export class PopupSettingsPanel {
       select.appendChild(option);
     });
     select.addEventListener('change', () => onChange(select.value));
-    field.appendChild(select);
+    wrap.appendChild(select);
+    wrap.insertAdjacentHTML('beforeend', CHEVRON_DOWN);
+    field.appendChild(wrap);
 
     return field;
   }

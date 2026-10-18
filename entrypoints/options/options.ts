@@ -19,6 +19,20 @@ let currentSettings: ExtensionSettings;
 let saveStatusEl: HTMLElement | null = null;
 const shortcutRecorder = new ShortcutRecorder();
 
+/* Shared Tailwind recipes for the rows the page builds in TypeScript. */
+const ROW = 'pa-row flex items-center justify-between gap-6 px-[18px] py-[14px] max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3';
+const ROW_TEXT = 'pa-row-text flex-[1_1_auto] min-w-0';
+const ROW_TITLE = 'pa-row-title block text-[13px] font-medium text-brand-text';
+const ROW_DESC = 'pa-row-desc mt-0.5 text-xs leading-[1.45] text-brand-muted';
+const ROW_CONTROL = 'pa-row-control flex-none flex items-center gap-3 max-[820px]:justify-start';
+const KEY_BADGE =
+  'pa-key-badge flex-none min-w-[104px] px-3 py-[7px] rounded-[9px] border border-white/10 bg-white/5 ' +
+  'text-brand-accent-soft font-mono text-xs font-semibold text-center cursor-pointer ' +
+  'transition-colors duration-[130ms] hover:bg-white/[0.09] hover:border-white/[0.18] ' +
+  'data-[capturing=true]:bg-brand-danger/[0.12] data-[capturing=true]:border-brand-danger ' +
+  'data-[capturing=true]:text-brand-danger-soft data-[capturing=true]:animate-pulse ' +
+  'data-[conflict=true]:border-brand-warning data-[conflict=true]:text-brand-warning-soft';
+
 export async function initOptions() {
   currentSettings = await loadSettings();
   saveStatusEl = document.getElementById('save-status');
@@ -82,17 +96,14 @@ function setupTabs() {
 
   function activateTab(tab: HTMLButtonElement, shouldFocus = true) {
     tabs.forEach((t) => {
-      t.classList.remove('active');
       t.setAttribute('aria-selected', 'false');
       t.setAttribute('tabindex', '-1');
     });
     panes.forEach((p) => {
-      p.classList.remove('active', 'block');
       p.classList.add('hidden');
       p.hidden = true;
     });
 
-    tab.classList.add('active');
     tab.setAttribute('aria-selected', 'true');
     tab.setAttribute('tabindex', '0');
 
@@ -100,7 +111,6 @@ function setupTabs() {
     const targetPane = document.getElementById(targetId);
     if (targetPane) {
       targetPane.classList.remove('hidden');
-      targetPane.classList.add('active', 'block');
       targetPane.hidden = false;
     }
 
@@ -139,19 +149,19 @@ function renderShortcuts() {
 
   SHORTCUT_DEFINITIONS.forEach((def) => {
     const item = document.createElement('div');
-    item.className = 'pa-row';
+    item.className = ROW;
 
     const info = document.createElement('div');
-    info.className = 'pa-row-text';
+    info.className = ROW_TEXT;
     info.innerHTML = `
-      <span class="pa-row-title">${def.name}</span>
-      <span class="pa-row-desc">${def.description}</span>
+      <span class="${ROW_TITLE}">${def.name}</span>
+      <span class="${ROW_DESC}">${def.description}</span>
     `;
 
     const keyVal = currentSettings.shortcuts[def.id] || def.defaultKey;
     const badge = document.createElement('button');
     badge.type = 'button';
-    badge.className = 'pa-key-badge';
+    badge.className = KEY_BADGE;
     badge.textContent = formatShortcutForDisplay(keyVal);
     badge.title = 'Click to record new keystroke (Esc to cancel)';
     badge.setAttribute(
@@ -174,20 +184,30 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
   const def = SHORTCUT_DEFINITIONS.find((d) => d.id === actionId);
   const actionName = def ? def.name : actionId;
 
-  const clearConflict = () => btn.classList.remove('border-amber-500', 'text-amber-400');
+  const setConflict = (on: boolean) => {
+    if (on) {
+      btn.dataset.conflict = 'true';
+      btn.classList.add('border-amber-500', 'text-amber-400');
+    } else {
+      delete btn.dataset.conflict;
+      btn.classList.remove('border-amber-500', 'text-amber-400');
+    }
+  };
 
+  btn.dataset.capturing = 'true';
   btn.classList.add('recording');
   btn.textContent = 'Press keys...';
   btn.setAttribute('aria-label', `Recording shortcut for ${actionName}. Press keys, or press Escape to cancel.`);
   announce(`Recording shortcut for ${actionName}. Press your desired key combination, or press Escape to cancel.`);
 
   shortcutRecorder.start((result) => {
+    delete btn.dataset.capturing;
     btn.classList.remove('recording');
 
     if (result.type === 'cancel') {
       const prevKey = currentSettings.shortcuts[actionId] || (def ? def.defaultKey : '');
       btn.textContent = formatShortcutForDisplay(prevKey);
-      clearConflict();
+      setConflict(false);
       btn.setAttribute(
         'aria-label',
         `Rebind shortcut for ${actionName}. Current shortcut is ${formatShortcutForDisplay(prevKey)}`
@@ -206,12 +226,11 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
     markDirty();
 
     if (conflict) {
-      clearConflict();
-      btn.classList.add('border-amber-500', 'text-amber-400');
+      setConflict(true);
       btn.title = `Warning: "${combo}" conflicts with ${conflict.browser} (${conflict.action}). Key may be intercepted by the browser.`;
       announce(`Shortcut set to ${combo}. Warning: conflicts with ${conflict.browser}`);
     } else {
-      clearConflict();
+      setConflict(false);
       btn.title = 'Click to record new keystroke';
       announce(`Shortcut for ${actionName} updated to ${combo}`);
     }
@@ -346,17 +365,17 @@ async function renderSavedPages() {
   if (countBadge) countBadge.textContent = `${pages.length}`;
 
   if (pages.length === 0) {
-    listContainer.innerHTML = `<div class="pa-empty">No saved annotations yet. Draw on any web page and it will appear here.</div>`;
+    listContainer.innerHTML = `<div class="pa-empty p-[18px] text-[13px] text-brand-muted text-center">No saved annotations yet. Draw on any web page and it will appear here.</div>`;
     return;
   }
 
   listContainer.innerHTML = '';
   pages.forEach((page) => {
     const item = document.createElement('div');
-    item.className = 'pa-row';
+    item.className = ROW;
 
     const info = document.createElement('div');
-    info.className = 'pa-row-text';
+    info.className = ROW_TEXT;
 
     const dateStr = new Date(page.updatedAt).toLocaleDateString(undefined, {
       month: 'short',
@@ -368,12 +387,14 @@ async function renderSavedPages() {
     const title = page.pageTitle || 'Untitled Page';
 
     const titleEl = document.createElement('div');
-    titleEl.className = 'pa-saved-title pa-row-title';
+    titleEl.className = `pa-saved-title ${ROW_TITLE}`;
     titleEl.textContent = title;
 
     // Only http(s) URLs become links; a stored URL can come from an untrusted backup.
-    const urlEl = document.createElement(isSafeHttpUrl(page.url) ? 'a' : 'span');
-    urlEl.className = 'pa-saved-url';
+    const isLink = isSafeHttpUrl(page.url);
+    const urlEl = document.createElement(isLink ? 'a' : 'span');
+    urlEl.className =
+      'pa-saved-url block text-xs text-brand-accent-soft max-w-[46ch] truncate' + (isLink ? ' hover:underline' : '');
     urlEl.textContent = page.url;
     if (urlEl instanceof HTMLAnchorElement) {
       urlEl.href = page.url;
@@ -383,7 +404,7 @@ async function renderSavedPages() {
     }
 
     const metaEl = document.createElement('div');
-    metaEl.className = 'pa-saved-meta pa-row-desc';
+    metaEl.className = `pa-saved-meta ${ROW_DESC}`;
     metaEl.textContent = `${page.elementCount} elements • Last updated ${dateStr}`;
 
     info.appendChild(titleEl);
@@ -391,10 +412,10 @@ async function renderSavedPages() {
     info.appendChild(metaEl);
 
     const actions = document.createElement('div');
-    actions.className = 'pa-saved-actions pa-row-control';
+    actions.className = `pa-saved-actions ${ROW_CONTROL}`;
 
     const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'pa-btn-danger';
+    deleteBtn.className = 'pa-btn-danger px-3 py-1.5 rounded-lg border border-brand-danger/35 bg-brand-danger/10 text-xs font-semibold text-brand-danger-soft cursor-pointer transition-colors duration-[130ms] ease-out hover:bg-brand-danger/20 hover:border-brand-danger/50';
     deleteBtn.textContent = 'Delete';
     deleteBtn.setAttribute('aria-label', `Delete saved drawings for ${page.pageTitle || page.url}`);
     deleteBtn.addEventListener('click', async () => {

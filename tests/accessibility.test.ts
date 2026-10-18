@@ -19,7 +19,7 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
 
     it('should have a skip-link on the options settings page (WCAG 2.4.1)', () => {
       const optionsHtml = fs.readFileSync(path.resolve(__dirname, '../entrypoints/options/index.html'), 'utf-8');
-      expect(optionsHtml).toContain('class="pa-skip-link"');
+      expect(optionsHtml).toMatch(/class="pa-skip-link[^"]*"/);
       expect(optionsHtml).toContain('href="#main-settings-content"');
       expect(optionsHtml).toContain('id="main-settings-content"');
     });
