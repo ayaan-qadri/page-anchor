@@ -19,6 +19,8 @@ export interface PageMetadataSummary {
   pageTitle: string;
   updatedAt: number;
   elementCount: number;
+  /** Serialized size of the stored page data, in bytes. */
+  bytes?: number;
 }
 
 export interface ExtensionSettings {

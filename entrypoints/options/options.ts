@@ -13,6 +13,7 @@ import {
   formatShortcutForDisplay,
   SHORTCUT_DEFINITIONS,
 } from '../../src/core/shortcuts';
+import { formatBytes } from '../../src/core/format';
 import { ShortcutRecorder } from '../../src/ui/shortcut-recorder';
 
 let currentSettings: ExtensionSettings;
@@ -405,7 +406,8 @@ async function renderSavedPages() {
 
     const metaEl = document.createElement('div');
     metaEl.className = `pa-saved-meta ${ROW_DESC}`;
-    metaEl.textContent = `${page.elementCount} elements • Last updated ${dateStr}`;
+    const elementLabel = `${page.elementCount} element${page.elementCount === 1 ? '' : 's'}`;
+    metaEl.textContent = `${elementLabel} • ${formatBytes(page.bytes ?? 0)} • Last updated ${dateStr}`;
 
     info.appendChild(titleEl);
     info.appendChild(urlEl);

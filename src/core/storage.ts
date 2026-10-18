@@ -276,7 +276,20 @@ export async function savePageData(
     pageTitle: data.pageTitle,
     updatedAt: data.updatedAt,
     elementCount: elements.length,
+    bytes: measureStoredBytes(data),
   });
+}
+
+/** Bytes of the JSON payload, matching how `storage.local` accounts for a value. */
+function measureStoredBytes(value: unknown): number {
+  try {
+    const json = JSON.stringify(value);
+    if (typeof json !== 'string') return 0;
+    if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(json).length;
+    return json.length;
+  } catch {
+    return 0;
+  }
 }
 
 export async function clearPageData(rawUrl: string, knownNormalizedUrl?: string): Promise<void> {
@@ -311,6 +324,17 @@ export async function getAllSavedPagesSummary(): Promise<PageMetadataSummary[]> 
   const res = await storageGet(INDEX_KEY);
   const index = (res?.[INDEX_KEY] || {}) as Record<string, PageMetadataSummary>;
   const list = Object.values(index);
+
+  // Entries saved before sizes were tracked are measured from their payload.
+  const unmeasured = list.filter((entry) => typeof entry.bytes !== 'number');
+  if (unmeasured.length > 0) {
+    const all = (await storageGet(null)) || {};
+    for (const entry of unmeasured) {
+      const stored = all[getStorageKey(entry.normalizedUrl)];
+      if (stored !== undefined) entry.bytes = measureStoredBytes(stored);
+    }
+  }
+
   list.sort((a, b) => b.updatedAt - a.updatedAt);
   return list;
 }
@@ -460,6 +484,7 @@ function sanitizeIndex(raw: Record<string, any>): Record<string, PageMetadataSum
       pageTitle: typeof entry.pageTitle === 'string' ? entry.pageTitle : '',
       updatedAt: num(entry.updatedAt),
       elementCount: num(entry.elementCount),
+      bytes: isFiniteNumber(entry.bytes) ? entry.bytes : undefined,
     };
   }
   return index;

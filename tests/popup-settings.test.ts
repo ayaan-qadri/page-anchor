@@ -152,6 +152,63 @@ describe('Popup settings panel', () => {
     expect(Array.from(root.querySelectorAll('h3')).map((h) => h.textContent)).toContain('Keyboard shortcuts');
   });
 
+  it('keeps the saved-page list behind a drill-down row that reports count and size', async () => {
+    const panel = mountPanel({
+      [INDEX_KEY]: {
+        'https://example.com/a': {
+          normalizedUrl: 'https://example.com/a',
+          url: 'https://example.com/a',
+          pageTitle: 'Example A',
+          updatedAt: Date.now(),
+          elementCount: 4,
+          bytes: 2048,
+        },
+      },
+    });
+    await panel.mount();
+
+    expect(root.querySelector('button[aria-label^="Delete saved drawings"]')).toBeNull();
+
+    const nav = root.querySelector<HTMLButtonElement>('button[aria-label="Open saved pages"]')!;
+    expect(nav.textContent).toContain('1 page · 2 KB stored');
+
+    nav.click();
+    await flush();
+
+    expect(root.querySelector('button[aria-label^="Delete saved drawings"]')).not.toBeNull();
+    expect(root.textContent).toContain('4 elements · 2 KB');
+    expect(root.textContent).toContain('1 page · 2 KB stored in this browser');
+  });
+
+  it('measures saved pages that were stored before sizes were tracked', async () => {
+    const panel = mountPanel({
+      [INDEX_KEY]: {
+        'https://example.com/legacy': {
+          normalizedUrl: 'https://example.com/legacy',
+          url: 'https://example.com/legacy',
+          pageTitle: 'Legacy',
+          updatedAt: Date.now(),
+          elementCount: 1,
+        },
+      },
+      'page_anchor_data:https://example.com/legacy': {
+        url: 'https://example.com/legacy',
+        normalizedUrl: 'https://example.com/legacy',
+        pageTitle: 'Legacy',
+        updatedAt: Date.now(),
+        elements: [{ id: '1', type: 'pen', points: [], strokeColor: '#000', strokeWidth: 1, opacity: 1, createdAt: 1 }],
+      },
+    });
+    await panel.mount();
+
+    const nav = root.querySelector<HTMLButtonElement>('button[aria-label="Open saved pages"]')!;
+    expect(nav.textContent).toMatch(/1 page · \d+(\.\d)? B stored/);
+
+    nav.click();
+    await flush();
+    expect(root.textContent).toContain('1 element ·');
+  });
+
   it('lists saved pages and removes one when its delete button is used', async () => {
     const panel = mountPanel({
       [INDEX_KEY]: {
@@ -166,6 +223,9 @@ describe('Popup settings panel', () => {
     });
     await panel.mount();
 
+    root.querySelector<HTMLButtonElement>('button[aria-label="Open saved pages"]')!.click();
+    await flush();
+
     const deleteBtn = root.querySelector<HTMLButtonElement>('button[aria-label^="Delete saved drawings"]')!;
     expect(deleteBtn.getAttribute('aria-label')).toBe('Delete saved drawings for Example A');
 
@@ -175,5 +235,29 @@ describe('Popup settings panel', () => {
     expect(storage.api.remove).toHaveBeenCalled();
     expect(storage.store[INDEX_KEY]).not.toHaveProperty('https://example.com/a');
     expect(root.querySelector('button[aria-label^="Delete saved drawings"]')).toBeNull();
+  });
+
+  it('returns from the saved-page list via back', async () => {
+    const panel = mountPanel({
+      [INDEX_KEY]: {
+        'https://example.com/a': {
+          normalizedUrl: 'https://example.com/a',
+          url: 'https://example.com/a',
+          pageTitle: 'Example A',
+          updatedAt: Date.now(),
+          elementCount: 4,
+        },
+      },
+    });
+    await panel.mount();
+
+    root.querySelector<HTMLButtonElement>('button[aria-label="Open saved pages"]')!.click();
+    await flush();
+    expect(root.querySelector('button[aria-label="Open saved pages"]')).toBeNull();
+
+    root.querySelector<HTMLButtonElement>('button[aria-label="Back to settings"]')!.click();
+    await flush();
+    expect(Array.from(root.querySelectorAll('h3')).map((h) => h.textContent)).toContain('Saved pages');
+    expect(root.querySelector('button[aria-label="Open saved pages"]')).not.toBeNull();
   });
 });

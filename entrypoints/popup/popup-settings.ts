@@ -7,11 +7,12 @@ import {
   loadSettings,
   saveSettings,
 } from '../../src/core/storage';
-import { ExtensionSettings, ShortcutAction } from '../../src/types';
+import { ExtensionSettings, PageMetadataSummary, ShortcutAction } from '../../src/types';
 import {
   SHORTCUT_DEFINITIONS,
   formatShortcutForDisplay,
 } from '../../src/core/shortcuts';
+import { formatBytes } from '../../src/core/format';
 import { ShortcutRecorder } from '../../src/ui/shortcut-recorder';
 
 const CHEVRON_RIGHT =
@@ -117,6 +118,7 @@ export class PopupSettingsPanel {
   private recorder = new ShortcutRecorder();
   private recordingButton: HTMLButtonElement | null = null;
   private savedPagesRoot!: HTMLElement;
+  private savedPagesStatus!: HTMLElement;
   private shortcutsRoot!: HTMLElement;
   private statusEl!: HTMLElement;
   private fileInput!: HTMLInputElement;
@@ -428,10 +430,68 @@ export class PopupSettingsPanel {
 
   private async renderSavedPages(): Promise<void> {
     const section = this.section('Saved pages');
+    const box = card();
+
+    const nav = el('button', NAV_ROW);
+    nav.type = 'button';
+    nav.setAttribute('aria-label', 'Open saved pages');
+
+    const info = el('div', ROW_TEXT);
+    info.appendChild(el('span', ROW_TITLE, 'Manage saved pages'));
+    const summary = el('span', ROW_DESC, 'Loading…');
+    info.appendChild(summary);
+    nav.appendChild(info);
+    nav.appendChild(el('span', NAV_CHEVRON, CHEVRON_RIGHT));
+    nav.addEventListener('click', () => void this.openSavedPagesList());
+
+    box.appendChild(nav);
+    section.appendChild(box);
+    this.root.appendChild(section);
+
+    summary.textContent = this.describeSavedPages(await getAllSavedPagesSummary());
+  }
+
+  private describeSavedPages(pages: PageMetadataSummary[]): string {
+    if (pages.length === 0) return 'Nothing saved yet';
+    const total = pages.reduce((sum, page) => sum + (page.bytes ?? 0), 0);
+    return `${pages.length} page${pages.length === 1 ? '' : 's'} · ${formatBytes(total)} stored`;
+  }
+
+  private describeSavedPage(page: PageMetadataSummary): string {
+    const elements = `${page.elementCount} element${page.elementCount === 1 ? '' : 's'}`;
+    return `${elements} · ${formatBytes(page.bytes ?? 0)}`;
+  }
+
+  private async openSavedPagesList(): Promise<void> {
+    this.dispose();
+
+    this.root.replaceChildren();
+    const section = el('section', SECTION);
+
+    const head = el('div', SUBHEAD);
+    const back = el('button', BACK, CHEVRON_LEFT);
+    back.type = 'button';
+    back.setAttribute('aria-label', 'Back to settings');
+    back.addEventListener('click', async () => {
+      await this.mount();
+      this.root.querySelector<HTMLButtonElement>('[aria-label="Open saved pages"]')?.focus();
+    });
+    head.appendChild(back);
+    head.appendChild(el('h3', SECTION_TITLE, 'Saved pages'));
+    section.appendChild(head);
+
     this.savedPagesRoot = card();
     section.appendChild(this.savedPagesRoot);
+
+    this.savedPagesStatus = el('p', STATUS);
+    this.savedPagesStatus.setAttribute('role', 'status');
+    this.savedPagesStatus.setAttribute('aria-live', 'polite');
+    section.appendChild(this.savedPagesStatus);
+
     this.root.appendChild(section);
+
     await this.refreshSavedPages();
+    back.focus();
   }
 
   private async refreshSavedPages(): Promise<void> {
@@ -442,6 +502,7 @@ export class PopupSettingsPanel {
       const empty = el('div', ROW);
       empty.appendChild(el('span', ROW_DESC, 'Nothing saved yet. Draw on any page and it will appear here.'));
       this.savedPagesRoot.appendChild(empty);
+      this.savedPagesStatus.textContent = '';
       return;
     }
 
@@ -453,9 +514,7 @@ export class PopupSettingsPanel {
         el('div', ROW_TITLE, page.pageTitle || 'Untitled page'),
       );
       info.appendChild(el('div', ROW_DESC, page.url));
-      info.appendChild(
-        el('div', ROW_DESC, `${page.elementCount} element${page.elementCount === 1 ? '' : 's'}`),
-      );
+      info.appendChild(el('div', ROW_DESC, this.describeSavedPage(page)));
       row.appendChild(info);
 
       const del = el('button', DELETE, 'Delete');
@@ -471,6 +530,9 @@ export class PopupSettingsPanel {
 
       this.savedPagesRoot.appendChild(row);
     });
+
+    const total = pages.reduce((sum, page) => sum + (page.bytes ?? 0), 0);
+    this.savedPagesStatus.textContent = `${pages.length} page${pages.length === 1 ? '' : 's'} · ${formatBytes(total)} stored in this browser`;
   }
 
   private renderBackup(): void {

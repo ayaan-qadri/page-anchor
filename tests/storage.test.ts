@@ -125,6 +125,36 @@ describe('Storage Engine: Persistence with Mocked Chrome Storage', () => {
     expect(summary.map((s) => s.pageTitle)).toContain('Page 2');
   });
 
+  it('reports the stored size of each saved page', async () => {
+    const url = 'https://example.com/sized';
+    await savePageData(
+      url,
+      [{ id: '1', type: 'pen', points: [{ x: 1, y: 2 }], strokeColor: '#000', strokeWidth: 1, opacity: 1, createdAt: 1, bbox: { minX:1, minY:2, maxX:1, maxY:2 } }],
+      'Sized'
+    );
+
+    const [entry] = await getAllSavedPagesSummary();
+    expect(entry.bytes).toBeGreaterThan(0);
+    expect(entry.bytes).toBe(JSON.stringify(mockStore['page_anchor_data:https://example.com/sized']).length);
+  });
+
+  it('measures index entries that predate size tracking', async () => {
+    const key = 'page_anchor_data:https://example.com/legacy';
+    mockStore['page_anchor_index'] = {
+      'https://example.com/legacy': {
+        normalizedUrl: 'https://example.com/legacy',
+        url: 'https://example.com/legacy',
+        pageTitle: 'Legacy',
+        updatedAt: 1,
+        elementCount: 1,
+      },
+    };
+    mockStore[key] = { pageTitle: 'Legacy', elements: [], url: 'x', normalizedUrl: 'x', updatedAt: 1 };
+
+    const [entry] = await getAllSavedPagesSummary();
+    expect(entry.bytes).toBe(JSON.stringify(mockStore[key]).length);
+  });
+
   it('clears page data and removes it from the global index', async () => {
     const url = 'https://example.com/to-clear';
     await savePageData(url, [{ id: '1', type: 'pen', points: [], strokeColor: '#000', strokeWidth: 1, opacity: 1, createdAt: 1, bbox: { minX:0, minY:0, maxX:0, maxY:0 } }], 'To Clear');
