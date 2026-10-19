@@ -182,7 +182,17 @@ pnpm test      # Vitest unit + integration suite
 pnpm check     # Type-check + lint + tests (what CI runs)
 ```
 
-### 6. Regenerate Extension Icons
+### 6. Load, Throttle & Edge-Case Harnesses
+```bash
+pnpm build && pnpm test:edge   # real-browser edge cases (persistence, quota, backups, SPA, orphans)
+pnpm build && pnpm perf        # 1,000 anchored elements under 1x/4x/6x CPU + slow-3G network
+pnpm build && pnpm perf:quick  # same run with 300 elements, for a faster loop
+```
+Both harnesses launch Chromium with the built extension loaded, drive the real UI, and write
+machine-readable results to `edge-results.json` and `perf-results.json`. `pnpm perf` reports
+main-thread task time, frame-time percentiles, long tasks, and storage timings per phase.
+
+### 7. Regenerate Extension Icons
 ```bash
 pnpm icons                # rebuild 16/32/48/128 from assets/icon-source.png
 pnpm icons -- --all       # also emit 19/38/64/96/256/512

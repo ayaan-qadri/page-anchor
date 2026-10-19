@@ -20,7 +20,10 @@
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "check": "pnpm compile && pnpm lint && pnpm test",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "perf": "node scripts/perf-throttle.mjs",
+    "perf:quick": "node scripts/perf-throttle.mjs --quick",
+    "test:edge": "node scripts/edge-cases.mjs"
   },
   "keywords": [],
   "author": "",

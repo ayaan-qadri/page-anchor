@@ -47,4 +47,31 @@ export default [
       },
     },
   },
+  {
+    // Browser-automation harnesses: their `page.evaluate` callbacks run in the
+    // page, so they reference browser globals and the extension APIs.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        performance: 'readonly',
+        requestAnimationFrame: 'readonly',
+        cancelAnimationFrame: 'readonly',
+        PerformanceObserver: 'readonly',
+        NodeFilter: 'readonly',
+        chrome: 'readonly',
+        File: 'readonly',
+        DataTransfer: 'readonly',
+        Event: 'readonly',
+        history: 'readonly',
+        location: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+      },
+    },
+    rules: {
+      'no-empty': ['error', { allowEmptyCatch: true }],
+    },
+  },
 ];
