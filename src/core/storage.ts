@@ -228,10 +228,16 @@ export async function loadSettings(): Promise<ExtensionSettings> {
   };
 }
 
+let settingsWriteChain: Promise<void> = Promise.resolve();
+
 export async function saveSettings(settings: Partial<ExtensionSettings>): Promise<void> {
-  const current = await loadSettings();
-  const merged = { ...current, ...settings };
-  await storageSet({ [SETTINGS_KEY]: merged });
+  const write = settingsWriteChain.then(async () => {
+    const current = await loadSettings();
+    const merged = { ...current, ...settings };
+    await storageSet({ [SETTINGS_KEY]: merged });
+  });
+  settingsWriteChain = write.catch(() => {});
+  return write;
 }
 
 export async function loadPageData(rawUrl: string): Promise<PageAnchorData | null> {

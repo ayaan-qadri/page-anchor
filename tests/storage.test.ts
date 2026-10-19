@@ -184,6 +184,36 @@ describe('Storage Engine: Persistence with Mocked Chrome Storage', () => {
     expect(afterRestore.defaultStrokeWidth).toBe(8);
   });
 
+  it('does not lose an overlapping settings write', async () => {
+    await Promise.all([
+      saveSettings({ defaultStrokeWidth: 9 }),
+      saveSettings({ defaultStrokeColor: '#10b981' }),
+      saveSettings({ isToolbarOpen: true }),
+    ]);
+
+    const settings = await loadSettings();
+    expect(settings.defaultStrokeWidth).toBe(9);
+    expect(settings.defaultStrokeColor).toBe('#10b981');
+    expect(settings.isToolbarOpen).toBe(true);
+  });
+
+  it('keeps saving after one settings write fails', async () => {
+    const originalSet = (globalThis as any).chrome.storage.local.set;
+    let calls = 0;
+    (globalThis as any).chrome.storage.local.set = (data: any, cb?: () => void) => {
+      calls += 1;
+      if (calls === 1) throw new Error('quota');
+      return originalSet(data, cb);
+    };
+
+    await expect(saveSettings({ defaultStrokeWidth: 7 })).rejects.toThrow('quota');
+    await saveSettings({ defaultFontSize: 22 });
+
+    (globalThis as any).chrome.storage.local.set = originalSet;
+    const settings = await loadSettings();
+    expect(settings.defaultFontSize).toBe(22);
+  });
+
   describe('Settings Schema Migration', () => {
     it('maps a legacy `performanceMode` value onto `strokeSimplification`', async () => {
       mockStore['page_anchor_settings'] = { performanceMode: false };

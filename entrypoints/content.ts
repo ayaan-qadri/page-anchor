@@ -70,6 +70,43 @@ export default defineContentScript({
     let settings: ExtensionSettings = { ...DEFAULT_SETTINGS };
     let currentLoadedUrl = window.location.href;
     let saveTimeout: number | null = null;
+    let saveErrorVisible = false;
+
+    const showSaveError = (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error ?? '');
+      console.warn('[Page Anchor] could not save drawings:', error);
+      if (saveErrorVisible) return;
+      saveErrorVisible = true;
+
+      const isQuota = /quota|QUOTA_BYTES/i.test(message);
+      const toast = document.createElement('div');
+      toast.className = 'pa-save-error';
+      toast.setAttribute('role', 'status');
+      toast.setAttribute('aria-live', 'polite');
+      toast.textContent = isQuota
+        ? 'Page Anchor could not save: browser storage is full. Free space in Settings → Saved pages.'
+        : 'Page Anchor could not save your drawings. Try reloading the page.';
+      Object.assign(toast.style, {
+        position: 'fixed',
+        bottom: '16px',
+        right: '16px',
+        zIndex: '2147483647',
+        maxWidth: '320px',
+        padding: '10px 14px',
+        borderRadius: '10px',
+        background: 'rgba(120, 24, 32, 0.96)',
+        color: '#fff',
+        font: '600 12px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        boxShadow: '0 10px 30px -12px rgba(0, 0, 0, 0.8)',
+        pointerEvents: 'none',
+      });
+      uiContainer.appendChild(toast);
+
+      window.setTimeout(() => {
+        toast.remove();
+        saveErrorVisible = false;
+      }, 8000);
+    };
 
     const triggerSave = (elements: AnchorElement[]) => {
       if (saveTimeout) clearTimeout(saveTimeout);
@@ -78,7 +115,9 @@ export default defineContentScript({
         try {
           await savePageData(url, elements, document.title, engine.getDomAnchoringEnabled());
           toolbar?.updateBadge();
-        } catch {}
+        } catch (error) {
+          showSaveError(error);
+        }
       }, 250);
     };
 
@@ -86,7 +125,9 @@ export default defineContentScript({
       if (engine && currentLoadedUrl) {
         try {
           await savePageData(currentLoadedUrl, engine.getElements(), document.title, engine.getDomAnchoringEnabled());
-        } catch {}
+        } catch (error) {
+          showSaveError(error);
+        }
       }
     };
 
@@ -169,7 +210,9 @@ export default defineContentScript({
       if (engine && prevUrl) {
         try {
           await savePageData(prevUrl, engine.getElements(), document.title, engine.getDomAnchoringEnabled());
-        } catch {}
+        } catch (error) {
+          showSaveError(error);
+        }
       }
 
       if (token !== navToken) return;
