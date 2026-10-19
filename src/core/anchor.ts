@@ -311,6 +311,7 @@ export class DOMAnchorManager {
   private resizeListener: (() => void) | null = null;
   private onPositionsChanged?: () => void;
   private debounceTimer: number | null = null;
+  private resizeTimer: number | null = null;
 
   constructor(onPositionsChanged?: () => void) {
     this.onPositionsChanged = onPositionsChanged;
@@ -321,8 +322,12 @@ export class DOMAnchorManager {
     if (typeof window === 'undefined') return;
 
     this.resizeListener = () => {
-      this.invalidateCache();
-      this.onPositionsChanged?.();
+      if (this.resizeTimer !== null) clearTimeout(this.resizeTimer);
+      this.resizeTimer = window.setTimeout(() => {
+        this.resizeTimer = null;
+        this.invalidateCache();
+        this.onPositionsChanged?.();
+      }, 120);
     };
     window.addEventListener('resize', this.resizeListener, { passive: true });
 
@@ -387,6 +392,10 @@ export class DOMAnchorManager {
     if (this.debounceTimer !== null) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
+    }
+    if (this.resizeTimer !== null) {
+      clearTimeout(this.resizeTimer);
+      this.resizeTimer = null;
     }
     if (this.mutationObserver) {
       this.mutationObserver.disconnect();

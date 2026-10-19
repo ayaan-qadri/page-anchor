@@ -51,8 +51,9 @@ export class CanvasEngine {
   private shapeStartPoint: Point | null = null;
   private currentShape: ShapeElement | null = null;
 
-  private rafId: number | null = null;
   private scrollRafId: number | null = null;
+  private resizeRafId: number | null = null;
+  private textMetricsCache = new Map<string, { width: number; height: number }>();
   private dpr = 1;
   private callbacks: EngineCallbacks;
 
@@ -344,7 +345,11 @@ export class CanvasEngine {
 
   private bindEvents(): void {
     const handleResize = () => {
-      this.updateDprAndSize();
+      if (this.resizeRafId) return;
+      this.resizeRafId = requestAnimationFrame(() => {
+        this.resizeRafId = null;
+        this.updateDprAndSize();
+      });
     };
     window.addEventListener('resize', handleResize, { passive: true });
 
@@ -900,13 +905,21 @@ export class CanvasEngine {
     const lineHeight = el.fontSize * 1.35;
     const padding = 6;
 
-    let maxWidth = 0;
-    for (const line of lines) {
-      const met = ctx.measureText(line);
-      if (met.width > maxWidth) maxWidth = met.width;
+    const cacheKey = `${el.fontSize}\u0000${el.text}`;
+    let measured = this.textMetricsCache.get(cacheKey);
+    if (!measured) {
+      let maxWidth = 0;
+      for (const line of lines) {
+        const met = ctx.measureText(line);
+        if (met.width > maxWidth) maxWidth = met.width;
+      }
+      measured = { width: maxWidth, height: lines.length * lineHeight };
+      if (this.textMetricsCache.size > 500) this.textMetricsCache.clear();
+      this.textMetricsCache.set(cacheKey, measured);
     }
-    const boxW = Math.max(maxWidth + padding * 2, el.width || 60);
-    const boxH = Math.max(lines.length * lineHeight + padding * 2, el.height || 30);
+
+    const boxW = Math.max(measured.width + padding * 2, el.width || 60);
+    const boxH = Math.max(measured.height + padding * 2, el.height || 30);
 
     // Text sizing is measured lazily here (canvas metrics are only available at
     // draw time). The result is deterministic for a given text/font, so the
@@ -1096,9 +1109,10 @@ export class CanvasEngine {
   }
 
   public destroy(): void {
-    if (this.rafId) cancelAnimationFrame(this.rafId);
     if (this.scrollRafId) cancelAnimationFrame(this.scrollRafId);
+    if (this.resizeRafId) cancelAnimationFrame(this.resizeRafId);
     this.anchorManager.destroy();
+    this.textMetricsCache.clear();
     this.baseCanvas.remove();
     this.activeCanvas.remove();
   }

@@ -211,7 +211,7 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
   });
 
   describe('DOMAnchorManager Caching & Lifecycle', () => {
-    it('caches resolved offsets for zero-lag performance and invalidates on resize', () => {
+    it('caches resolved offsets for zero-lag performance and invalidates on resize', async () => {
       const el = document.createElement('div');
       el.id = 'cached-issue';
       el.textContent = 'Performance Test Issue';
@@ -241,6 +241,7 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
 
       manager.invalidateCache();
       window.dispatchEvent(new Event('resize'));
+      await new Promise((resolve) => setTimeout(resolve, 200));
       expect(notifyCount).toBeGreaterThanOrEqual(1);
 
       manager.destroy();
