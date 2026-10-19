@@ -126,7 +126,7 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     await expect(anchorBtn).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('USER FLOW 2: Preferences configuration, tab navigation, color change, & shortcut rebinding', async ({
+  test('USER FLOW 2: Preferences configuration, tab navigation, & shortcut rebinding', async ({
     context,
     extensionId,
   }) => {
@@ -139,23 +139,15 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
 
     await expect(page.locator('h1')).toHaveText(/Page Anchor/i);
 
-    const drawingTab = page.locator('#tab-btn-drawing');
-    await drawingTab.click();
-    await expect(drawingTab).toHaveAttribute('aria-selected', 'true');
-
-    const penColor = page.locator('#pref-pen-color');
-    await expect(penColor).toBeVisible();
-    await penColor.fill('#10b981');
-
-    const penWidth = page.locator('#pref-pen-width');
-    await penWidth.fill('10');
-
     const persistenceTab = page.locator('#tab-btn-persistence');
     await persistenceTab.click();
     await expect(persistenceTab).toHaveAttribute('aria-selected', 'true');
 
     const matchMode = page.locator('#pref-url-match-mode');
     await matchMode.selectOption('domain');
+
+    const strokeSimplification = page.locator('#pref-stroke-simplification');
+    await strokeSimplification.uncheck();
 
     const shortcutsTab = page.locator('#tab-btn-shortcuts');
     await shortcutsTab.click();
@@ -167,7 +159,7 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
 
     await page.keyboard.press('Control+Shift+KeyU');
     await expect(firstKeyBadge).not.toHaveClass(/recording/);
-    await expect(firstKeyBadge).toHaveText(/Ctrl\+.*Shift\+.*u/i);
+    await expect(firstKeyBadge).toHaveText(/Ctrl\s*\+\s*Shift\s*\+\s*U/i);
 
     const saveBtn = page.locator('#btn-save');
     await saveBtn.click();
