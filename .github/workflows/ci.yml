@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
 
 concurrency:
@@ -32,6 +32,9 @@ jobs:
 
       - name: Production build (Chrome MV3)
         run: pnpm build
+
+      - name: Production build (Firefox MV2)
+        run: pnpm build:firefox
 
   e2e:
     needs: check

@@ -5,9 +5,12 @@ export default defineConfig({
   vite: () => ({
     plugins: [tailwindcss()],
   }),
+  zip: {
+    excludeSources: ['docs/**', '.output/**', '.wxt/**'],
+  },
   manifest: ({ browser }) => ({
     name: 'Page Anchor - Web Annotation & Drawing',
-    description: 'High-performance freehand drawing, shapes, and text annotations directly on web pages with persistent storage and customizable shortcuts.',
+    description: 'Freehand drawing, shapes, and text annotations directly on web pages with persistent storage and customizable shortcuts.',
     version: '1.0.0',
     permissions: [
       'storage',
@@ -18,8 +21,14 @@ export default defineConfig({
       ? {
           browser_specific_settings: {
             gecko: {
-              id: 'page-anchor@extension.local',
-              strict_min_version: '109.0',
+              id: 'page-anchor@ayaanqadri.dev',
+              strict_min_version: '140.0',
+              data_collection_permissions: {
+                required: ['none'],
+              },
+            },
+            gecko_android: {
+              strict_min_version: '142.0',
             },
           },
         }

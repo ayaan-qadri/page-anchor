@@ -1,7 +1,7 @@
 {
   "name": "page-anchor",
   "version": "1.0.0",
-  "description": "",
+  "description": "Freehand drawing, shapes, and text annotations directly on web pages with persistent storage and customizable shortcuts.",
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
@@ -25,9 +25,26 @@
     "perf:quick": "node scripts/perf-throttle.mjs --quick",
     "test:edge": "node scripts/edge-cases.mjs"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "browser-extension",
+    "annotation",
+    "drawing",
+    "canvas",
+    "screenshot",
+    "firefox",
+    "chrome",
+    "manifest-v3"
+  ],
+  "author": "Ayaan Qadri",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ayaan-qadri/page-anchor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ayaan-qadri/page-anchor/issues"
+  },
+  "homepage": "https://github.com/ayaan-qadri/page-anchor#readme",
   "devEngines": {
     "packageManager": {
       "name": "pnpm",

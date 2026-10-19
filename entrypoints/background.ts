@@ -40,10 +40,4 @@ export default defineBackground(() => {
       }
     } catch {}
   });
-
-  ext.tabs?.onUpdated?.addListener((tabId: number, changeInfo: any) => {
-    if (changeInfo.url) {
-      ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_URL_CHANGED', url: changeInfo.url }).catch(() => {});
-    }
-  });
 });

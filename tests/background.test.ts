@@ -6,7 +6,6 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
   let listeners: {
     command?: (cmd: string) => Promise<void>;
     onInstalled?: () => Promise<void>;
-    onUpdated?: (tabId: number, changeInfo: any) => void;
   };
 
   beforeEach(() => {
@@ -19,11 +18,6 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
       tabs: {
         query: vi.fn(),
         sendMessage: vi.fn(),
-        onUpdated: {
-          addListener: vi.fn((fn) => {
-            listeners.onUpdated = fn;
-          }),
-        },
       },
       commands: {
         onCommand: {
@@ -53,7 +47,6 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
 
     expect(mockChrome.commands.onCommand.addListener).toHaveBeenCalledTimes(1);
     expect(mockChrome.runtime.onInstalled.addListener).toHaveBeenCalledTimes(1);
-    expect(mockChrome.tabs.onUpdated.addListener).toHaveBeenCalledTimes(1);
   });
 
   it('toggles drawing mode via keyboard command on active tab', async () => {
@@ -111,19 +104,6 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
     expect(mockChrome.scripting.executeScript).toHaveBeenCalledWith({
       target: { tabId: 2 },
       files: ['content-scripts/content.js'],
-    });
-  });
-
-  it('broadcasts PAGE_ANCHOR_URL_CHANGED on tab navigation', () => {
-    backgroundDefinition.main();
-
-    mockChrome.tabs.sendMessage.mockResolvedValue({});
-
-    listeners.onUpdated?.(55, { url: 'https://example.com/new-path' });
-
-    expect(mockChrome.tabs.sendMessage).toHaveBeenCalledWith(55, {
-      type: 'PAGE_ANCHOR_URL_CHANGED',
-      url: 'https://example.com/new-path',
     });
   });
 });
