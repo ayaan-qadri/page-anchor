@@ -288,6 +288,45 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     expect(wrapper.style.top).toBe('20px');
   });
 
+  it('writes the dragged position to settings so it survives a reload', () => {
+    const dragHandle = container.querySelector('.pa-drag-handle') as HTMLElement;
+    (dragHandle as any).setPointerCapture = vi.fn();
+
+    dragHandle.dispatchEvent(
+      new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 40, pointerId: 1, bubbles: true })
+    );
+    dragHandle.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 140, clientY: 60, pointerId: 1, bubbles: true })
+    );
+    dragHandle.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, bubbles: true }));
+
+    const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
+    const applied = {
+      x: parseFloat(wrapper.style.left),
+      y: parseFloat(wrapper.style.top),
+    };
+    expect((toolbar as any).settings.toolbarPosition).toEqual(applied);
+    expect(applied.x).toBeGreaterThan(0);
+    expect(mockCallbacks.onSettingsUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ toolbarPosition: applied })
+    );
+  });
+
+  it('writes the keyboard-nudged position to settings', () => {
+    const dragHandle = container.querySelector('.pa-drag-handle') as HTMLElement;
+    const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
+    dragHandle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+
+    const applied = {
+      x: parseFloat(wrapper.style.left),
+      y: parseFloat(wrapper.style.top),
+    };
+    expect((toolbar as any).settings.toolbarPosition).toEqual(applied);
+    expect(mockCallbacks.onSettingsUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ toolbarPosition: applied })
+    );
+  });
+
   it('toggles DOM anchoring mode via action button', () => {
     const anchorBtn = container.querySelector('[data-action="dom-anchor"]') as HTMLButtonElement;
     expect(engine.getDomAnchoringEnabled()).toBe(true);

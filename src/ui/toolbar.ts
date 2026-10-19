@@ -43,6 +43,7 @@ export class FloatingToolbar {
   private isDragging = false;
   private dragOffset = { x: 0, y: 0 };
   private isDocked = false;
+  private positionSaveTimer: number | null = null;
 
   constructor(
     container: HTMLElement,
@@ -316,8 +317,18 @@ export class FloatingToolbar {
       this.wrapper.style.transform = 'none';
       this.wrapper.style.left = `${clampX}px`;
       this.wrapper.style.top = `${clampY}px`;
-      this.settings.toolbarPosition = { x: clampX, y: clampY };
+      this.persistToolbarPosition({ x: clampX, y: clampY });
     }
+  }
+
+  private persistToolbarPosition(position: { x: number; y: number }): void {
+    this.settings.toolbarPosition = position;
+    this.callbacks.onSettingsUpdate?.(this.settings);
+    if (this.positionSaveTimer !== null) clearTimeout(this.positionSaveTimer);
+    this.positionSaveTimer = window.setTimeout(() => {
+      this.positionSaveTimer = null;
+      saveSettings({ toolbarPosition: this.settings.toolbarPosition }).catch(() => {});
+    }, 200);
   }
 
   public toggleDrawingMode(persist = true): void {
@@ -851,6 +862,8 @@ export class FloatingToolbar {
     let startX = 0;
     let startY = 0;
     let moved = false;
+    let lastX = 0;
+    let lastY = 0;
 
     dragHandle.addEventListener('pointerdown', (e: PointerEvent) => {
       if (e.button !== 0) return;
@@ -859,6 +872,8 @@ export class FloatingToolbar {
       startX = e.clientX;
       startY = e.clientY;
       const rect = this.wrapper.getBoundingClientRect();
+      lastX = rect.left;
+      lastY = rect.top;
       this.dragOffset.x = e.clientX - rect.left;
       this.dragOffset.y = e.clientY - rect.top;
       dragHandle.setPointerCapture(e.pointerId);
@@ -873,6 +888,8 @@ export class FloatingToolbar {
       }
       const newX = Math.max(10, Math.min(window.innerWidth - this.wrapper.offsetWidth - 10, e.clientX - this.dragOffset.x));
       const newY = Math.max(10, Math.min(window.innerHeight - this.wrapper.offsetHeight - 10, e.clientY - this.dragOffset.y));
+      lastX = newX;
+      lastY = newY;
       this.wrapper.style.left = `${newX}px`;
       this.wrapper.style.top = `${newY}px`;
     });
@@ -881,9 +898,7 @@ export class FloatingToolbar {
       if (!this.isDragging) return;
       this.isDragging = false;
       if (!commit || !moved) return;
-      const rect = this.wrapper.getBoundingClientRect();
-      this.settings.toolbarPosition = { x: rect.left, y: rect.top };
-      this.callbacks.onSettingsUpdate?.(this.settings);
+      this.persistToolbarPosition({ x: lastX, y: lastY });
     };
 
     dragHandle.addEventListener('pointerup', () => finishDrag(true));
@@ -916,8 +931,7 @@ export class FloatingToolbar {
         this.wrapper.style.transform = 'none';
         this.wrapper.style.left = `${newX}px`;
         this.wrapper.style.top = `${newY}px`;
-        this.settings.toolbarPosition = { x: newX, y: newY };
-        this.callbacks.onSettingsUpdate?.(this.settings);
+        this.persistToolbarPosition({ x: newX, y: newY });
       }
     });
   }
