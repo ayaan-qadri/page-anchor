@@ -13,6 +13,7 @@ import {
   formatShortcutForDisplay,
 } from '../../src/core/shortcuts';
 import { formatBytes } from '../../src/core/format';
+import { appendMarkup } from '../../src/ui/dom';
 import { ShortcutRecorder } from '../../src/ui/shortcut-recorder';
 
 const CHEVRON_RIGHT =
@@ -78,14 +79,30 @@ const BTN_DASHED =
 const ACTIONS = 'pa-ps-actions flex flex-col gap-2 p-3';
 const STATUS = 'pa-ps-status min-h-3.5 text-[11px] text-brand-accent-soft';
 
+/**
+ * Creates an element with an optional class. The third argument is inserted as
+ * text, never markup, so page-derived values (saved page titles and URLs) can
+ * be passed safely. Use `iconEl` for bundled SVG markup.
+ */
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className?: string,
-  html?: string,
+  text?: string,
 ): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
   if (className) node.className = className;
-  if (html !== undefined) node.innerHTML = html;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+/** Like `el`, but fills the element with trusted, bundled SVG markup. */
+function iconEl<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  className: string,
+  markup: string,
+): HTMLElementTagNameMap[K] {
+  const node = el(tag, className);
+  appendMarkup(node, markup);
   return node;
 }
 
@@ -240,7 +257,7 @@ export class PopupSettingsPanel {
       el('span', ROW_DESC, `Rebind the ${SHORTCUT_DEFINITIONS.length} shortcuts for tools and actions`),
     );
     nav.appendChild(info);
-    nav.appendChild(el('span', NAV_CHEVRON, CHEVRON_RIGHT));
+    nav.appendChild(iconEl('span', NAV_CHEVRON, CHEVRON_RIGHT));
     nav.addEventListener('click', () => this.openShortcutEditor());
 
     box.appendChild(nav);
@@ -259,7 +276,7 @@ export class PopupSettingsPanel {
     const section = el('section', SECTION);
 
     const head = el('div', SUBHEAD);
-    const back = el('button', BACK, CHEVRON_LEFT);
+    const back = iconEl('button', BACK, CHEVRON_LEFT);
     back.type = 'button';
     back.setAttribute('aria-label', 'Back to settings');
     back.addEventListener('click', async () => {
@@ -376,7 +393,7 @@ export class PopupSettingsPanel {
     const summary = el('span', ROW_DESC, 'Loading…');
     info.appendChild(summary);
     nav.appendChild(info);
-    nav.appendChild(el('span', NAV_CHEVRON, CHEVRON_RIGHT));
+    nav.appendChild(iconEl('span', NAV_CHEVRON, CHEVRON_RIGHT));
     nav.addEventListener('click', () => void this.openSavedPagesList());
 
     box.appendChild(nav);
@@ -404,7 +421,7 @@ export class PopupSettingsPanel {
     const section = el('section', SECTION);
 
     const head = el('div', SUBHEAD);
-    const back = el('button', BACK, CHEVRON_LEFT);
+    const back = iconEl('button', BACK, CHEVRON_LEFT);
     back.type = 'button';
     back.setAttribute('aria-label', 'Back to settings');
     back.addEventListener('click', async () => {
@@ -585,7 +602,7 @@ export class PopupSettingsPanel {
     });
     select.addEventListener('change', () => onChange(select.value));
     wrap.appendChild(select);
-    wrap.insertAdjacentHTML('beforeend', CHEVRON_DOWN);
+    appendMarkup(wrap, CHEVRON_DOWN);
     field.appendChild(wrap);
 
     return field;

@@ -259,4 +259,28 @@ describe('Popup settings panel', () => {
     expect(Array.from(root.querySelectorAll('h3')).map((h) => h.textContent)).toContain('Saved pages');
     expect(root.querySelector('button[aria-label="Open saved pages"]')).not.toBeNull();
   });
+
+  it('renders untrusted saved page titles and URLs as text, never as markup', async () => {
+    const panel = mountPanel({
+      [INDEX_KEY]: {
+        '<img src=x onerror="window.__pwned=1">': {
+          normalizedUrl: 'https://example.com/x',
+          url: '<script>window.__pwned=1</script>',
+          pageTitle: '<img src=x onerror="window.__pwned=1">',
+          updatedAt: Date.now(),
+          elementCount: 1,
+        },
+      },
+    });
+    await panel.mount();
+
+    root.querySelector<HTMLButtonElement>('button[aria-label="Open saved pages"]')!.click();
+    await flush();
+
+    expect((globalThis as any).window?.__pwned).toBeUndefined();
+    expect(root.querySelector('img')).toBeNull();
+    expect(root.querySelector('script')).toBeNull();
+    expect(root.textContent).toContain('<img src=x onerror="window.__pwned=1">');
+    expect(root.textContent).toContain('<script>window.__pwned=1</script>');
+  });
 });

@@ -14,6 +14,7 @@ import {
   SHORTCUT_DEFINITIONS,
 } from '../../src/core/shortcuts';
 import { formatBytes } from '../../src/core/format';
+import { appendMarkup } from '../../src/ui/dom';
 import { ShortcutRecorder } from '../../src/ui/shortcut-recorder';
 
 let currentSettings: ExtensionSettings;
@@ -145,7 +146,7 @@ function setupTabs() {
 function renderShortcuts() {
   const container = document.getElementById('shortcuts-container');
   if (!container) return;
-  container.innerHTML = '';
+  container.replaceChildren();
 
   SHORTCUT_DEFINITIONS.forEach((def) => {
     const item = document.createElement('div');
@@ -153,10 +154,13 @@ function renderShortcuts() {
 
     const info = document.createElement('div');
     info.className = ROW_TEXT;
-    info.innerHTML = `
-      <span class="${ROW_TITLE}">${def.name}</span>
-      <span class="${ROW_DESC}">${def.description}</span>
-    `;
+    const titleEl = document.createElement('span');
+    titleEl.className = ROW_TITLE;
+    titleEl.textContent = def.name;
+    const descEl = document.createElement('span');
+    descEl.className = ROW_DESC;
+    descEl.textContent = def.description;
+    info.replaceChildren(titleEl, descEl);
 
     const keyVal = currentSettings.shortcuts[def.id] || def.defaultKey;
     const badge = document.createElement('button');
@@ -291,11 +295,15 @@ async function renderSavedPages() {
   if (countBadge) countBadge.textContent = `${pages.length}`;
 
   if (pages.length === 0) {
-    listContainer.innerHTML = `<div class="pa-empty p-4.5 text-[13px] text-brand-muted text-center">No saved annotations yet. Draw on any web page and it will appear here.</div>`;
+    listContainer.replaceChildren();
+    appendMarkup(
+      listContainer,
+      '<div class="pa-empty p-4.5 text-[13px] text-brand-muted text-center">No saved annotations yet. Draw on any web page and it will appear here.</div>'
+    );
     return;
   }
 
-  listContainer.innerHTML = '';
+  listContainer.replaceChildren();
   pages.forEach((page) => {
     const item = document.createElement('div');
     item.className = ROW;

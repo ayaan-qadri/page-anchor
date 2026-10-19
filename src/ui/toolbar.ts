@@ -4,6 +4,7 @@ import { ToolType } from '../types/engine.types';
 import { ExtensionSettings } from '../types/storage.types';
 import { ToolbarCallbacks } from '../types/ui.types';
 import { ICONS } from '../icons/svg-icons';
+import { setIconWithTooltip, setMarkup } from './dom';
 import { TextEditorOverlay } from './text-editor';
 import { formatShortcutForDisplay } from '../core/shortcuts';
 import { DEFAULT_SETTINGS, saveSettings } from '../core/storage';
@@ -100,10 +101,13 @@ export class FloatingToolbar {
     this.dockTab.setAttribute('aria-label', 'Open drawing toolbar');
     this.dockTab.setAttribute('aria-expanded', shouldBeOpen ? 'true' : 'false');
     this.dockTab.title = 'Open drawing toolbar';
-    this.dockTab.innerHTML = `
-      ${ICONS.dragHandle}
-      <span class="pa-dock-badge" style="display: none;" aria-label="Active annotations">0</span>
-    `;
+    const dockBadge = document.createElement('span');
+    dockBadge.className = 'pa-dock-badge';
+    dockBadge.style.display = 'none';
+    dockBadge.setAttribute('aria-label', 'Active annotations');
+    dockBadge.textContent = '0';
+    setMarkup(this.dockTab, ICONS.dragHandle);
+    this.dockTab.appendChild(dockBadge);
     this.dockBadge = this.dockTab.querySelector('.pa-dock-badge') as HTMLElement;
     this.dockPanel.appendChild(this.dockTab);
 
@@ -112,7 +116,7 @@ export class FloatingToolbar {
     this.dockClose.className = 'pa-dock-close';
     this.dockClose.setAttribute('aria-label', 'Hide toolbar');
     this.dockClose.title = 'Hide toolbar';
-    this.dockClose.innerHTML = ICONS.close;
+    setMarkup(this.dockClose, ICONS.close);
     this.dockPanel.appendChild(this.dockClose);
 
     this.wrapper.appendChild(this.toolbar);
@@ -353,7 +357,7 @@ export class FloatingToolbar {
     dragHandle.setAttribute('aria-expanded', 'true');
     dragHandle.setAttribute('aria-label', 'Move toolbar position. Drag or use arrow keys.');
     dragHandle.title = 'Move toolbar position (Arrow keys or drag)';
-    dragHandle.innerHTML = ICONS.dragHandle;
+    setMarkup(dragHandle, ICONS.dragHandle);
     this.toolbar.appendChild(dragHandle);
 
     this.toolbar.appendChild(this.createToolButton('select', 'Select & Move', 'tool-select', ICONS.select));
@@ -451,7 +455,7 @@ export class FloatingToolbar {
         const eyeLabel = next ? 'Hide Drawings' : 'Show Drawings';
         eyeBtn.dataset.label = eyeLabel;
         eyeBtn.setAttribute('aria-label', eyeLabel);
-        eyeBtn.innerHTML = `${next ? ICONS.eye : ICONS.eyeOff}<span class="pa-tooltip" aria-hidden="true">${eyeLabel}</span>`;
+        setIconWithTooltip(eyeBtn, next ? ICONS.eye : ICONS.eyeOff, eyeLabel);
       }
     );
     eyeBtn.setAttribute('aria-pressed', isVisible ? 'true' : 'false');
@@ -472,7 +476,7 @@ export class FloatingToolbar {
         anchorBtn.setAttribute('aria-pressed', next ? 'true' : 'false');
         anchorBtn.setAttribute('aria-label', label);
         anchorBtn.classList.toggle('active', next);
-        anchorBtn.innerHTML = `${ICONS.anchor}<span class="pa-tooltip" aria-hidden="true">${label}</span>`;
+        setIconWithTooltip(anchorBtn, ICONS.anchor, label);
       }
     );
     anchorBtn.setAttribute('aria-pressed', isAnchoring ? 'true' : 'false');
@@ -498,7 +502,7 @@ export class FloatingToolbar {
       btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
       btn.setAttribute('aria-label', label);
       btn.classList.toggle('active', enabled);
-      btn.innerHTML = `${ICONS.anchor}<span class="pa-tooltip" aria-hidden="true">${label}</span>`;
+      setIconWithTooltip(btn, ICONS.anchor, label);
     }
   }
 
@@ -775,8 +779,7 @@ export class FloatingToolbar {
     btn.dataset.label = name;
     btn.setAttribute('aria-label', `${name}${shortcutText ? ` (${shortcutText})` : ''}`);
     btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    const kbd = shortcutText ? ` <kbd>${shortcutText}</kbd>` : '';
-    btn.innerHTML = `${iconSvg}<span class="pa-tooltip" aria-hidden="true">${name}${kbd}</span>`;
+    setIconWithTooltip(btn, iconSvg, name, shortcutText);
 
     btn.addEventListener('click', () => {
       this.engine.setTool(tool);
@@ -801,8 +804,7 @@ export class FloatingToolbar {
     const shortcutText = this.getShortcutDisplay(shortcutId);
     btn.dataset.label = title;
     btn.setAttribute('aria-label', `${title}${shortcutText ? ` (${shortcutText})` : ''}`);
-    const kbd = shortcutText ? ` <kbd>${shortcutText}</kbd>` : '';
-    btn.innerHTML = `${iconSvg}<span class="pa-tooltip" aria-hidden="true">${title}${kbd}</span>`;
+    setIconWithTooltip(btn, iconSvg, title, shortcutText);
 
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
