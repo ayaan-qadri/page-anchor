@@ -1,6 +1,6 @@
 {
   "name": "page-anchor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Freehand drawing, shapes, and text annotations directly on web pages with persistent storage and customizable shortcuts.",
   "scripts": {
     "dev": "wxt",

@@ -3,6 +3,14 @@
 All notable changes to Page Anchor are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] — 2026-10-26
+
+### Fixed
+
+- Drawings no longer vanish on pages with deeply nested elements. Anchors now
+  resolve the full path to `body`, validate the selector against the captured
+  element, and retry after truncated-selector misses.
+
 ## [1.0.0] — 2026-10-19
 
 Initial public release.
