@@ -10,9 +10,19 @@ export function safeCssEscape(str: string): string {
   return str.replace(/([!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, '\\$1');
 }
 
+function isFullPageWrapper(
+  el: Element,
+  viewportWidth: number,
+  viewportHeight: number
+): boolean {
+  const rect = el.getBoundingClientRect();
+  return rect.width > viewportWidth * 0.9 && rect.height > viewportHeight * 0.9;
+}
+
 /**
  * Finds the most relevant and specific semantic container element at a document point.
- * Avoids full-page wrappers (like body or screen-wide layout divs) and extension-owned elements.
+ * Avoids full-page wrappers (like body or screen-wide layout divs), page
+ * canvases, and extension-owned elements.
  */
 export function findBestAnchorElement(
   docPoint: Point,
@@ -44,6 +54,7 @@ export function findBestAnchorElement(
   const validElements = elements.filter((el) => {
     if (!el || el === document.documentElement || el === document.body) return false;
     if (el.id === hostElementId || el.closest?.(`#${hostElementId}`)) return false;
+    if (el.tagName === 'CANVAS') return false;
     if (
       el.classList?.contains('page-anchor-base-canvas') ||
       el.classList?.contains('page-anchor-active-canvas')
@@ -63,9 +74,15 @@ export function findBestAnchorElement(
   while (current && current !== document.body && current !== document.documentElement) {
     if (current.id === hostElementId) break;
 
+    const rect = current.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      current = current.parentElement;
+      continue;
+    }
+
     const id = current.id;
     if (id && !id.startsWith('page-anchor') && !id.match(/^[0-9]+$/)) {
-      return current;
+      if (!isFullPageWrapper(current, winW, winH)) return current;
     }
 
     if (
@@ -73,7 +90,7 @@ export function findBestAnchorElement(
       current.hasAttribute('data-testid') ||
       current.hasAttribute('data-item-id')
     ) {
-      return current;
+      if (!isFullPageWrapper(current, winW, winH)) return current;
     }
 
     const tagName = current.tagName.toLowerCase();
@@ -84,8 +101,10 @@ export function findBestAnchorElement(
       tagName === 'section' ||
       tagName === 'details'
     ) {
-      bestContainer = current;
-      break;
+      if (!isFullPageWrapper(current, winW, winH)) {
+        bestContainer = current;
+        break;
+      }
     }
 
     const classStr = typeof current.className === 'string' ? current.className : '';
@@ -96,8 +115,10 @@ export function findBestAnchorElement(
       classStr.includes('card') ||
       classStr.includes('comment')
     ) {
-      bestContainer = current;
-      break;
+      if (!isFullPageWrapper(current, winW, winH)) {
+        bestContainer = current;
+        break;
+      }
     }
 
     current = current.parentElement;
@@ -105,8 +126,7 @@ export function findBestAnchorElement(
 
   if (bestContainer) return bestContainer;
 
-  const rect = deepest.getBoundingClientRect();
-  if (rect.width > winW * 0.9 && rect.height > winH * 0.9) {
+  if (isFullPageWrapper(deepest, winW, winH)) {
     return null;
   }
 
@@ -150,7 +170,7 @@ export function generateSelector(el: Element): { selector: string; fallbackSelec
   const pathParts: string[] = [];
   let curr: Element | null = el;
 
-  while (curr && curr !== document.body && curr !== document.documentElement && pathParts.length < 5) {
+  while (curr && curr !== document.body && curr !== document.documentElement) {
     const tag = curr.tagName.toLowerCase();
     if (curr.id && !curr.id.startsWith('page-anchor') && !curr.id.match(/^[0-9]+$/)) {
       pathParts.unshift(`#${safeCssEscape(curr.id)}`);
@@ -169,10 +189,15 @@ export function generateSelector(el: Element): { selector: string; fallbackSelec
     } else {
       pathParts.unshift(tag);
     }
+
+    if (pathParts.length >= 32) break;
     curr = parent;
   }
 
-  const hierarchicalSelector = pathParts.join(' > ') || el.tagName.toLowerCase();
+  const rootedAtBody = curr === document.body || curr === document.documentElement;
+  const hierarchicalSelector = pathParts.length
+    ? `${rootedAtBody && document.body && document.body.contains(el) ? 'body > ' : ''}${pathParts.join(' > ')}`
+    : el.tagName.toLowerCase();
 
   if (typeof el.className === 'string' && el.className.trim()) {
     const classList = el.className
@@ -241,14 +266,39 @@ export function resolveAnchor(anchor: DOMAnchor, allowTextWalk = true): Resolved
 
   let matchedElement: Element | null = null;
 
-  try {
-    const el = document.querySelector(anchor.selector);
-    if (el && el.isConnected) {
-      if (!anchor.textQuote?.exact || el.textContent?.includes(anchor.textQuote.exact.slice(0, 30))) {
-        matchedElement = el;
+  // Root legacy unbounded paths at <body> to repair stored anchors.
+  const legacyPath =
+    anchor.selector.includes(' > ') &&
+    !anchor.selector.startsWith('body > ') &&
+    !anchor.selector.startsWith('#');
+  const primarySelectors: Array<{ selector: string; verifyText: boolean }> = [];
+  if (legacyPath) {
+    primarySelectors.push({ selector: `body > ${anchor.selector}`, verifyText: false });
+  }
+  primarySelectors.push({ selector: anchor.selector, verifyText: legacyPath });
+  if (anchor.selector.startsWith('body > ')) {
+    // Retry selectors from the version that truncated deep paths.
+    primarySelectors.push({
+      selector: anchor.selector.slice('body > '.length),
+      verifyText: true,
+    });
+  }
+
+  for (const { selector, verifyText } of primarySelectors) {
+    try {
+      const el = document.querySelector(selector);
+      if (el && el.isConnected) {
+        if (
+          !verifyText ||
+          !anchor.textQuote?.exact ||
+          el.textContent?.includes(anchor.textQuote.exact.slice(0, 30))
+        ) {
+          matchedElement = el;
+          break;
+        }
       }
-    }
-  } catch {}
+    } catch {}
+  }
 
   if (!matchedElement && anchor.fallbackSelectors) {
     for (const fb of anchor.fallbackSelectors) {
@@ -304,8 +354,16 @@ export function resolveAnchor(anchor: DOMAnchor, allowTextWalk = true): Resolved
   };
 }
 
+interface CachedResolution {
+  resolved: ResolvedAnchor;
+  scrollX: number;
+  scrollY: number;
+  /** A fixed/sticky element's offset is only valid at the sampled scroll position. */
+  scrollSensitive: boolean;
+}
+
 export class DOMAnchorManager {
-  private cache = new Map<string, ResolvedAnchor>();
+  private cache = new Map<string, CachedResolution>();
   private textWalkAt = new Map<string, number>();
   private mutationObserver: MutationObserver | null = null;
   private resizeListener: (() => void) | null = null;
@@ -363,14 +421,29 @@ export class DOMAnchorManager {
     }
 
     if (!targetEl) return undefined;
-    return createDOMAnchor(targetEl);
+
+    const anchor = createDOMAnchor(targetEl);
+    // A mismatched selector would orphan (and hide) the drawing; stay unanchored.
+    try {
+      if (document.querySelector(anchor.selector) !== targetEl) return undefined;
+    } catch {
+      return undefined;
+    }
+    return anchor;
   }
 
   public resolve(anchor: DOMAnchor): ResolvedAnchor {
     const key = `${anchor.selector}::${anchor.initialRect.left}::${anchor.initialRect.top}`;
+    const scrollX = typeof window !== 'undefined' ? window.scrollX : 0;
+    const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
+
     const cached = this.cache.get(key);
-    if (cached) {
-      return cached;
+    if (
+      cached &&
+      (!cached.scrollSensitive ||
+        (cached.scrollX === scrollX && cached.scrollY === scrollY))
+    ) {
+      return cached.resolved;
     }
 
     const now = Date.now();
@@ -380,7 +453,26 @@ export class DOMAnchorManager {
     }
 
     const resolved = resolveAnchor(anchor, allowTextWalk);
-    this.cache.set(key, resolved);
+
+    let scrollSensitive = false;
+    if (resolved.element && typeof getComputedStyle === 'function') {
+      try {
+        const position = getComputedStyle(resolved.element).position;
+        scrollSensitive = position === 'fixed' || position === 'sticky';
+      } catch {}
+    }
+
+    // Don't cache misses; nodes are often detached transiently.
+    if (resolved.element) {
+      this.cache.set(key, {
+        resolved,
+        scrollX,
+        scrollY,
+        scrollSensitive,
+      });
+    } else {
+      this.cache.delete(key);
+    }
     return resolved;
   }
 

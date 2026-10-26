@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   createDOMAnchor,
   DOMAnchorManager,
   extractTextQuote,
+  findBestAnchorElement,
   generateSelector,
   resolveAnchor,
   safeCssEscape,
@@ -68,6 +69,50 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       const res = generateSelector(secondLi);
       expect(res.selector).toContain('#issues-list > li:nth-of-type(2)');
     });
+
+    it('keeps deep paths rooted at body instead of truncating them', () => {
+      const root = document.createElement('section');
+      document.body.appendChild(root);
+      let parent: HTMLElement = root;
+      for (let i = 0; i < 7; i++) {
+        const child = document.createElement('div');
+        parent.appendChild(child);
+        parent = child;
+      }
+      const target = document.createElement('div');
+      parent.appendChild(target);
+
+      const { selector } = generateSelector(target);
+      expect(selector.startsWith('body > section > ')).toBe(true);
+      expect(selector.split(' > ').length).toBeGreaterThan(5);
+      expect(document.querySelector(selector)).toBe(target);
+    });
+
+    it('anchors hierarchical selectors to body so they cannot match an earlier same-shaped subtree', () => {
+      const header = document.createElement('div');
+      header.className = 'header';
+      [1, 2, 3].forEach(() => header.appendChild(document.createElement('div')));
+      const wrap = document.createElement('div');
+      wrap.className = 'wrap';
+      const wrong = document.createElement('div');
+      wrong.className = 'wrong';
+      wrap.appendChild(wrong);
+      header.appendChild(wrap);
+
+      const main = document.createElement('div');
+      main.className = 'main';
+      const target = document.createElement('div');
+      target.className = 'empty';
+      main.appendChild(target);
+
+      const root = document.createElement('section');
+      document.body.appendChild(root);
+      root.append(header, main);
+
+      const { selector } = generateSelector(target);
+      expect(selector.startsWith('body > section > ')).toBe(true);
+      expect(document.querySelector(selector)).toBe(target);
+    });
   });
 
   describe('W3C Text Quote Extraction', () => {
@@ -88,6 +133,86 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
 
       const quote = extractTextQuote(el);
       expect(quote).toBeUndefined();
+    });
+  });
+
+  const mockRect = (left: number, top: number, width: number, height: number): DOMRect =>
+    ({
+      left,
+      top,
+      width,
+      height,
+      right: left + width,
+      bottom: top + height,
+      x: left,
+      y: top,
+      toJSON: () => ({}),
+    }) as DOMRect;
+
+  describe('Page Wrappers and Canvases', () => {
+    const originalElementsFromPoint = document.elementsFromPoint;
+
+    afterEach(() => {
+      if (originalElementsFromPoint) {
+        document.elementsFromPoint = originalElementsFromPoint;
+      } else {
+        delete (document as any).elementsFromPoint;
+      }
+    });
+
+    it('does not anchor to a full-viewport wrapper even when it has an id', () => {
+      const wrapper = document.createElement('div');
+      wrapper.id = 'app';
+      wrapper.style.position = 'fixed';
+      wrapper.getBoundingClientRect = () => mockRect(0, 0, window.innerWidth, window.innerHeight);
+      testDomContainer.appendChild(wrapper);
+
+      document.elementsFromPoint = vi.fn(() => [
+        wrapper,
+        document.body,
+        document.documentElement,
+      ]) as any;
+
+      expect(findBestAnchorElement({ x: 50, y: 50 })).toBeNull();
+    });
+
+    it('does not anchor to a full-viewport wrapper selected by a data attribute', () => {
+      const wrapper = document.createElement('div');
+      wrapper.setAttribute('data-testid', 'app-shell');
+      wrapper.getBoundingClientRect = () => mockRect(0, 0, window.innerWidth, window.innerHeight);
+      testDomContainer.appendChild(wrapper);
+
+      document.elementsFromPoint = vi.fn(() => [wrapper, document.body]) as any;
+
+      expect(findBestAnchorElement({ x: 50, y: 50 })).toBeNull();
+    });
+
+    it('falls back to a smaller element inside a full-viewport wrapper', () => {
+      const wrapper = document.createElement('div');
+      wrapper.id = 'app';
+      wrapper.getBoundingClientRect = () => mockRect(0, 0, window.innerWidth, window.innerHeight);
+
+      const card = document.createElement('div');
+      card.id = 'content-card';
+      card.textContent = 'Card';
+      card.getBoundingClientRect = () => mockRect(40, 40, 300, 120);
+
+      wrapper.appendChild(card);
+      testDomContainer.appendChild(wrapper);
+
+      document.elementsFromPoint = vi.fn(() => [card, wrapper, document.body]) as any;
+
+      expect(findBestAnchorElement({ x: 100, y: 80 })).toBe(card);
+    });
+
+    it('never anchors to a page canvas', () => {
+      const canvas = document.createElement('canvas');
+      canvas.getBoundingClientRect = () => mockRect(40, 40, 300, 200);
+      testDomContainer.appendChild(canvas);
+
+      document.elementsFromPoint = vi.fn(() => [canvas, document.body]) as any;
+
+      expect(findBestAnchorElement({ x: 100, y: 80 })).toBeNull();
     });
   });
 
@@ -146,6 +271,34 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       expect(shiftedResolution.status).toBe('found');
       expect(shiftedResolution.deltaX).toBe(0);
       expect(shiftedResolution.deltaY).toBe(65);
+    });
+
+    it('resolves legacy unbounded selectors to the body-rooted element', () => {
+      const header = document.createElement('div');
+      [1, 2, 3].forEach(() => header.appendChild(document.createElement('div')));
+      const wrap = document.createElement('div');
+      const wrong = document.createElement('div');
+      wrong.getBoundingClientRect = () => mockRect(0, 50, 1000, 40);
+      wrap.appendChild(wrong);
+      header.appendChild(wrap);
+
+      const main = document.createElement('div');
+      const target = document.createElement('div');
+      target.getBoundingClientRect = () => mockRect(0, 400, 1000, 200);
+      main.appendChild(target);
+
+      document.body.append(header, main);
+
+      const { selector } = generateSelector(target);
+      expect(selector.startsWith('body > ')).toBe(true);
+
+      const legacySelector = selector.replace(/^body > /, '');
+      expect(document.querySelector(legacySelector)).toBe(wrong);
+
+      const anchor = { ...createDOMAnchor(target), selector: legacySelector };
+      const res = resolveAnchor(anchor);
+      expect(res.element).toBe(target);
+      expect(res.deltaY).toBe(0);
     });
 
     it('falls back to W3C Text Quote if selector is altered or moved', () => {
@@ -208,6 +361,40 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       expect(res.status).toBe('orphaned');
       expect(res.element).toBeNull();
     });
+
+    it('recovers selectors that were wrongly prefixed with body after truncation', () => {
+      const host = document.createElement('div');
+      host.id = 'deep-host';
+      const target = document.createElement('div');
+      target.textContent = 'Deep target text';
+      host.appendChild(target);
+      testDomContainer.appendChild(host);
+      target.getBoundingClientRect = () => mockRect(0, 300, 100, 40);
+
+      const anchor = createDOMAnchor(target);
+      expect(anchor.selector).toBe('#deep-host > div');
+
+      const truncated = { ...anchor, selector: `body > ${anchor.selector}` };
+      const res = resolveAnchor(truncated);
+      expect(res.element).toBe(target);
+      expect(res.deltaY).toBe(0);
+    });
+
+    it('trusts a unique primary selector even when the element text changes', () => {
+      const el = document.createElement('div');
+      el.id = 'live-status';
+      el.textContent = 'tick 1';
+      el.getBoundingClientRect = () => mockRect(0, 100, 400, 40);
+      testDomContainer.appendChild(el);
+
+      const anchor = createDOMAnchor(el);
+      el.textContent = 'completely different words';
+
+      const res = resolveAnchor(anchor);
+      expect(res.status).toBe('found');
+      expect(res.element).toBe(el);
+      expect(res.deltaY).toBe(0);
+    });
   });
 
   describe('DOMAnchorManager Caching & Lifecycle', () => {
@@ -243,6 +430,71 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       window.dispatchEvent(new Event('resize'));
       await new Promise((resolve) => setTimeout(resolve, 200));
       expect(notifyCount).toBeGreaterThanOrEqual(1);
+
+      manager.destroy();
+    });
+
+    it('declines an anchor whose selector resolves to a different element', () => {
+      const wrong = document.createElement('div');
+      wrong.setAttribute('data-id', 'duplicate-id');
+      testDomContainer.appendChild(wrong);
+
+      const target = document.createElement('div');
+      target.setAttribute('data-id', 'duplicate-id');
+      target.getBoundingClientRect = () => mockRect(50, 50, 200, 40);
+      testDomContainer.appendChild(target);
+
+      const spy = vi.spyOn(document, 'elementFromPoint').mockReturnValue(target);
+      const manager = new DOMAnchorManager();
+      try {
+        const anchor = manager.captureAnchor(
+          { minX: 50, minY: 50, maxX: 250, maxY: 90 },
+          { x: 100, y: 70 }
+        );
+        expect(anchor).toBeUndefined();
+      } finally {
+        manager.destroy();
+        spy.mockRestore();
+      }
+    });
+
+    it('does not cache orphaned resolutions so reattached nodes recover', () => {
+      const el = document.createElement('div');
+      el.id = 'reattached-node';
+      el.getBoundingClientRect = () => mockRect(20, 80, 200, 40);
+      testDomContainer.appendChild(el);
+
+      const manager = new DOMAnchorManager();
+      const anchor = createDOMAnchor(el);
+
+      el.remove();
+      expect(manager.resolve(anchor).status).toBe('orphaned');
+
+      testDomContainer.appendChild(el);
+      expect(manager.resolve(anchor).status).toBe('found');
+
+      manager.destroy();
+    });
+
+    it('re-resolves scroll-sensitive anchors after the page scrolls', () => {
+      const fixedEl = document.createElement('div');
+      fixedEl.id = 'fixed-bar';
+      fixedEl.textContent = 'Fixed bar';
+      fixedEl.style.position = 'fixed';
+      fixedEl.getBoundingClientRect = () => mockRect(0, 0, 300, 60);
+      testDomContainer.appendChild(fixedEl);
+
+      const manager = new DOMAnchorManager();
+      const anchor = createDOMAnchor(fixedEl);
+
+      expect(manager.resolve(anchor).deltaY).toBe(0);
+
+      try {
+        window.scrollTo(0, 400);
+        expect(manager.resolve(anchor).deltaY).toBe(400);
+      } finally {
+        window.scrollTo(0, 0);
+      }
 
       manager.destroy();
     });
