@@ -57,7 +57,25 @@ export const SHADOW_STYLES = `
   border: 1px solid var(--pa-line);
   box-shadow: var(--pa-panel-shadow);
 }
+@media (max-width: 600px) {
+  .pa-toolbar-wrapper:not(.docked) {
+    width: calc(100vw - 20px);
+  }
 
+  .pa-toolbar {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .pa-btn {
+    flex: 0 0 32px;
+  }
+
+  .pa-drag-handle {
+    flex: 0 0 20px;
+  }
+}
 .pa-drag-handle {
   display: flex;
   align-items: center;

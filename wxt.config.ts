@@ -15,6 +15,8 @@ export default defineConfig({
     permissions: [
       'storage',
       'activeTab',
+	  'downloads',
+	  '<all_urls>',
       ...(browser === 'firefox' || browser === 'safari' ? [] : ['scripting']),
     ],
     ...(browser === 'firefox'

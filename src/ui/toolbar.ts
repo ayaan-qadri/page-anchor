@@ -44,6 +44,7 @@ export class FloatingToolbar {
   private isDragging = false;
   private dragOffset = { x: 0, y: 0 };
   private isDocked = false;
+  private readonly isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
   private positionSaveTimer: number | null = null;
 
   constructor(
@@ -117,7 +118,9 @@ export class FloatingToolbar {
     this.dockClose.setAttribute('aria-label', 'Hide toolbar');
     this.dockClose.title = 'Hide toolbar';
     setMarkup(this.dockClose, ICONS.close);
-    this.dockPanel.appendChild(this.dockClose);
+	if(!this.isAndroid){
+		this.dockPanel.appendChild(this.dockClose);
+	}
 
     this.wrapper.appendChild(this.toolbar);
     this.wrapper.appendChild(this.colorPopover);
@@ -491,7 +494,9 @@ export class FloatingToolbar {
     const closeBtn = this.createActionButton('hide', 'Hide Toolbar', '', ICONS.close, () => {
       this.hideToolbar();
     });
-    this.toolbar.appendChild(closeBtn);
+	if(!this.isAndroid){
+		this.toolbar.appendChild(closeBtn);
+	}
   }
 
   public updateDomAnchoringUI(enabled: boolean): void {
