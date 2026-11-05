@@ -13,7 +13,14 @@ const HANDLED_MESSAGE_TYPES = new Set([
   'PAGE_ANCHOR_TOGGLE',
   'PAGE_ANCHOR_GET_STATUS',
   'PAGE_ANCHOR_CLEAR',
+  'PAGE_ANCHOR_EXPORT_FRAME',
   'PAGE_ANCHOR_URL_CHANGED',
+  'PAGE_ANCHOR_EXPORT_START',
+  'PAGE_ANCHOR_EXPORT_SCROLL',
+  'PAGE_ANCHOR_EXPORT_END',
+  'PAGE_ANCHOR_FULL_BEGIN',
+  'PAGE_ANCHOR_FULL_SLICE',
+  'PAGE_ANCHOR_FULL_END',
 ]);
 
 export default defineContentScript({
@@ -276,6 +283,81 @@ export default defineContentScript({
       }
     });
 
+
+    // A short-lived export session; the safety timer restores the toolbar if
+    // the Android extension popup gets closed before export completes.
+    type ExportSession = {
+      x: number;
+      y: number;
+      active: boolean;
+      htmlBehavior: string;
+      bodyBehavior: string;
+      toolbarElement: HTMLElement | null;
+      toolbarVisibility: string;
+    };
+    let exportSession: ExportSession | null = null;
+    let exportSafetyTimer: number | null = null;
+
+    const exportGeometry = () => ({
+      scrollY: window.scrollY,
+      viewportHeight: window.innerHeight,
+      viewportWidth: window.innerWidth,
+      scrollHeight: Math.max(
+        document.documentElement.scrollHeight,
+        document.body?.scrollHeight || 0,
+        document.documentElement.offsetHeight,
+        document.body?.offsetHeight || 0,
+      ),
+    });
+
+    const finishExport = () => {
+      if (exportSafetyTimer !== null) {
+        clearTimeout(exportSafetyTimer);
+        exportSafetyTimer = null;
+      }
+      const old = exportSession;
+      if (!old) return;
+      exportSession = null;
+      document.documentElement.style.scrollBehavior = old.htmlBehavior;
+      if (document.body) document.body.style.scrollBehavior = old.bodyBehavior;
+      if (old.toolbarElement) old.toolbarElement.style.visibility = old.toolbarVisibility;
+      window.scrollTo(old.x, old.y);
+      engine.setActiveMode(old.active);
+      engine.renderBase();
+    };
+
+    const armExportSafety = () => {
+      if (exportSafetyTimer !== null) clearTimeout(exportSafetyTimer);
+      exportSafetyTimer = window.setTimeout(finishExport, 120000);
+    };
+
+    const settleExportFrame = async () => {
+      // Background tabs may throttle requestAnimationFrame on Android;
+      // timeouts and an explicit engine redraw work in that situation.
+      await new Promise<void>(resolve => window.setTimeout(resolve, 250));
+      engine.renderBase();
+      await new Promise<void>(resolve => window.setTimeout(resolve, 200));
+    };
+
+    // Single-shot full-page export. Hide our host without changing page layout.
+    // Safety timer restores it if the popup disappears mid-export.
+    let fullExportVisibility: string | null = null;
+    let fullExportTimer: number | null = null;
+    const endFullExport = () => {
+      if (fullExportTimer !== null) {
+        window.clearTimeout(fullExportTimer);
+        fullExportTimer = null;
+      }
+      if (fullExportVisibility !== null) {
+        host.style.visibility = fullExportVisibility;
+        fullExportVisibility = null;
+      }
+    };
+    const armFullExportTimeout = () => {
+      if (fullExportTimer !== null) window.clearTimeout(fullExportTimer);
+      fullExportTimer = window.setTimeout(endFullExport, 300000);
+    };
+
     const runtime = typeof browser !== 'undefined' ? browser.runtime : (typeof chrome !== 'undefined' ? chrome.runtime : null);
     runtime?.onMessage?.addListener((msg: any, _sender: any, sendResponse: (r?: any) => void) => {
       const type = typeof msg?.type === 'string' ? msg.type : '';
@@ -287,6 +369,91 @@ export default defineContentScript({
       ensureHostAttached();
 
       switch (type) {
+        case 'PAGE_ANCHOR_FULL_BEGIN': {
+          endFullExport();
+          const html = document.documentElement;
+          const body = document.body;
+          const width = Math.ceil(Math.max(
+            html.scrollWidth, html.clientWidth,
+            body ? body.scrollWidth : 0,
+          ));
+          const height = Math.ceil(Math.max(
+            html.scrollHeight, html.clientHeight,
+            body ? body.scrollHeight : 0,
+          ));
+          if (!(width > 0 && height > 0)) {
+            sendResponse({ error: 'Некорректные размеры HTML-документа' });
+            break;
+          }
+          fullExportVisibility = host.style.visibility;
+          host.style.visibility = 'hidden';
+          armFullExportTimeout();
+          sendResponse({ ok: true, width, height, count: engine.getElements().length });
+          break;
+        }
+        case 'PAGE_ANCHOR_FULL_SLICE': {
+          if (fullExportVisibility === null) {
+            sendResponse({ error: 'Сессия экспорта завершена' });
+            break;
+          }
+          const pxWidth = Math.floor(Number(msg.pxWidth));
+          const pxHeight = Math.floor(Number(msg.pxHeight));
+          const pxTop = Number(msg.pxTop);
+          const scaleX = Number(msg.scaleX);
+          const scaleY = Number(msg.scaleY);
+          const cssWidth = Number(msg.cssWidth);
+          if (!Number.isFinite(pxTop) || pxTop < 0 ||
+              !Number.isFinite(scaleX) || scaleX <= 0 ||
+              !Number.isFinite(scaleY) || scaleY <= 0 ||
+              !Number.isFinite(cssWidth) || cssWidth <= 0 ||
+              !(pxWidth > 0 && pxWidth <= 16384) ||
+              !(pxHeight > 0 && pxHeight <= 16384)) {
+            sendResponse({ error: 'Некорректная геометрия слоя рисунков' });
+            break;
+          }
+          try {
+            const overlay = document.createElement('canvas');
+            overlay.width = pxWidth;
+            overlay.height = pxHeight;
+            const ctx = overlay.getContext('2d');
+            if (!ctx) throw new Error('Canvas 2D недоступен');
+            // Shared engine renderer: supports all original tools and DOM anchors.
+            engine.renderExportSlice(ctx, pxTop, pxHeight, cssWidth, scaleX, scaleY);
+            armFullExportTimeout();
+            sendResponse({ ok: true, dataUrl: overlay.toDataURL('image/png') });
+          } catch (error) {
+            sendResponse({ error: String(error) });
+          }
+          break;
+        }
+        case 'PAGE_ANCHOR_FULL_END': {
+          endFullExport();
+          sendResponse({ ok: true });
+          break;
+        }
+
+		case 'PAGE_ANCHOR_EXPORT_FRAME': {
+          // Explicit synchronous redraw avoids stale fixed-canvas screenshots
+          // when Firefox Android throttles requestAnimationFrame in background tabs.
+          engine.renderBase();
+          const canvas = shadowRoot.querySelector('.page-anchor-base-canvas') as HTMLCanvasElement | null;
+          if (!canvas) {
+            sendResponse({ error: 'Canvas с аннотациями не найден' });
+            break;
+          }
+          const rect = canvas.getBoundingClientRect();
+          const viewport = window.visualViewport;
+          sendResponse({
+            overlayDataUrl: engine.getAnnotationsVisible() ? canvas.toDataURL('image/png') : null,
+            rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+            visualTop: window.scrollY + (viewport?.offsetTop ?? 0),
+            visualWidth: viewport?.width ?? window.innerWidth,
+            visualHeight: viewport?.height ?? window.innerHeight,
+            offsetLeft: viewport?.offsetLeft ?? 0,
+            offsetTop: viewport?.offsetTop ?? 0,
+          });
+          break;
+		}
         case 'PAGE_ANCHOR_TOGGLE':
           toolbar.toggleDrawingMode(true);
           sendResponse({ active: engine.getActiveMode(), count: engine.getElements().length });
@@ -307,6 +474,50 @@ export default defineContentScript({
           toolbar.updateHistoryButtons();
           sendResponse({ success: true });
           break;
+
+        case 'PAGE_ANCHOR_EXPORT_START': {
+          if (exportSession) finishExport();
+          const toolbarElement = shadowRoot.querySelector('.pa-toolbar-wrapper') as HTMLElement | null;
+          exportSession = {
+            x: window.scrollX,
+            y: window.scrollY,
+            active: engine.getActiveMode(),
+            htmlBehavior: document.documentElement.style.scrollBehavior,
+            bodyBehavior: document.body?.style.scrollBehavior || '',
+            toolbarElement,
+            toolbarVisibility: toolbarElement?.style.visibility || '',
+          };
+          if (toolbarElement) toolbarElement.style.visibility = 'hidden';
+          document.documentElement.style.scrollBehavior = 'auto';
+          if (document.body) document.body.style.scrollBehavior = 'auto';
+          engine.setActiveMode(false);
+          window.scrollTo(0, 0);
+          armExportSafety();
+          void settleExportFrame().then(() => {
+            sendResponse({ ok: true, ...exportGeometry() });
+          }).catch(error => {
+            finishExport();
+            sendResponse({ error: String(error) });
+          });
+          return true;
+        }
+        case 'PAGE_ANCHOR_EXPORT_SCROLL': {
+          if (!exportSession) {
+            sendResponse({ error: 'Export session has expired' });
+            return true;
+          }
+          window.scrollTo(0, Math.max(0, Number(msg.y) || 0));
+          armExportSafety();
+          void settleExportFrame().then(() => {
+            sendResponse({ ok: true, ...exportGeometry() });
+          }).catch(error => sendResponse({ error: String(error) }));
+          return true;
+        }
+        case 'PAGE_ANCHOR_EXPORT_END': {
+          finishExport();
+          sendResponse({ ok: true });
+          return true;
+        }
         case 'PAGE_ANCHOR_URL_CHANGED':
           handleUrlChange();
           sendResponse({ success: true });

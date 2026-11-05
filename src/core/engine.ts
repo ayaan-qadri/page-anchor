@@ -88,6 +88,7 @@ export class CanvasEngine {
     this.activeCanvas.style.width = '100vw';
     this.activeCanvas.style.height = '100vh';
     this.activeCanvas.style.pointerEvents = 'none';
+    this.activeCanvas.style.touchAction = 'none';
     this.activeCanvas.style.zIndex = '2147483641';
 
     this.container.appendChild(this.baseCanvas);
@@ -328,11 +329,15 @@ export class CanvasEngine {
   }
 
   private updateDprAndSize(): void {
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    this.dpr = Math.min(window.devicePixelRatio || 1);
 
     const w = window.innerWidth;
     const h = window.innerHeight;
-
+	this.baseCanvas.style.width = `${w}px`;
+    this.baseCanvas.style.height = `${h}px`;
+    this.activeCanvas.style.width = `${w}px`;
+    this.activeCanvas.style.height = `${h}px`;
+	  
     if (this.baseCanvas.width !== w * this.dpr || this.baseCanvas.height !== h * this.dpr) {
       this.baseCanvas.width = Math.round(w * this.dpr);
       this.baseCanvas.height = Math.round(h * this.dpr);
@@ -731,6 +736,38 @@ export class CanvasEngine {
     ctx.translate(-window.scrollX, -window.scrollY);
 
     this.renderSingleElement(ctx, this.currentShape);
+    ctx.restore();
+  }
+
+  /**
+   * Render saved annotations in document coordinates into one PDF-page slice.
+   * The caller supplies the conversion from document CSS pixels to screenshot pixels.
+   * Reuses the exact on-screen renderer (including DOM anchor offsets and shapes).
+   */
+  public renderExportSlice(
+    ctx: CanvasRenderingContext2D,
+    pixelTop: number,
+    pixelHeight: number,
+    cssWidth: number,
+    scaleX: number,
+    scaleY: number,
+  ): void {
+    const visibleBox: BoundingBox = {
+      minX: -20,
+      minY: pixelTop / scaleY - 20,
+      maxX: cssWidth + 20,
+      maxY: (pixelTop + pixelHeight) / scaleY + 20,
+    };
+    ctx.save();
+    ctx.setTransform(scaleX, 0, 0, scaleY, 0, -pixelTop);
+    for (const el of this.elements) {
+      const eff = this.getElementEffectiveBBox(el);
+      if (eff.isOrphaned && this.orphanedAnchorMode === 'hide') continue;
+      if (!intersectsBoundingBox(eff.bbox, visibleBox)) continue;
+      this.renderSingleElementWithOffset(
+        ctx, el, eff.deltaX, eff.deltaY, eff.isOrphaned,
+      );
+    }
     ctx.restore();
   }
 
