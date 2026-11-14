@@ -163,6 +163,10 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
     activeCanvas.dispatchEvent(
       new PointerEvent('pointerdown', { clientX: 100, clientY: 100, button: 0, pointerId: 4 })
     );
+    // The sweep is reported once it ends, so the count settles on release.
+    window.dispatchEvent(
+      new PointerEvent('pointerup', { clientX: 100, clientY: 100, pointerId: 4 })
+    );
     const countAfterErase = Number(badge.textContent);
     expect(countAfterErase).toBeLessThan(countBeforeErase);
 
@@ -185,7 +189,6 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
 
     const clearBtn = shadow.querySelector('[data-action="clear"]') as HTMLButtonElement;
     clearBtn.click();
-    expect(globalThis.confirm).toHaveBeenCalled();
     expect(badge.style.display).toBe('none');
     await wait(320);
     expect(await loadPageData(window.location.href)).toBeNull();

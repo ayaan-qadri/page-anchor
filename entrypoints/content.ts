@@ -177,6 +177,16 @@ export default defineContentScript({
           engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
           engine.setStrokeSimplification(settings.strokeSimplification);
         },
+        onOpenOptions: () => {
+          const ext = typeof browser !== 'undefined' ? browser : chrome;
+          try {
+            const sent = ext.runtime.sendMessage({ type: 'PAGE_ANCHOR_OPEN_OPTIONS' });
+            if (sent && typeof sent.catch === 'function') sent.catch(() => {});
+          } catch {
+            // The background may be asleep; the options page stays reachable
+            // through the browser's extension management UI either way.
+          }
+        },
       }
     );
 
@@ -300,8 +310,7 @@ export default defineContentScript({
           });
           break;
         case 'PAGE_ANCHOR_CLEAR':
-          history.pushState([]);
-          engine.clear();
+          toolbar.clearPageWithToast();
           clearPageData(currentLoadedUrl).catch(() => {});
           toolbar.updateBadge();
           toolbar.updateHistoryButtons();
@@ -431,13 +440,7 @@ export default defineContentScript({
           break;
         }
         case 'action-clear': {
-          if (confirm('Clear all drawings on this page?')) {
-            history.pushState([]);
-            engine.clear();
-            toolbar.updateHistoryButtons();
-            toolbar.updateBadge();
-            triggerSave([]);
-          }
+          toolbar.clearPageWithToast();
           break;
         }
       }

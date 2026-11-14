@@ -112,8 +112,8 @@ describe('Geometry Engine: Render Helpers and Missing Hit-Test Branches', () => 
       };
       // Center is (50, 50), radius is 50. Point (50, 100) is right on bottom perimeter.
       expect(isPointNearElement({ x: 50, y: 100 }, circle, 6)).toBe(true);
-      // Point (50, 50) is the center (unfilled), should NOT hit perimeter
-      expect(isPointNearElement({ x: 50, y: 50 }, circle, 6)).toBe(false);
+      // The enclosed area belongs to the shape, so it is hit too.
+      expect(isPointNearElement({ x: 50, y: 50 }, circle, 6)).toBe(true);
       expect(isPointNearElement({ x: 200, y: 200 }, circle, 6)).toBe(false);
     });
 

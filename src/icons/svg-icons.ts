@@ -19,6 +19,9 @@ import {
   EyeOff,
   BoxSelect,
   X,
+  Shapes,
+  Settings,
+  Ellipsis,
   type IconNode,
 } from 'lucide';
 
@@ -91,4 +94,7 @@ export const ICONS: Record<string, string> = {
   close: toSvg(X, 16),
   dragHandle: dragHandleSvg(),
   selectAll: toSvg(BoxSelect),
+  shapes: toSvg(Shapes),
+  settings: toSvg(Settings),
+  more: toSvg(Ellipsis),
 };

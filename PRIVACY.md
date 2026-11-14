@@ -33,7 +33,7 @@ Page Anchor only requests browser permissions that are strictly necessary to pro
 | Permission | Purpose & Scope |
 | :--- | :--- |
 | **`storage`** | Persists your drawings, text notes, and preferences locally on your machine so they reappear when you revisit a page. |
-| **`activeTab`** | Allows the Extension to interact with the current tab when you open the popup or activate drawing mode. |
+| **`activeTab`** | Allows the Extension to interact with the current tab when you activate drawing mode. |
 | **`scripting`** | Injects the drawing overlay into the active webpage DOM upon user interaction. Not requested in the Firefox or Safari builds. |
 | **`<all_urls>`** (Host Permission) | Enables the drawing overlay to appear on any website you choose to annotate; the Extension cannot know those pages in advance. |
 

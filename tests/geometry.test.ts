@@ -132,7 +132,7 @@ describe('Geometry Engine: Point-to-Element Hit Testing', () => {
     expect(isPointNearElement({ x: 500, y: 500 }, stroke)).toBe(false);
   });
 
-  it('detects hits on rectangle boundaries and filled rectangles', () => {
+  it('detects hits on rectangle boundaries and inside rectangles', () => {
     const rectOutlined: ShapeElement = {
       id: 'r1',
       type: 'rect',
@@ -148,7 +148,9 @@ describe('Geometry Engine: Point-to-Element Hit Testing', () => {
     };
 
     expect(isPointNearElement({ x: 100, y: 51 }, rectOutlined)).toBe(true);
-    expect(isPointNearElement({ x: 100, y: 100 }, rectOutlined)).toBe(false);
+    // The enclosed area belongs to the shape, so it can be grabbed from inside.
+    expect(isPointNearElement({ x: 100, y: 100 }, rectOutlined)).toBe(true);
+    expect(isPointNearElement({ x: 200, y: 200 }, rectOutlined)).toBe(false);
 
     const rectFilled: ShapeElement = { ...rectOutlined, fillColor: 'rgba(255,0,0,0.5)' };
     expect(isPointNearElement({ x: 100, y: 100 }, rectFilled)).toBe(true);

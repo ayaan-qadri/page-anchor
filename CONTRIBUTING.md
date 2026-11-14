@@ -101,8 +101,7 @@ pnpm icons
 - **`entrypoints/`**:
   - `background.ts`: Service worker that routes the toggle command and injects the overlay into open tabs.
   - `content.ts`: Content script that mounts the Shadow DOM host and drives the drawing engine.
-  - `popup/`: Browser action popup with quick toggles and the settings panel.
-  - `options/`: Full-screen settings, shortcut rebinding, and saved-page management.
+  - `options/`: Settings, shortcut rebinding, saved-page management, and backup.
 - **`src/core/`**:
   - `engine.ts`: Fixed-viewport dual-canvas rendering engine with frustum culling.
   - `geometry.ts`: AABB culling, RDP stroke simplification, and spline maths.

@@ -8,12 +8,10 @@ import { HistoryManager } from '../src/core/history';
 import { DEFAULT_SETTINGS } from '../src/core/storage';
 
 describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
-  describe('Static Template Audits: popup/index.html & options/index.html', () => {
+  describe('Static Template Audits: options/index.html', () => {
     it('should have valid html lang attribute on all entrypoint pages', () => {
-      const popupHtml = fs.readFileSync(path.resolve(__dirname, '../entrypoints/popup/index.html'), 'utf-8');
       const optionsHtml = fs.readFileSync(path.resolve(__dirname, '../entrypoints/options/index.html'), 'utf-8');
 
-      expect(popupHtml).toMatch(/<html\s+lang="en">/);
       expect(optionsHtml).toMatch(/<html\s+lang="en">/);
     });
 
@@ -45,47 +43,37 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
     });
 
     it('should include aria-live regions for dynamic status announcements', () => {
-      const popupHtml = fs.readFileSync(path.resolve(__dirname, '../entrypoints/popup/index.html'), 'utf-8');
       const optionsHtml = fs.readFileSync(path.resolve(__dirname, '../entrypoints/options/index.html'), 'utf-8');
 
-      expect(popupHtml).toContain('id="popup-announcer"');
-      expect(popupHtml).toContain('aria-live="polite"');
       expect(optionsHtml).toContain('id="options-announcer"');
       expect(optionsHtml).toContain('aria-live="polite"');
     });
 
     it('should hide decorative graphics from assistive technology', () => {
-      const popupHtml = fs.readFileSync(path.resolve(__dirname, '../entrypoints/popup/index.html'), 'utf-8');
       const optionsHtml = fs.readFileSync(path.resolve(__dirname, '../entrypoints/options/index.html'), 'utf-8');
 
-      // Inline SVG action icons in the popup (settings, trash) stay hidden from AT
-      expect(popupHtml).toMatch(/<svg[^>]*aria-hidden="true"/);
+      // Inline SVG action icons in the options page stay hidden from AT
+      expect(optionsHtml).toMatch(/<svg[^>]*aria-hidden="true"/);
 
       // Brand marks are decorative logo images: aria-hidden container + empty alt
-      for (const html of [popupHtml, optionsHtml]) {
-        expect(html).toMatch(/class="pa-brand-icon[^"]*"\s+aria-hidden="true"/);
-        expect(html).toMatch(/<img[^>]*alt=""/);
-      }
+      expect(optionsHtml).toMatch(/class="pa-brand-icon[^"]*"\s+aria-hidden="true"/);
+      expect(optionsHtml).toMatch(/<img[^>]*alt=""/);
     });
   });
 
   describe('CSS Accessibility Audits: focus-visible and reduced-motion', () => {
-    it('should define :focus-visible indicators in popup.css, options.css, and shadow styles', () => {
-      const popupCss = fs.readFileSync(path.resolve(__dirname, '../entrypoints/popup/popup.css'), 'utf-8');
+    it('should define :focus-visible indicators in options.css and shadow styles', () => {
       const optionsCss = fs.readFileSync(path.resolve(__dirname, '../entrypoints/options/options.css'), 'utf-8');
       const shadowStyles = fs.readFileSync(path.resolve(__dirname, '../src/ui/styles.ts'), 'utf-8');
 
-      expect(popupCss).toContain(':focus-visible');
       expect(optionsCss).toContain(':focus-visible');
       expect(shadowStyles).toContain(':focus-visible');
     });
 
     it('should respect prefers-reduced-motion media query across all styles (WCAG 2.3.3)', () => {
-      const popupCss = fs.readFileSync(path.resolve(__dirname, '../entrypoints/popup/popup.css'), 'utf-8');
       const optionsCss = fs.readFileSync(path.resolve(__dirname, '../entrypoints/options/options.css'), 'utf-8');
       const shadowStyles = fs.readFileSync(path.resolve(__dirname, '../src/ui/styles.ts'), 'utf-8');
 
-      expect(popupCss).toContain('@media (prefers-reduced-motion: reduce)');
       expect(optionsCss).toContain('@media (prefers-reduced-motion: reduce)');
       expect(shadowStyles).toContain('@media (prefers-reduced-motion: reduce)');
     });

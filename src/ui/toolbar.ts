@@ -40,6 +40,9 @@ export class FloatingToolbar {
   private dockClose: HTMLButtonElement;
   private colorPopover: HTMLElement;
   private colorPreviewBtn: HTMLElement;
+  private toastElement: HTMLElement | null = null;
+  private toastTimer: number | null = null;
+  private menuWrappers: HTMLElement[] = [];
 
   private isDragging = false;
   private dragOffset = { x: 0, y: 0 };
@@ -362,32 +365,16 @@ export class FloatingToolbar {
 
     this.toolbar.appendChild(this.createToolButton('select', 'Select & Move', 'tool-select', ICONS.select));
 
-    this.toolbar.appendChild(
-      this.createActionButton(
-        'select-all',
-        'Select All to Move',
-        'action-select-all',
-        ICONS.selectAll,
-        () => {
-          this.engine.selectAll();
-          this.updateActiveToolUI();
-        }
-      )
-    );
-
     this.toolbar.appendChild(this.createSeparator());
 
+    // Primary drawing tools stay on the bar. Everything less common lives in
+    // menus so the toolbar reads as a short list instead of a wall of icons.
     this.toolbar.appendChild(this.createToolButton('pen', 'Pen', 'tool-pen', ICONS.pen));
     this.toolbar.appendChild(this.createToolButton('highlighter', 'Highlighter', 'tool-highlighter', ICONS.highlighter));
-
-    this.toolbar.appendChild(this.createToolButton('rect', 'Rectangle', 'tool-rect', ICONS.rect));
-    this.toolbar.appendChild(this.createToolButton('circle', 'Circle', 'tool-circle', ICONS.circle));
-    this.toolbar.appendChild(this.createToolButton('line', 'Line', 'tool-line', ICONS.line));
-    this.toolbar.appendChild(this.createToolButton('arrow', 'Arrow', 'tool-arrow', ICONS.arrow));
-    this.toolbar.appendChild(this.createToolButton('double-arrow', 'Double Arrow', 'tool-double-arrow', ICONS.doubleArrow));
-
     this.toolbar.appendChild(this.createToolButton('text', 'Text Note', 'tool-text', ICONS.text));
     this.toolbar.appendChild(this.createToolButton('eraser', 'Eraser', 'tool-eraser', ICONS.eraser));
+
+    this.toolbar.appendChild(this.buildShapesMenu());
 
     this.toolbar.appendChild(this.createSeparator());
 
@@ -408,102 +395,363 @@ export class FloatingToolbar {
     this.toolbar.appendChild(this.createSeparator());
 
     const undoBtn = this.createActionButton('undo', 'Undo', 'action-undo', ICONS.undo, () => {
-      const prev = this.history.undo();
-      if (prev !== null) {
-        this.engine.setElements(prev);
-        this.updateHistoryButtons();
-        this.updateBadge();
-        this.callbacks.onClear?.();
-      }
+      this.undo();
     });
     this.toolbar.appendChild(undoBtn);
 
     const redoBtn = this.createActionButton('redo', 'Redo', 'action-redo', ICONS.redo, () => {
-      const next = this.history.redo();
-      if (next !== null) {
-        this.engine.setElements(next);
-        this.updateHistoryButtons();
-        this.updateBadge();
-        this.callbacks.onClear?.();
-      }
+      this.redo();
     });
     this.toolbar.appendChild(redoBtn);
 
     const clearBtn = this.createActionButton('clear', 'Clear Page', 'action-clear', ICONS.trash, () => {
-      if (confirm('Clear all drawings on this page?')) {
-        this.history.pushState([]);
-        this.engine.clear();
-        this.updateHistoryButtons();
-        this.updateBadge();
-        this.callbacks.onClear?.();
-      }
+      this.clearPageWithToast();
     });
     this.toolbar.appendChild(clearBtn);
 
+    this.toolbar.appendChild(this.buildMoreMenu());
+  }
+
+  /**
+   * A menu of the five shape tools. They keep their own keyboard shortcuts,
+   * so the menu is a convenience rather than the only route to them.
+   */
+  private buildShapesMenu(): HTMLElement {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'pa-menu-anchor';
+
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'pa-btn pa-menu-trigger';
+    trigger.dataset.action = 'shapes';
+    trigger.setAttribute('aria-haspopup', 'menu');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-label', 'Shape tools');
+    trigger.title = 'Shape tools';
+    setMarkup(trigger, ICONS.shapes);
+    wrapper.appendChild(trigger);
+
+    const menu = document.createElement('div');
+    menu.className = 'pa-menu';
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', 'Shape tools');
+
+    const shapes: Array<[ToolType, string, string, string]> = [
+      ['rect', 'Rectangle', 'tool-rect', ICONS.rect],
+      ['circle', 'Circle', 'tool-circle', ICONS.circle],
+      ['line', 'Line', 'tool-line', ICONS.line],
+      ['arrow', 'Arrow', 'tool-arrow', ICONS.arrow],
+      ['double-arrow', 'Double Arrow', 'tool-double-arrow', ICONS.doubleArrow],
+    ];
+
+    for (const [tool, name, shortcutId, icon] of shapes) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'pa-menu-item';
+      item.dataset.tool = tool;
+      item.setAttribute('role', 'menuitemradio');
+      item.setAttribute('aria-checked', 'false');
+      setMarkup(item, icon);
+      const label = document.createElement('span');
+      label.className = 'pa-menu-item-label';
+      label.textContent = name;
+      item.appendChild(label);
+      const kbd = document.createElement('kbd');
+      kbd.className = 'pa-menu-item-key';
+      kbd.textContent = this.getShortcutDisplay(shortcutId);
+      item.appendChild(kbd);
+      item.addEventListener('click', () => {
+        this.engine.setTool(tool);
+        this.updateActiveToolUI();
+        this.closeMenus();
+      });
+      menu.appendChild(item);
+    }
+
+    wrapper.appendChild(menu);
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleMenu(wrapper, menu, trigger);
+    });
+
+    this.menuWrappers.push(wrapper);
+    return wrapper;
+  }
+
+  /**
+   * A menu of the secondary controls: select-all, drawing visibility, smart
+   * anchoring, and toolbar placement.
+   */
+  private buildMoreMenu(): HTMLElement {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'pa-menu-anchor';
+
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'pa-btn pa-menu-trigger';
+    trigger.dataset.action = 'more';
+    trigger.setAttribute('aria-haspopup', 'menu');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-label', 'More options');
+    trigger.title = 'More options';
+    setMarkup(trigger, ICONS.more);
+    wrapper.appendChild(trigger);
+
+    const menu = document.createElement('div');
+    menu.className = 'pa-menu pa-menu-right';
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', 'More options');
+
+    const selectAllItem = document.createElement('button');
+    selectAllItem.type = 'button';
+    selectAllItem.className = 'pa-menu-item';
+    selectAllItem.dataset.action = 'select-all';
+    selectAllItem.setAttribute('role', 'menuitem');
+    selectAllItem.setAttribute('aria-label', 'Select All to Move');
+    setMarkup(selectAllItem, ICONS.selectAll);
+    const selectAllLabel = document.createElement('span');
+    selectAllLabel.className = 'pa-menu-item-label';
+    selectAllLabel.textContent = 'Select All to Move';
+    selectAllItem.appendChild(selectAllLabel);
+    selectAllItem.addEventListener('click', () => {
+      this.engine.selectAll();
+      this.updateActiveToolUI();
+      this.closeMenus();
+    });
+    menu.appendChild(selectAllItem);
+
     const isVisible = this.engine.getAnnotationsVisible();
-    const eyeBtn = this.createActionButton(
-      'visibility',
-      isVisible ? 'Hide Drawings' : 'Show Drawings',
-      '',
-      isVisible ? ICONS.eye : ICONS.eyeOff,
-      () => {
-        const next = !this.engine.getAnnotationsVisible();
-        this.engine.setAnnotationsVisible(next);
-        this.settings.areAnnotationsVisible = next;
-        saveSettings({ areAnnotationsVisible: next }).catch(() => {});
-        eyeBtn.setAttribute('aria-pressed', next ? 'true' : 'false');
-        const eyeLabel = next ? 'Hide Drawings' : 'Show Drawings';
-        eyeBtn.dataset.label = eyeLabel;
-        eyeBtn.setAttribute('aria-label', eyeLabel);
-        setIconWithTooltip(eyeBtn, next ? ICONS.eye : ICONS.eyeOff, eyeLabel);
-      }
-    );
-    eyeBtn.setAttribute('aria-pressed', isVisible ? 'true' : 'false');
-    this.toolbar.appendChild(eyeBtn);
+    const eyeBtn = document.createElement('button');
+    eyeBtn.type = 'button';
+    eyeBtn.className = 'pa-menu-item';
+    eyeBtn.dataset.action = 'visibility';
+    eyeBtn.setAttribute('role', 'menuitemcheckbox');
+    eyeBtn.setAttribute('aria-checked', isVisible ? 'true' : 'false');
+    eyeBtn.setAttribute('aria-label', isVisible ? 'Hide Drawings' : 'Show Drawings');
+    setMarkup(eyeBtn, isVisible ? ICONS.eye : ICONS.eyeOff);
+    const eyeLabel = document.createElement('span');
+    eyeLabel.className = 'pa-menu-item-label';
+    eyeLabel.textContent = isVisible ? 'Hide Drawings' : 'Show Drawings';
+    eyeBtn.appendChild(eyeLabel);
+    eyeBtn.addEventListener('click', () => {
+      const next = !this.engine.getAnnotationsVisible();
+      this.engine.setAnnotationsVisible(next);
+      this.settings.areAnnotationsVisible = next;
+      saveSettings({ areAnnotationsVisible: next }).catch(() => {});
+      eyeBtn.setAttribute('aria-checked', next ? 'true' : 'false');
+      eyeLabel.textContent = next ? 'Hide Drawings' : 'Show Drawings';
+      setMarkup(eyeBtn, next ? ICONS.eye : ICONS.eyeOff);
+      this.closeMenus();
+    });
+    menu.appendChild(eyeBtn);
 
     const isAnchoring = this.engine.getDomAnchoringEnabled();
-    const anchorBtn = this.createActionButton(
-      'dom-anchor',
-      isAnchoring ? 'Smart Anchoring: ON (Follows moving items)' : 'Smart Anchoring: OFF (Fixed position)',
-      '',
-      ICONS.anchor,
-      () => {
-        const next = !this.engine.getDomAnchoringEnabled();
-        this.engine.setDomAnchoringEnabled(next);
-        this.callbacks.onToggleDomAnchoring?.(next);
-        const label = next ? 'Smart Anchoring: ON (Follows moving items)' : 'Smart Anchoring: OFF (Fixed position)';
-        anchorBtn.dataset.label = label;
-        anchorBtn.setAttribute('aria-pressed', next ? 'true' : 'false');
-        anchorBtn.setAttribute('aria-label', label);
-        anchorBtn.classList.toggle('active', next);
-        setIconWithTooltip(anchorBtn, ICONS.anchor, label);
-      }
-    );
-    anchorBtn.setAttribute('aria-pressed', isAnchoring ? 'true' : 'false');
-    anchorBtn.classList.toggle('active', isAnchoring);
-    this.toolbar.appendChild(anchorBtn);
+    const anchorBtn = document.createElement('button');
+    anchorBtn.type = 'button';
+    anchorBtn.className = 'pa-menu-item';
+    anchorBtn.dataset.action = 'dom-anchor';
+    anchorBtn.setAttribute('role', 'menuitemcheckbox');
+    anchorBtn.setAttribute('aria-checked', isAnchoring ? 'true' : 'false');
+    anchorBtn.setAttribute('aria-label', isAnchoring ? 'Smart Anchoring: On' : 'Smart Anchoring: Off');
+    setMarkup(anchorBtn, ICONS.anchor);
+    const anchorLabel = document.createElement('span');
+    anchorLabel.className = 'pa-menu-item-label';
+    anchorLabel.textContent = isAnchoring ? 'Smart Anchoring: On' : 'Smart Anchoring: Off';
+    anchorBtn.appendChild(anchorLabel);
+    anchorBtn.addEventListener('click', () => {
+      const next = !this.engine.getDomAnchoringEnabled();
+      this.engine.setDomAnchoringEnabled(next);
+      this.callbacks.onToggleDomAnchoring?.(next);
+      anchorBtn.setAttribute('aria-checked', next ? 'true' : 'false');
+      anchorLabel.textContent = next ? 'Smart Anchoring: On' : 'Smart Anchoring: Off';
+      this.closeMenus();
+    });
+    menu.appendChild(anchorBtn);
 
-    const dockBtn = this.createActionButton('dock', 'Dock to Left Edge', '', ICONS.minimize, () => {
+    const dockItem = document.createElement('button');
+    dockItem.type = 'button';
+    dockItem.className = 'pa-menu-item';
+    dockItem.dataset.action = 'dock';
+    dockItem.setAttribute('role', 'menuitem');
+    dockItem.setAttribute('aria-label', 'Dock to Left Edge');
+    setMarkup(dockItem, ICONS.minimize);
+    const dockLabel = document.createElement('span');
+    dockLabel.className = 'pa-menu-item-label';
+    dockLabel.textContent = 'Dock to Left Edge';
+    dockItem.appendChild(dockLabel);
+    const dockHint = document.createElement('span');
+    dockHint.className = 'pa-menu-item-hint';
+    dockHint.textContent = 'stops drawing';
+    dockItem.appendChild(dockHint);
+    dockItem.addEventListener('click', () => {
+      this.closeMenus();
       this.setDrawingMode(false);
     });
-    this.toolbar.appendChild(dockBtn);
+    menu.appendChild(dockItem);
 
-    const closeBtn = this.createActionButton('hide', 'Hide Toolbar', '', ICONS.close, () => {
+    const settingsItem = document.createElement('button');
+    settingsItem.type = 'button';
+    settingsItem.className = 'pa-menu-item';
+    settingsItem.dataset.action = 'open-options';
+    settingsItem.setAttribute('role', 'menuitem');
+    settingsItem.setAttribute('aria-label', 'Settings & Backup');
+    setMarkup(settingsItem, ICONS.settings);
+    const settingsLabel = document.createElement('span');
+    settingsLabel.className = 'pa-menu-item-label';
+    settingsLabel.textContent = 'Settings & Backup';
+    settingsItem.appendChild(settingsLabel);
+    settingsItem.addEventListener('click', () => {
+      this.closeMenus();
+      this.callbacks.onOpenOptions?.();
+    });
+    menu.appendChild(settingsItem);
+
+    const closeItem = document.createElement('button');
+    closeItem.type = 'button';
+    closeItem.className = 'pa-menu-item';
+    closeItem.dataset.action = 'hide';
+    closeItem.setAttribute('role', 'menuitem');
+    closeItem.setAttribute('aria-label', 'Hide Toolbar');
+    setMarkup(closeItem, ICONS.close);
+    const closeLabel = document.createElement('span');
+    closeLabel.className = 'pa-menu-item-label';
+    closeLabel.textContent = 'Hide Toolbar';
+    closeItem.appendChild(closeLabel);
+    closeItem.addEventListener('click', () => {
+      this.closeMenus();
       this.hideToolbar();
     });
-    this.toolbar.appendChild(closeBtn);
+    menu.appendChild(closeItem);
+
+    wrapper.appendChild(menu);
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleMenu(wrapper, menu, trigger);
+    });
+
+    this.menuWrappers.push(wrapper);
+    return wrapper;
+  }
+
+  private toggleMenu(wrapper: HTMLElement, menu: HTMLElement, trigger: HTMLElement): void {
+    const isOpen = wrapper.classList.contains('open');
+    this.closeMenus();
+    if (isOpen) return;
+    wrapper.classList.add('open');
+    menu.classList.add('open');
+    trigger.setAttribute('aria-expanded', 'true');
+  }
+
+  /** Closes every open toolbar menu. */
+  public closeMenus(): void {
+    for (const wrapper of this.menuWrappers) {
+      wrapper.classList.remove('open');
+      wrapper.querySelector('.pa-menu')?.classList.remove('open');
+      wrapper.querySelector('.pa-menu-trigger')?.setAttribute('aria-expanded', 'false');
+    }
   }
 
   public updateDomAnchoringUI(enabled: boolean): void {
     const btn = this.toolbar.querySelector('[data-action="dom-anchor"]') as HTMLButtonElement | null;
     if (btn) {
-      const label = enabled ? 'Smart Anchoring: ON (Follows moving items)' : 'Smart Anchoring: OFF (Fixed position)';
-      btn.dataset.label = label;
-      btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-      btn.setAttribute('aria-label', label);
-      btn.classList.toggle('active', enabled);
-      setIconWithTooltip(btn, ICONS.anchor, label);
+      btn.setAttribute('aria-checked', enabled ? 'true' : 'false');
+      const label = btn.querySelector('.pa-menu-item-label');
+      if (label) label.textContent = enabled ? 'Smart Anchoring: On' : 'Smart Anchoring: Off';
     }
+  }
+
+  public isHighlighterActive(): boolean {
+    return this.engine.getTool() === 'highlighter';
+  }
+
+  public showToast(
+    message: string,
+    actionLabel?: string,
+    onAction?: () => void,
+    durationMs = 4500
+  ): void {
+    if (this.toastElement) {
+      this.toastElement.remove();
+      this.toastElement = null;
+    }
+    if (this.toastTimer) {
+      clearTimeout(this.toastTimer);
+      this.toastTimer = null;
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'pa-toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+
+    const text = document.createElement('span');
+    text.className = 'pa-toast-text';
+    text.textContent = message;
+    toast.appendChild(text);
+
+    const dismiss = () => {
+      toast.classList.add('pa-toast-hiding');
+      setTimeout(() => {
+        if (toast.parentNode) toast.remove();
+        if (this.toastElement === toast) this.toastElement = null;
+      }, 180);
+    };
+
+    if (actionLabel && onAction) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pa-toast-btn';
+      btn.textContent = actionLabel;
+      btn.setAttribute('aria-label', actionLabel);
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onAction();
+        dismiss();
+      });
+      toast.appendChild(btn);
+    }
+
+    this.wrapper.appendChild(toast);
+    this.toastElement = toast;
+
+    this.toastTimer = window.setTimeout(() => {
+      dismiss();
+    }, durationMs);
+  }
+
+  public clearPageWithToast(): void {
+    const hadElements = this.engine.getElements().length > 0;
+
+    // `engine.clear()` reports the change, which the host records in the undo
+    // history. One undo therefore steps straight back to the cleared page.
+    this.engine.clear();
+    this.updateHistoryButtons();
+    this.updateBadge();
+    this.callbacks.onClear?.();
+
+    if (hadElements) {
+      this.showToast('Page drawings cleared', 'Undo', () => this.undo());
+    }
+  }
+
+  /** Reverts the most recent change, restoring the previous page state. */
+  public undo(): void {
+    const prev = this.history.undo();
+    if (prev === null) return;
+    this.engine.setElements(prev);
+    this.updateHistoryButtons();
+    this.updateBadge();
+    this.callbacks.onClear?.();
+  }
+
+  /** Re-applies the most recently undone change. */
+  public redo(): void {
+    const next = this.history.redo();
+    if (next === null) return;
+    this.engine.setElements(next);
+    this.updateHistoryButtons();
+    this.updateBadge();
+    this.callbacks.onClear?.();
   }
 
   private toggleColorPopover(): void {
@@ -523,22 +771,35 @@ export class FloatingToolbar {
     const body = document.createElement('div');
     body.className = 'pa-popover-body';
 
+    // Names the tool the swatches below will change, so the grid is never
+    // ambiguous about what it is about to recolour.
+    const target = document.createElement('div');
+    target.className = 'pa-color-target';
+    target.setAttribute('aria-live', 'polite');
+    body.appendChild(target);
+
     const grid = document.createElement('div');
     grid.className = 'pa-color-grid';
     grid.setAttribute('role', 'group');
-    grid.setAttribute('aria-label', 'Preset pen colors');
+    const isHl = this.isHighlighterActive();
+    const activeColor = isHl ? this.settings.defaultHighlighterColor : this.settings.defaultStrokeColor;
+    grid.setAttribute('aria-label', isHl ? 'Preset highlighter colors' : 'Preset pen colors');
 
     PRESET_COLORS.forEach((color) => {
       const swatch = document.createElement('button');
       swatch.type = 'button';
-      const isActive = color === this.settings.defaultStrokeColor;
+      const isActive = color === activeColor;
       swatch.className = `pa-color-swatch ${isActive ? 'active' : ''}`;
       swatch.style.backgroundColor = color;
       swatch.dataset.color = color;
       swatch.setAttribute('aria-label', `Color ${color}`);
       swatch.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       swatch.addEventListener('click', () => {
-        this.updateDrawingDefaults({ defaultStrokeColor: color });
+        if (this.isHighlighterActive()) {
+          this.updateDrawingDefaults({ defaultHighlighterColor: color });
+        } else {
+          this.updateDrawingDefaults({ defaultStrokeColor: color });
+        }
       });
       grid.appendChild(swatch);
     });
@@ -583,6 +844,7 @@ export class FloatingToolbar {
       (e) => {
         if (!e.composedPath().includes(this.wrapper)) {
           this.closeColorPopover();
+          this.closeMenus();
         }
       },
       true
@@ -616,9 +878,14 @@ export class FloatingToolbar {
     input.addEventListener('input', () => {
       if (setting === 'defaultStrokeColor') {
         this.engine.setStrokeColor(input.value);
-        this.colorPreviewBtn.style.backgroundColor = input.value;
+        if (!this.isHighlighterActive()) {
+          this.colorPreviewBtn.style.backgroundColor = input.value;
+        }
       } else {
         this.engine.setHighlighterColor(input.value);
+        if (this.isHighlighterActive()) {
+          this.colorPreviewBtn.style.backgroundColor = input.value;
+        }
       }
     });
     input.addEventListener('change', () => {
@@ -752,15 +1019,33 @@ export class FloatingToolbar {
     this.refreshPenColorControls();
   }
 
-  /** Keeps the pen preview button and preset swatches in step with the pen colour. */
-  private refreshPenColorControls(): void {
-    const pen = this.settings.defaultStrokeColor;
-    this.colorPreviewBtn.style.backgroundColor = pen;
+  /** Keeps the color preview button and preset swatches in step with the active tool's colour. */
+  public refreshColorControls(): void {
+    const isHl = this.isHighlighterActive();
+    const activeColor = isHl ? this.settings.defaultHighlighterColor : this.settings.defaultStrokeColor;
+    this.colorPreviewBtn.style.backgroundColor = activeColor;
+    this.colorPreviewBtn.title = isHl ? 'Highlighter defaults' : 'Drawing defaults';
+    this.colorPreviewBtn.setAttribute('aria-label', isHl ? 'Highlighter defaults' : 'Drawing defaults');
+
+    const target = this.colorPopover.querySelector('.pa-color-target');
+    if (target) {
+      target.textContent = isHl ? 'Highlighter colours' : 'Pen colours';
+    }
+
+    const grid = this.colorPopover.querySelector('.pa-color-grid');
+    if (grid) {
+      grid.setAttribute('aria-label', isHl ? 'Preset highlighter colors' : 'Preset pen colors');
+    }
+
     this.colorPopover.querySelectorAll<HTMLButtonElement>('.pa-color-swatch').forEach((swatch) => {
-      const isActive = swatch.dataset.color === pen;
+      const isActive = swatch.dataset.color === activeColor;
       swatch.classList.toggle('active', isActive);
       swatch.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
+  }
+
+  private refreshPenColorControls(): void {
+    this.refreshColorControls();
   }
 
   private createToolButton(
@@ -838,7 +1123,22 @@ export class FloatingToolbar {
         btn.classList.remove('active');
         btn.setAttribute('aria-pressed', 'false');
       }
+      if (btn.getAttribute('role') === 'menuitemradio') {
+        btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+      }
     });
+
+    // The shape tools live in a menu, so their trigger carries the active
+    // state instead of the individual buttons being visible on the bar.
+    const shapeTools: ToolType[] = ['rect', 'circle', 'line', 'arrow', 'double-arrow'];
+    const shapeTrigger = this.toolbar.querySelector('[data-action="shapes"]') as HTMLElement | null;
+    if (shapeTrigger) {
+      const isShapeActive = shapeTools.includes(current);
+      shapeTrigger.classList.toggle('active', isShapeActive);
+      shapeTrigger.setAttribute('aria-pressed', isShapeActive ? 'true' : 'false');
+    }
+
+    this.refreshColorControls();
   }
 
   public updateTooltips(): void {

@@ -21,6 +21,18 @@ export default defineBackground(() => {
     }
   }
 
+  const actionApi = ext.action || ext.browserAction;
+  actionApi?.onClicked?.addListener(async (tab?: any) => {
+    let tabId = tab?.id;
+    if (!tabId) {
+      const [activeTab] = await ext.tabs.query({ active: true, currentWindow: true });
+      tabId = activeTab?.id;
+    }
+    if (tabId) {
+      await safeToggleTab(tabId);
+    }
+  });
+
   ext.commands?.onCommand?.addListener(async (command: string) => {
     if (command === 'toggle-drawing-mode') {
       const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
@@ -28,6 +40,15 @@ export default defineBackground(() => {
         await safeToggleTab(tab.id);
       }
     }
+  });
+
+  // The in-page toolbar's "Settings & Backup" item routes through the
+  // background, because only an extension context can open the options page.
+  ext.runtime?.onMessage?.addListener((msg: any) => {
+    if (msg?.type === 'PAGE_ANCHOR_OPEN_OPTIONS') {
+      ext.runtime.openOptionsPage?.();
+    }
+    return false;
   });
 
   ext.runtime?.onInstalled?.addListener(async () => {

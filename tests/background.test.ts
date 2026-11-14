@@ -6,12 +6,20 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
   let listeners: {
     command?: (cmd: string) => Promise<void>;
     onInstalled?: () => Promise<void>;
+    actionClick?: (tab?: any) => Promise<void>;
   };
 
   beforeEach(() => {
     listeners = {};
 
     mockChrome = {
+      action: {
+        onClicked: {
+          addListener: vi.fn((fn) => {
+            listeners.actionClick = fn;
+          }),
+        },
+      },
       scripting: {
         executeScript: vi.fn().mockResolvedValue([{ result: true }]),
       },
@@ -45,8 +53,32 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
   it('registers all required extension event listeners on background boot', () => {
     backgroundDefinition.main();
 
+    expect(mockChrome.action.onClicked.addListener).toHaveBeenCalledTimes(1);
     expect(mockChrome.commands.onCommand.addListener).toHaveBeenCalledTimes(1);
     expect(mockChrome.runtime.onInstalled.addListener).toHaveBeenCalledTimes(1);
+  });
+
+  it('toggles drawing mode directly when extension action icon is clicked', async () => {
+    backgroundDefinition.main();
+
+    mockChrome.tabs.query.mockResolvedValue([{ id: 77, active: true }]);
+    mockChrome.tabs.sendMessage.mockResolvedValue({ active: true });
+
+    await listeners.actionClick?.({ id: 77 });
+
+    expect(mockChrome.tabs.sendMessage).toHaveBeenCalledWith(77, { type: 'PAGE_ANCHOR_TOGGLE' });
+  });
+
+  it('toggles drawing mode on active tab when extension action click receives tab without id', async () => {
+    backgroundDefinition.main();
+
+    mockChrome.tabs.query.mockResolvedValue([{ id: 88, active: true }]);
+    mockChrome.tabs.sendMessage.mockResolvedValue({ active: true });
+
+    await listeners.actionClick?.();
+
+    expect(mockChrome.tabs.query).toHaveBeenCalledWith({ active: true, currentWindow: true });
+    expect(mockChrome.tabs.sendMessage).toHaveBeenCalledWith(88, { type: 'PAGE_ANCHOR_TOGGLE' });
   });
 
   it('toggles drawing mode via keyboard command on active tab', async () => {

@@ -61,6 +61,10 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     const toolbar = page.locator('#page-anchor-host .pa-toolbar');
     await expect(toolbar).toBeVisible();
 
+    // Shape tools live behind the toolbar's "Shapes" menu.
+    const shapesBtn = page.locator('#page-anchor-host [data-action="shapes"]');
+    await shapesBtn.click();
+
     const rectTool = page.locator('#page-anchor-host [data-tool="rect"]');
     await rectTool.click();
     await expect(rectTool).toHaveClass(/active/);
@@ -118,12 +122,16 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     await page.keyboard.press('Alt+Shift+KeyD');
     await expect(toolbar).toBeVisible();
 
+    // Smart anchoring lives in the toolbar's "More" menu.
+    const moreBtn = page.locator('#page-anchor-host [data-action="more"]');
+    await moreBtn.click();
+
     const anchorBtn = page.locator('#page-anchor-host [data-action="dom-anchor"]');
-    await expect(anchorBtn).toHaveAttribute('aria-pressed', 'true');
+    await expect(anchorBtn).toHaveAttribute('aria-checked', 'true');
     await anchorBtn.click();
-    await expect(anchorBtn).toHaveAttribute('aria-pressed', 'false');
+    await moreBtn.click();
+    await expect(anchorBtn).toHaveAttribute('aria-checked', 'false');
     await anchorBtn.click();
-    await expect(anchorBtn).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('USER FLOW 2: Preferences configuration, tab navigation, & shortcut rebinding', async ({
@@ -169,25 +177,56 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     await expect(toast).toHaveText('Settings saved successfully!');
   });
 
-  test('USER FLOW 3: Extension popup opening, status display, and navigation to options', async ({
+  test('USER FLOW 3: Extension action toggles the in-page toolbar, and options page opens', async ({
     context,
     extensionId,
   }) => {
     expect(extensionId).toBeTruthy();
 
     const page = await context.newPage();
-    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await page.goto(`http://localhost:${serverPort}/portal`);
     await page.waitForLoadState('domcontentloaded');
 
-    await expect(page.locator('.pa-brand-title')).toHaveText('Page Anchor');
+    // The action icon has no default popup: clicking it drives the in-page
+    // toolbar directly instead of showing a dashboard.
+    const background = await context.serviceWorkers()[0].evaluate(() => {
+      const m = chrome.runtime.getManifest();
+      return { hasDefaultPopup: !!m.action?.default_popup };
+    });
+    expect(background.hasDefaultPopup).toBe(false);
 
-    const toggleSwitch = page.locator('#toggle-draw-mode');
-    await expect(toggleSwitch).toBeAttached();
+    const dockTab = page.locator('#page-anchor-host .pa-dock-tab');
+    await expect(dockTab).toBeVisible({ timeout: 10000 });
 
-    const clearCard = page.locator('#btn-clear');
-    await expect(clearCard).toBeVisible();
+    const toolbar = page.locator('#page-anchor-host .pa-toolbar');
+    await expect(toolbar).toBeHidden();
 
-    const optionsBtn = page.locator('#btn-options');
-    await expect(optionsBtn).toBeVisible();
+    // Clicking the action icon expands the toolbar, and clicking again docks
+    // it back to the left edge.
+    const clickActionIcon = async () => {
+      const worker = context.serviceWorkers()[0];
+      const tabs = await worker.evaluate(() =>
+        chrome.tabs.query({ active: true, currentWindow: true })
+      );
+      await worker.evaluate(
+        (tabId) => chrome.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_TOGGLE' }),
+        tabs[0].id
+      );
+      await page.waitForTimeout(200);
+    };
+
+    await clickActionIcon();
+    await expect(toolbar).toBeVisible();
+    await expect(dockTab).toBeHidden();
+
+    await clickActionIcon();
+    await expect(toolbar).toBeHidden();
+    await expect(dockTab).toBeVisible();
+
+    // The options page remains the home for settings and backup.
+    const optionsPage = await context.newPage();
+    await optionsPage.goto(`chrome-extension://${extensionId}/options.html`);
+    await optionsPage.waitForLoadState('domcontentloaded');
+    await expect(optionsPage.locator('h1')).toHaveText(/Page Anchor/i);
   });
 });

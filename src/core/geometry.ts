@@ -173,8 +173,11 @@ export function isPointNearElement(pt: Point, element: AnchorElement, threshold 
     const minY = Math.min(element.startY, element.endY);
     const maxY = Math.max(element.startY, element.endY);
 
-    if (element.fillColor) {
-      return pt.x >= minX && pt.x <= maxX && pt.y >= minY && pt.y <= maxY;
+    // The interior counts as part of the shape. A rectangle is a region the
+    // user drew around something, so clicking inside it should select it
+    // rather than falling through to whatever is behind.
+    if (pt.x >= minX && pt.x <= maxX && pt.y >= minY && pt.y <= maxY) {
+      return true;
     }
 
     const top = distToSegmentSquared(pt, { x: minX, y: minY }, { x: maxX, y: minY });
@@ -194,8 +197,9 @@ export function isPointNearElement(pt: Point, element: AnchorElement, threshold 
     if (rx === 0 || ry === 0) return false;
 
     const normDist = ((pt.x - cx) / rx) ** 2 + ((pt.y - cy) / ry) ** 2;
-    if (element.fillColor) {
-      return normDist <= 1.05;
+    // As with rectangles, the enclosed area belongs to the shape.
+    if (normDist <= 1.05) {
+      return true;
     }
     const avgR = (rx + ry) / 2;
     const distToCenter = Math.sqrt((pt.x - cx) ** 2 + (pt.y - cy) ** 2);

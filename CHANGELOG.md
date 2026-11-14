@@ -3,6 +3,35 @@
 All notable changes to Page Anchor are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- The extension icon now toggles the in-page drawing toolbar directly, instead
+  of opening a dashboard popup. Clicking it again docks the toolbar against the
+  left edge, so it stops covering the page; the small tab there brings it back.
+  Settings, saved pages, and backup live on the Options page, reachable from
+  the toolbar's "More" menu.
+- The drawing toolbar is shorter and calmer. Shape tools moved into a "Shapes"
+  menu, and secondary controls moved into a "More" menu, taking the bar from
+  twenty buttons to thirteen. Selection chrome was muted so it stops
+  competing with the page being annotated.
+
+### Fixed
+
+- Changing the highlighter colour now actually changes the highlighter. The
+  preset swatches and the colour preview follow the active tool, so picking a
+  colour while the highlighter is selected recolours highlights instead of the
+  pen. Editing the pen colour no longer disturbs the highlighter's colour.
+- "Clear All" no longer asks for confirmation on every press. It clears
+  immediately and offers an undo, so repeated edits are not interrupted by a
+  modal dialog.
+- Undoing a clear restores the drawings in a single step instead of two.
+- An eraser sweep counts as one undo step rather than one per pointer event.
+- Clicking an element to select it no longer consumes an undo step.
+- Clicking inside a shape you drew now selects it, instead of requiring a hit
+  on its thin outline.
+
 ## [1.0.1] — 2026-10-26
 
 ### Fixed

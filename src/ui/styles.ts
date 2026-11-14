@@ -8,15 +8,15 @@ export const SHADOW_STYLES = `
   box-sizing: border-box;
 
   /* Design tokens (isolated copy — the host page never loads the app theme). */
-  --pa-bg: #0a0d16;
-  --pa-surface: #11141f;
-  --pa-surface-2: #161a27;
-  --pa-elevated: #1b2030;
+  --pa-bg: #141724;
+  --pa-surface: #1e2233;
+  --pa-surface-2: #262b3e;
+  --pa-elevated: #2f354c;
   --pa-text: #e8eaf3;
-  --pa-muted: #99a1b8;
-  --pa-faint: #7c849e;
-  --pa-line: rgba(255, 255, 255, 0.08);
-  --pa-line-strong: rgba(255, 255, 255, 0.14);
+  --pa-muted: #9da6c0;
+  --pa-faint: #7d86a2;
+  --pa-line: rgba(255, 255, 255, 0.12);
+  --pa-line-strong: rgba(255, 255, 255, 0.18);
   --pa-accent: #5b8def;
   --pa-accent-strong: #3f63da;
   --pa-accent-soft: #a9c1f8;
@@ -28,7 +28,7 @@ export const SHADOW_STYLES = `
   --pa-warning: #e5a94a;
   --pa-warning-soft: #f0c680;
   --pa-ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --pa-panel-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 32px -14px rgba(0, 0, 0, 0.85);
+  --pa-panel-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.35), 0 2px 6px -1px rgba(0, 0, 0, 0.2);
 }
 
 *, *::before, *::after {
@@ -51,9 +51,9 @@ export const SHADOW_STYLES = `
   gap: 2px;
   padding: 5px;
   border-radius: 13px;
-  background: rgba(17, 20, 31, 0.86);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  backdrop-filter: blur(20px) saturate(160%);
+  background: rgba(26, 30, 44, 0.92);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   border: 1px solid var(--pa-line);
   box-shadow: var(--pa-panel-shadow);
 }
@@ -188,11 +188,11 @@ export const SHADOW_STYLES = `
   min-width: 196px;
   padding: 0;
   border-radius: 12px;
-  background: rgba(17, 20, 31, 0.96);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  backdrop-filter: blur(20px) saturate(160%);
+  background: rgba(26, 30, 44, 0.96);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   border: 1px solid var(--pa-line-strong);
-  box-shadow: 0 18px 40px -14px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.5);
   max-height: min(70vh, 520px);
   overflow: hidden;
   z-index: 101;
@@ -227,6 +227,14 @@ export const SHADOW_STYLES = `
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 8px;
+}
+
+.pa-color-target {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--pa-faint);
 }
 
 .pa-color-swatch {
@@ -344,6 +352,99 @@ export const SHADOW_STYLES = `
 .pa-toolbar-wrapper.docked .pa-toolbar,
 .pa-toolbar-wrapper.docked .pa-popover {
   display: none !important;
+}
+
+/* ── Popup menus ──────────────────────────────────────────────── */
+
+.pa-menu-anchor {
+  position: relative;
+  display: flex;
+}
+
+.pa-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  flex-direction: column;
+  min-width: 190px;
+  padding: 5px;
+  border-radius: 11px;
+  background: rgba(26, 30, 44, 0.97);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--pa-line-strong);
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.5);
+  z-index: 102;
+}
+
+.pa-menu.pa-menu-right {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.pa-menu.open {
+  display: flex;
+}
+
+.pa-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 9px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pa-muted);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s var(--pa-ease), color 0.12s var(--pa-ease);
+}
+
+.pa-menu-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--pa-text);
+}
+
+.pa-menu-item.active {
+  background: rgba(91, 141, 239, 0.16);
+  color: var(--pa-accent-soft);
+}
+
+.pa-menu-item svg {
+  flex: none;
+}
+
+.pa-menu-item-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pa-menu-item-key {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--pa-faint);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.pa-menu-item-hint {
+  flex: none;
+  color: var(--pa-faint);
+  font-size: 10.5px;
+  font-weight: 500;
 }
 
 .pa-dock {
@@ -487,6 +588,72 @@ export const SHADOW_STYLES = `
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.pa-toast {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 9px;
+  background: var(--pa-surface-2);
+  border: 1px solid var(--pa-line-strong);
+  box-shadow: 0 6px 20px -3px rgba(0, 0, 0, 0.45);
+  color: var(--pa-text);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 2147483647;
+  pointer-events: auto;
+  animation: pa-toast-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pa-toast.pa-toast-hiding {
+  opacity: 0;
+  transform: translateX(-50%) translateY(4px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.pa-toast-text {
+  color: var(--pa-text);
+}
+
+.pa-toast-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--pa-accent);
+  border: none;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.12s ease, transform 0.08s ease;
+}
+
+.pa-toast-btn:hover {
+  background: var(--pa-accent-strong);
+}
+
+.pa-toast-btn:active {
+  transform: scale(0.96);
+}
+
+@keyframes pa-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

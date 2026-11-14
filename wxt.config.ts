@@ -40,7 +40,9 @@ export default defineConfig({
       128: '/icon-128.png',
     },
     action: {
-      default_title: 'Page Anchor',
+      // Names the behaviour, since clicking the icon toggles the in-page
+      // toolbar between expanded and docked.
+      default_title: 'Page Anchor — toggle drawing toolbar',
       default_icon: {
         16: '/icon-16.png',
         32: '/icon-32.png',

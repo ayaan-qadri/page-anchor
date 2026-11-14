@@ -21,6 +21,13 @@ import {
 
 export type { EngineCallbacks };
 
+/**
+ * Muted selection chrome. Saturated blues shout over the page being annotated;
+ * this reads as a quiet overlay that still marks what is selected.
+ */
+const SELECTION_COLOR = '#8fa6cc';
+const SELECTION_BADGE_BG = 'rgba(56, 70, 106, 0.94)';
+
 export class CanvasEngine {
   private baseCanvas: HTMLCanvasElement;
   private baseCtx: CanvasRenderingContext2D;
@@ -50,6 +57,16 @@ export class CanvasEngine {
   private currentStrokePoints: Point[] = [];
   private shapeStartPoint: Point | null = null;
   private currentShape: ShapeElement | null = null;
+
+  /** True only once a select-drag actually displaced an element. */
+  private hasMovedElements = false;
+
+  /**
+   * Eraser state. A sweep is a single user action, so its removals are
+   * coalesced into one history entry instead of one per pointer event.
+   */
+  private isErasingGesture = false;
+  private eraseChangedPending = false;
 
   private scrollRafId: number | null = null;
   private resizeRafId: number | null = null;
@@ -400,6 +417,7 @@ export class CanvasEngine {
         }
 
         this.isDraggingSelected = true;
+        this.hasMovedElements = false;
         this.dragStartPoint = docPt;
         this.callbacks.onSelectionChange?.(this.selectedElements[0] || null, this.selectedElements);
         this.renderBase();
@@ -408,6 +426,7 @@ export class CanvasEngine {
 
       if (this.selectedElements.length > 1 && this.isPointInsideUnionBBox(docPt)) {
         this.isDraggingSelected = true;
+        this.hasMovedElements = false;
         this.dragStartPoint = docPt;
         return;
       }
@@ -427,6 +446,10 @@ export class CanvasEngine {
     }
 
     if (this.activeTool === 'eraser') {
+      // Flush any stale pending change before starting a new sweep.
+      this.commitErase();
+      this.isErasingGesture = true;
+      this.eraseChangedPending = false;
       this.eraseAtPoints([docPt]);
       return;
     }
@@ -479,8 +502,11 @@ export class CanvasEngine {
       if (this.isDraggingSelected && this.selectedElements.length > 0 && this.dragStartPoint) {
         const dx = currentDocPt.x - this.dragStartPoint.x;
         const dy = currentDocPt.y - this.dragStartPoint.y;
-        for (const el of this.selectedElements) {
-          this.moveElement(el, dx, dy);
+        if (dx !== 0 || dy !== 0) {
+          for (const el of this.selectedElements) {
+            this.moveElement(el, dx, dy);
+          }
+          this.hasMovedElements = true;
         }
         this.dragStartPoint = currentDocPt;
         this.renderBase();
@@ -537,16 +563,26 @@ export class CanvasEngine {
     this.isPointerDown = false;
     this.pointerId = null;
 
+    if (this.isErasingGesture) {
+      this.commitErase();
+      return;
+    }
+
     if (this.activeTool === 'select') {
       if (this.isDraggingSelected) {
         this.isDraggingSelected = false;
         this.dragStartPoint = null;
-        if (this.isDomAnchoringEnabled) {
-          for (const el of this.selectedElements) {
-            el.anchor = this.anchorManager.captureAnchor(el.bbox);
+        // A click that selected an element without displacing it is not an
+        // edit, so it must not cost the user an undo step.
+        if (this.hasMovedElements) {
+          this.hasMovedElements = false;
+          if (this.isDomAnchoringEnabled) {
+            for (const el of this.selectedElements) {
+              el.anchor = this.anchorManager.captureAnchor(el.bbox);
+            }
           }
+          this.callbacks.onElementsChange?.(this.elements);
         }
-        this.callbacks.onElementsChange?.(this.elements);
       }
       if (this.isMarqueeSelecting && this.currentMarqueeBBox) {
         const w = this.currentMarqueeBBox.maxX - this.currentMarqueeBBox.minX;
@@ -630,9 +666,20 @@ export class CanvasEngine {
     const prevCount = this.elements.length;
     this.elements = this.elements.filter((el) => !points.some((pt) => this.isPointErasing(el, pt)));
     if (this.elements.length !== prevCount) {
-      this.callbacks.onElementsChange?.(this.elements);
+      this.eraseChangedPending = true;
       this.renderBase();
     }
+  }
+
+  /**
+   * Ends an eraser sweep. The removals are reported once, so a single sweep
+   * costs one undo step instead of one per pointer event.
+   */
+  private commitErase(): void {
+    this.isErasingGesture = false;
+    if (!this.eraseChangedPending) return;
+    this.eraseChangedPending = false;
+    this.callbacks.onElementsChange?.(this.elements);
   }
 
   private isPointErasing(el: AnchorElement, pt: Point): boolean {
@@ -969,10 +1016,10 @@ export class CanvasEngine {
     const w = b.maxX - b.minX;
     const h = b.maxY - b.minY;
 
-    ctx.fillStyle = 'rgba(91, 141, 239, 0.12)';
+    ctx.fillStyle = 'rgba(143, 166, 204, 0.14)';
     ctx.fillRect(b.minX, b.minY, w, h);
 
-    ctx.strokeStyle = '#5b8def';
+    ctx.strokeStyle = SELECTION_COLOR;
     ctx.lineWidth = 1.5;
     ctx.setLineDash([4, 4]);
     ctx.strokeRect(b.minX, b.minY, w, h);
@@ -1006,7 +1053,7 @@ export class CanvasEngine {
     };
 
     ctx.save();
-    ctx.strokeStyle = '#5b8def';
+    ctx.strokeStyle = SELECTION_COLOR;
     ctx.lineWidth = 2;
     ctx.setLineDash([5, 5]);
 
@@ -1015,7 +1062,7 @@ export class CanvasEngine {
     ctx.strokeRect(unionBBox.minX, unionBBox.minY, w, h);
 
     ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#5b8def';
+    ctx.strokeStyle = SELECTION_COLOR;
     ctx.lineWidth = 1.5;
     ctx.setLineDash([]);
     const corners = [
@@ -1037,7 +1084,7 @@ export class CanvasEngine {
     const badgeX = unionBBox.minX;
     const badgeY = Math.max(unionBBox.minY - badgeH - 6, window.scrollY + 8);
 
-    ctx.fillStyle = 'rgba(63, 99, 218, 0.95)';
+    ctx.fillStyle = SELECTION_BADGE_BG;
     this.roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 6);
     ctx.fill();
 
@@ -1051,7 +1098,7 @@ export class CanvasEngine {
   private renderSingleSelectionOutline(ctx: CanvasRenderingContext2D, el: AnchorElement): void {
     const pad = 6;
     ctx.save();
-    ctx.strokeStyle = '#5b8def';
+    ctx.strokeStyle = SELECTION_COLOR;
     ctx.lineWidth = 2;
     ctx.setLineDash([4, 4]);
 
@@ -1064,7 +1111,7 @@ export class CanvasEngine {
     );
 
     ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#5b8def';
+    ctx.strokeStyle = SELECTION_COLOR;
     ctx.lineWidth = 1.5;
     ctx.setLineDash([]);
     const corners = [
@@ -1083,7 +1130,7 @@ export class CanvasEngine {
   private renderIndividualItemOutline(ctx: CanvasRenderingContext2D, el: AnchorElement): void {
     const pad = 3;
     ctx.save();
-    ctx.strokeStyle = 'rgba(59, 130, 246, 0.45)';
+    ctx.strokeStyle = 'rgba(143, 166, 204, 0.45)';
     ctx.lineWidth = 1;
     ctx.setLineDash([3, 3]);
     const b = this.getElementEffectiveBBox(el).bbox;

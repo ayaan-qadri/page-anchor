@@ -91,4 +91,19 @@ describe('HistoryManager: Undo & Redo Reliability', () => {
 
     expect(previous![0].strokeColor).toBe('#000');
   });
+
+  it('restores the drawings with a single undo after a clear', () => {
+    const history = new HistoryManager([]);
+    const el1 = dummyElement('1');
+    const el2 = dummyElement('2');
+
+    history.pushState([el1, el2]);
+    history.pushState([]);
+
+    // Single undo must immediately return the 2 drawings, not an empty state
+    const restored = history.undo();
+    expect(restored).toHaveLength(2);
+    expect(restored![0].id).toBe('1');
+    expect(restored![1].id).toBe('2');
+  });
 });

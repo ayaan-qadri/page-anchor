@@ -4,6 +4,7 @@ import { CanvasEngine } from '../src/core/engine';
 import { HistoryManager } from '../src/core/history';
 import { TextEditorOverlay } from '../src/ui/text-editor';
 import { DEFAULT_SETTINGS } from '../src/core/storage';
+import { formatShortcutForDisplay } from '../src/core/shortcuts';
 
 describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () => {
   let container: HTMLElement;
@@ -22,10 +23,14 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
       onClear: vi.fn(),
       onToggleDomAnchoring: vi.fn(),
       onSettingsUpdate: vi.fn(),
+      onOpenOptions: vi.fn(),
     };
 
-    engine = new CanvasEngine(container);
     history = new HistoryManager([]);
+    // Mirrors the content script: every engine change is recorded in history.
+    engine = new CanvasEngine(container, {
+      onElementsChange: (elements) => history.pushState(elements),
+    });
     textEditor = new TextEditorOverlay(container);
     toolbar = new FloatingToolbar(
       container,
@@ -219,7 +224,25 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
   it('exposes a distinct shortcut label for the double-arrow tool', () => {
     const doubleArrowBtn = container.querySelector('[data-tool="double-arrow"]') as HTMLButtonElement;
     expect(doubleArrowBtn).not.toBeNull();
-    expect(doubleArrowBtn.dataset.shortcut).toBe('tool-double-arrow');
+    const shortcutKey = doubleArrowBtn.querySelector('.pa-menu-item-key') as HTMLElement;
+    expect(shortcutKey.textContent).toBe(
+      formatShortcutForDisplay(DEFAULT_SETTINGS.shortcuts['tool-double-arrow'])
+    );
+  });
+
+  it('groups the shape tools behind a single menu entry', () => {
+    const shapesTrigger = container.querySelector('[data-action="shapes"]') as HTMLButtonElement;
+    expect(shapesTrigger).not.toBeNull();
+    expect(shapesTrigger.getAttribute('aria-haspopup')).toBe('menu');
+
+    // Shape tools live in the menu but keep working as ordinary tool buttons.
+    const rectBtn = container.querySelector('[data-tool="rect"]') as HTMLButtonElement;
+    rectBtn.click();
+    expect(engine.getTool()).toBe('rect');
+    expect(rectBtn.classList.contains('active')).toBe(true);
+
+    // The trigger carries the active state, since the button itself is hidden.
+    expect(shapesTrigger.classList.contains('active')).toBe(true);
   });
 
   it('updates undo and redo buttons availability based on history stack', () => {
@@ -409,5 +432,130 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     expect((toolbar as any).settings.defaultStrokeWidth).toBe(DEFAULT_SETTINGS.defaultStrokeWidth);
     expect((toolbar as any).settings.defaultFontSize).toBe(DEFAULT_SETTINGS.defaultFontSize);
     expect(penWidth.value).toBe(`${DEFAULT_SETTINGS.defaultStrokeWidth}`);
+  });
+
+  it('updates highlighter color when preset swatch is clicked while highlighter tool is active', () => {
+    const hlBtn = container.querySelector('[data-tool="highlighter"]') as HTMLButtonElement;
+    hlBtn.click();
+
+    const colorBtn = container.querySelector('.pa-color-preview-btn') as HTMLButtonElement;
+    colorBtn.click();
+
+    // The grid should now represent highlighter colors
+    const grid = container.querySelector('.pa-color-grid') as HTMLElement;
+    expect(grid.getAttribute('aria-label')).toBe('Preset highlighter colors');
+
+    // Pick 2nd swatch (orange #f97316)
+    const swatches = container.querySelectorAll<HTMLButtonElement>('.pa-color-swatch');
+    swatches[1].click();
+
+    expect((toolbar as any).settings.defaultHighlighterColor).toBe(swatches[1].dataset.color);
+    expect((engine as any).highlighterColor).toBe(swatches[1].dataset.color);
+    expect(colorBtn.style.backgroundColor).toBe(swatches[1].dataset.color);
+  });
+
+  it('applies the picked highlighter color to strokes drawn with the highlighter', () => {
+    (container.querySelector('[data-tool="highlighter"]') as HTMLButtonElement).click();
+    (container.querySelector('.pa-color-preview-btn') as HTMLButtonElement).click();
+    const swatches = container.querySelectorAll<HTMLButtonElement>('.pa-color-swatch');
+    swatches[2].click();
+    const picked = swatches[2].dataset.color as string;
+
+    const canvas = container.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', { clientX: 10, clientY: 10, button: 0, pointerId: 1 })
+    );
+    window.dispatchEvent(new PointerEvent('pointermove', { clientX: 60, clientY: 10, pointerId: 1 }));
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: 60, clientY: 10, pointerId: 1 }));
+
+    const stroke = engine.getElements()[0] as any;
+    expect(stroke.type).toBe('highlighter');
+    expect(stroke.strokeColor).toBe(picked);
+  });
+
+  it('keeps the pen colour unchanged when the highlighter colour is edited', () => {
+    const penBefore = (toolbar as any).settings.defaultStrokeColor;
+
+    (container.querySelector('[data-tool="highlighter"]') as HTMLButtonElement).click();
+    (container.querySelector('.pa-color-preview-btn') as HTMLButtonElement).click();
+    const swatches = container.querySelectorAll<HTMLButtonElement>('.pa-color-swatch');
+    swatches[3].click();
+
+    expect((toolbar as any).settings.defaultStrokeColor).toBe(penBefore);
+    expect((engine as any).strokeColor).toBe(penBefore);
+  });
+
+  it('clears drawings immediately and displays undo toast without modal confirm', () => {
+    (globalThis as any).confirm = vi.fn();
+
+    // Add a dummy element through the engine so the change is recorded in
+    // history, exactly as drawing a stroke would be.
+    const dummy: any = {
+      id: 'd1', type: 'pen', points: [{ x: 10, y: 10 }],
+      strokeColor: '#000', strokeWidth: 2, opacity: 1, createdAt: 0,
+      bbox: { minX: 10, minY: 10, maxX: 10, maxY: 10 },
+    };
+    engine.addElement(dummy);
+    expect(engine.getElements()).toHaveLength(1);
+
+    const clearBtn = container.querySelector('[data-action="clear"]') as HTMLButtonElement;
+    clearBtn.click();
+
+    expect((globalThis as any).confirm).not.toHaveBeenCalled();
+    expect(engine.getElements()).toHaveLength(0);
+    expect(mockCallbacks.onClear).toHaveBeenCalled();
+
+    // Verify toast with Undo button was rendered
+    const toast = container.querySelector('.pa-toast') as HTMLElement;
+    expect(toast).not.toBeNull();
+    const undoBtn = toast.querySelector('.pa-toast-btn') as HTMLButtonElement;
+    expect(undoBtn).not.toBeNull();
+
+    // Clicking Undo restores the drawings
+    undoBtn.click();
+    expect(engine.getElements()).toHaveLength(1);
+    expect(engine.getElements()[0].id).toBe('d1');
+  });
+
+  it('restores the cleared drawings with a single undo, and redoes the clear', () => {
+    const dummy: any = {
+      id: 'd1', type: 'pen', points: [{ x: 10, y: 10 }],
+      strokeColor: '#000', strokeWidth: 2, opacity: 1, createdAt: 0,
+      bbox: { minX: 10, minY: 10, maxX: 10, maxY: 10 },
+    };
+    engine.addElement(dummy);
+
+    (container.querySelector('[data-action="clear"]') as HTMLButtonElement).click();
+    expect(engine.getElements()).toHaveLength(0);
+
+    // One undo brings the drawings back — no extra press needed.
+    (container.querySelector('[data-action="undo"]') as HTMLButtonElement).click();
+    expect(engine.getElements()).toHaveLength(1);
+
+    // And redo re-applies the clear.
+    (container.querySelector('[data-action="redo"]') as HTMLButtonElement).click();
+    expect(engine.getElements()).toHaveLength(0);
+  });
+
+  it('moves the secondary controls into a More menu that can be opened', () => {
+    const moreTrigger = container.querySelector('[data-action="more"]') as HTMLButtonElement;
+    expect(moreTrigger).not.toBeNull();
+    expect(moreTrigger.getAttribute('aria-haspopup')).toBe('menu');
+    expect(moreTrigger.getAttribute('aria-expanded')).toBe('false');
+
+    moreTrigger.click();
+    expect(moreTrigger.getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelector('.pa-menu.open')).not.toBeNull();
+
+    // The controls are reachable and labelled.
+    const selectAll = container.querySelector('[data-action="select-all"]') as HTMLElement;
+    expect(selectAll.getAttribute('aria-label')).toContain('Select All');
+    expect(container.querySelector('[data-action="open-options"]')).not.toBeNull();
+  });
+
+  it('opens the options page from the More menu when requested', () => {
+    (container.querySelector('[data-action="more"]') as HTMLButtonElement).click();
+    (container.querySelector('[data-action="open-options"]') as HTMLButtonElement).click();
+    expect(mockCallbacks.onOpenOptions).toHaveBeenCalled();
   });
 });

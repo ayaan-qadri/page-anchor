@@ -13,7 +13,7 @@ Page Anchor is designed with a **privacy-first, client-only architecture**:
 ## Security Safeguards
 
 - **Isolated Shadow DOM**: All injected UI components (the floating toolbar, colour popover, and text editor) live within an encapsulated Shadow DOM tree to prevent CSS bleed and protect against host-page script tampering.
-- **Safe DOM Insertion**: Dynamic values rendered in the toolbar, popup, and options pages are inserted as text, never parsed as HTML. Bundled icon markup is converted through `DOMParser`, which does not execute scripts.
+- **Safe DOM Insertion**: Dynamic values rendered in the toolbar and options pages are inserted as text, never parsed as HTML. Bundled icon markup is converted through `DOMParser`, which does not execute scripts.
 - **Untrusted Backup Hardening**: Imported backups are validated before use. Stored page titles and URLs are only ever rendered as text, and a stored URL is only converted into a clickable link when it uses a safe `http(s)` scheme.
 - **Storage Quota Handling**: Storage write failures, including quota exhaustion, are detected and surfaced to the user instead of failing silently.
 

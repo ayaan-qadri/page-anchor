@@ -275,7 +275,17 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
         new PointerEvent('pointerdown', { clientX: 55, clientY: 55, button: 0, pointerId: 1 })
       );
 
+      // The stroke is gone from the canvas immediately...
       expect(engine.getElements()).toHaveLength(0);
+      // ...but the change is reported once the sweep ends, so the whole sweep
+      // costs a single undo step.
+      expect(mockChange).not.toHaveBeenCalled();
+
+      window.dispatchEvent(
+        new PointerEvent('pointerup', { clientX: 55, clientY: 55, pointerId: 1 })
+      );
+
+      expect(mockChange).toHaveBeenCalledTimes(1);
       expect(mockChange).toHaveBeenCalledWith([]);
     });
   });
@@ -345,6 +355,64 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
       );
 
       expect(engine.getSelectedElements()).toHaveLength(0);
+    });
+
+    it('selects a shape by clicking inside it, not only on its outline', () => {
+      const rect: ShapeElement = {
+        id: 'r1',
+        type: 'rect',
+        startX: 20,
+        startY: 20,
+        endX: 120,
+        endY: 120,
+        strokeColor: '#000',
+        strokeWidth: 2,
+        opacity: 1,
+        createdAt: 0,
+        bbox: { minX: 15, minY: 15, maxX: 125, maxY: 125 },
+      };
+      engine.setElements([rect]);
+      engine.setTool('select');
+
+      const activeCanvas = container.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
+      activeCanvas.dispatchEvent(
+        new PointerEvent('pointerdown', { clientX: 70, clientY: 70, button: 0, pointerId: 1 })
+      );
+      window.dispatchEvent(
+        new PointerEvent('pointerup', { clientX: 70, clientY: 70, pointerId: 1 })
+      );
+
+      expect(engine.getSelectedElements().map((el) => el.id)).toEqual(['r1']);
+    });
+
+    it('does not record an undo step for a click that only selects an element', () => {
+      const rect: ShapeElement = {
+        id: 'r1',
+        type: 'rect',
+        startX: 20,
+        startY: 20,
+        endX: 120,
+        endY: 120,
+        strokeColor: '#000',
+        strokeWidth: 2,
+        opacity: 1,
+        createdAt: 0,
+        bbox: { minX: 15, minY: 15, maxX: 125, maxY: 125 },
+      };
+      engine.setElements([rect]);
+      engine.setTool('select');
+      mockChange.mockClear();
+
+      const activeCanvas = container.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
+      activeCanvas.dispatchEvent(
+        new PointerEvent('pointerdown', { clientX: 70, clientY: 70, button: 0, pointerId: 1 })
+      );
+      window.dispatchEvent(
+        new PointerEvent('pointerup', { clientX: 70, clientY: 70, pointerId: 1 })
+      );
+
+      // Selecting is not an edit, so nothing was reported as changed.
+      expect(mockChange).not.toHaveBeenCalled();
     });
   });
 

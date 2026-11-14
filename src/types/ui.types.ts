@@ -6,6 +6,8 @@ export interface ToolbarCallbacks {
   onSettingsUpdate?: (settings: ExtensionSettings) => void;
   onToggleActive?: (active: boolean) => void;
   onToggleDomAnchoring?: (enabled: boolean) => void;
+  /** Opens the extension's options page, where settings and backup live. */
+  onOpenOptions?: () => void;
 }
 
 export interface TextEditorCallbacks {

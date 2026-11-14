@@ -55,22 +55,24 @@ Page Anchor is a browser extension for marking up pages you don't own the source
 
 Click an icon, and a small toolbar appears. Draw a box around the broken button, arrow at the thing you mean, drop a note next to it, and leave. The next time you open that URL, everything is still there.
 
+Clicking the icon again docks the toolbar against the left edge, so it stops covering the page you're reading. Clicking the small tab there brings it back.
+
 All of it is local. There's no account, no sync server, no upload, and no telemetry.
 
 ---
 
 ## Features
 
-- **Pen and highlighter**: freehand strokes smoothed with quadratic bezier interpolation. The highlighter draws at 35% alpha, which keeps highlighted text legible on articles, docs, and code.
+- **Pen and highlighter**: freehand strokes smoothed with quadratic bezier interpolation. The highlighter draws at 35% alpha, which keeps highlighted text legible on articles, docs, and code. Each tool keeps its own colour and width, so switching between the pen and the highlighter never changes the other's settings.
 - **Vector shapes**: rectangle, ellipse, straight line (hold `Shift` to snap to 45° increments), directional arrow, and a double-headed dimension arrow for marking distances and gaps.
 - **Text notes**: click anywhere to type, with configurable font size and a high-legibility backdrop so notes stay readable over busy pages.
-- **Select, move, erase**: click an existing element to select it and drag it elsewhere, delete it with `Delete`/`Backspace`, or sweep the eraser across anything you want gone.
+- **Select, move, erase**: click an existing element to select it and drag it elsewhere, delete it with `Delete`/`Backspace`, or sweep the eraser across anything you want gone. Clicking inside a shape you drew selects it, so you don't have to hit its thin outline.
 - **DOM-aware anchoring**: drawings follow the elements they were made on when a page reflows, rather than staying pinned to raw pixel coordinates. This is the part that makes it work on real sites instead of only static ones.
 - **Persistent per-URL storage**: annotations are saved automatically and restored when you come back. Tracking parameters (`utm_*`, `fbclid`, `gclid`, …) and hash fragments are stripped before matching, so a link shared with tracking junk still finds your drawings. Matching can be clean, exact, or domain-wide.
 - **Fully rebindable shortcuts**: every tool and action can be remapped with an interactive key recorder, with warnings when you pick something the browser has reserved.
 - **Shadow DOM isolation**: the overlay UI lives in its own shadow root, so Tailwind resets, Bootstrap, and styled-components on the host page can't break it, and its styles can't leak out.
 - **Backup and restore**: export every page's annotations as a JSON file and import it again later.
-- **Bounded undo/redo**: 50 steps per page, so a long session doesn't grow memory without limit.
+- **Bounded undo/redo**: 50 steps per page, so a long session doesn't grow memory without limit. One action is one step: an eraser sweep undoes as a whole, and a click that only selects something doesn't cost a step.
 - **Cheap on weak hardware**: the renderer is built to stay smooth on budget laptops and Chromebooks. Details in [How It Works](#how-it-works).
 - **Cross-browser**: one codebase, builds for Chrome/Edge/Brave (MV3), Firefox (MV2), and Safari.
 
@@ -163,7 +165,7 @@ A few deliberate choices:
 - Global toggles use `Alt + Shift` so they don't collide with reserved browser shortcuts (`Ctrl + D` for bookmarks, `Alt + D` for the address bar) or with `AltGr` combinations that produce characters like `€` on European layouts.
 - Single-letter tool shortcuts only fire while drawing mode is active. With the overlay off, the page receives every keystroke as normal — YouTube, GitHub, and your own web apps behave exactly as they would without the extension.
 - Modifiers are labelled per platform: `Ctrl` on Windows and Linux, `Cmd` on macOS, `Option` instead of `Alt` on Apple hardware. Bindings saved by older versions are migrated automatically.
-- Everything above can be rebound from the popup's **Settings** panel or the **Options** page, which warn you when a chord is likely to be intercepted by the browser.
+- Everything above can be rebound from the **Options** page, which warns you when a chord is likely to be intercepted by the browser.
 
 ---
 
@@ -171,7 +173,7 @@ A few deliberate choices:
 
 - **[WXT](https://wxt.dev/)** for the extension framework: Vite-powered builds, HMR during development, and one codebase producing MV3 and MV2 bundles.
 - **TypeScript** in strict mode across the engine, storage layer, UI, and background worker.
-- **Tailwind CSS v4** for the popup and options pages, compiled at build time.
+- **Tailwind CSS v4** for the options page, compiled at build time.
 - **Canvas 2D** for rendering, with no rendering library in between.
 - **Lucide** icons, inlined as SVG at build time so there's no icon request at runtime.
 - **Vitest** and **happy-dom** for unit and integration tests, **Playwright** for end-to-end runs in a real browser.
@@ -294,12 +296,8 @@ page-anchor/
 ├── entrypoints/
 │   ├── background.ts            # Service worker, commands, cross-tab messaging
 │   ├── content.ts               # Content script: mounts the overlay on each page
-│   ├── popup/                   # Toolbar popup (status, settings, backup)
-│   │   ├── index.html
-│   │   ├── popup.css
-│   │   ├── popup.ts
-│   │   └── popup-settings.ts
-│   └── options/                 # Full options page
+│   ├── popup/                   # (removed — the icon now opens the in-page toolbar)
+│   └── options/                 # Settings page: shortcuts, persistence, saved pages, backup
 │       ├── index.html
 │       ├── options.css
 │       └── options.ts
@@ -321,7 +319,7 @@ page-anchor/
 │   │   └── dom.ts               # Safe DOM helpers (no innerHTML)
 │   ├── icons/svg-icons.ts       # Inlined SVG icon set
 │   ├── types/                   # Engine, storage, shortcut, and UI contracts
-│   └── styles/tailwind.css      # Popup / options styles
+│   └── styles/tailwind.css      # Options page styles
 ├── public/                      # Generated icons: 16, 32, 48, 128
 ├── assets/icon-source.png       # Master artwork for the icon pipeline
 ├── scripts/
@@ -355,7 +353,7 @@ If you're changing anything in the renderer or the anchoring logic, the perf and
 ## Security & Privacy
 
 - **Local only.** Drawings, notes, and settings live in `browser.storage.local`. Nothing is sent anywhere; there are no accounts and no telemetry.
-- **Narrow, explained permissions.** `storage` for annotations and settings, `activeTab` for the popup, and `scripting` on Chromium builds. The content script matches all URLs — that's what makes it possible to draw on arbitrary pages — but it only mounts the overlay and reads the annotations it stored itself. No network requests are made at runtime.
+- **Narrow, explained permissions.** `storage` for annotations and settings, `activeTab` to activate the toolbar on the current tab, and `scripting` on Chromium builds. The content script matches all URLs — that's what makes it possible to draw on arbitrary pages — but it only mounts the overlay and reads the annotations it stored itself. No network requests are made at runtime.
 - **Encapsulated UI.** The overlay lives inside a shadow root, so it can't be styled by, or leak styles into, the page you're annotating.
 - **Minimal page mutation.** The extension adds its own host element and canvases to the page; it doesn't rewrite or restyle the site's own DOM.
 
