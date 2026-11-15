@@ -57,7 +57,10 @@ Have an idea for a new tool or workflow improvement? [Open a feature request](ht
    ```bash
    pnpm install
    ```
-3. Make your changes with clear, concise commit messages.
+3. Make your changes with clear, atomic commit messages:
+   - Follow Conventional Commits: `<type>(<scope>): <subject>` (e.g., `feat(toolbar): scope defaults to active tool`).
+   - Keep subject lines under 50 characters (hard limit: 72 chars). Put extended details in the commit body.
+   - Stage only files related to your specific change (avoid `git add .`). See [AGENTS.md](AGENTS.md) for details.
 4. Ensure all type checks, linting, and tests pass:
    ```bash
    pnpm check
