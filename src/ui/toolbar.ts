@@ -34,19 +34,15 @@ export class FloatingToolbar {
 
   private wrapper: HTMLElement;
   private toolbar: HTMLElement;
-  private dockPanel: HTMLElement;
-  private dockTab: HTMLButtonElement;
-  private dockBadge: HTMLElement;
-  private dockClose: HTMLButtonElement;
   private colorPopover: HTMLElement;
   private colorPreviewBtn: HTMLElement;
+  private countBadge!: HTMLElement;
   private toastElement: HTMLElement | null = null;
   private toastTimer: number | null = null;
   private menuWrappers: HTMLElement[] = [];
 
   private isDragging = false;
   private dragOffset = { x: 0, y: 0 };
-  private isDocked = false;
   private positionSaveTimer: number | null = null;
 
   constructor(
@@ -95,49 +91,20 @@ export class FloatingToolbar {
 
     this.buildToolbarContent();
 
-    this.dockPanel = document.createElement('div');
-    this.dockPanel.className = 'pa-dock';
-
-    this.dockTab = document.createElement('button');
-    this.dockTab.type = 'button';
-    this.dockTab.className = 'pa-dock-tab';
-    this.dockTab.setAttribute('aria-label', 'Open drawing toolbar');
-    this.dockTab.setAttribute('aria-expanded', shouldBeOpen ? 'true' : 'false');
-    this.dockTab.title = 'Open drawing toolbar';
-    const dockBadge = document.createElement('span');
-    dockBadge.className = 'pa-dock-badge';
-    dockBadge.style.display = 'none';
-    dockBadge.setAttribute('aria-label', 'Active annotations');
-    dockBadge.textContent = '0';
-    setMarkup(this.dockTab, ICONS.dragHandle);
-    this.dockTab.appendChild(dockBadge);
-    this.dockBadge = this.dockTab.querySelector('.pa-dock-badge') as HTMLElement;
-    this.dockPanel.appendChild(this.dockTab);
-
-    this.dockClose = document.createElement('button');
-    this.dockClose.type = 'button';
-    this.dockClose.className = 'pa-dock-close';
-    this.dockClose.setAttribute('aria-label', 'Hide toolbar');
-    this.dockClose.title = 'Hide toolbar';
-    setMarkup(this.dockClose, ICONS.close);
-    this.dockPanel.appendChild(this.dockClose);
-
     this.wrapper.appendChild(this.toolbar);
     this.wrapper.appendChild(this.colorPopover);
-    this.wrapper.appendChild(this.dockPanel);
     this.container.appendChild(this.wrapper);
 
     this.initDragEvents();
-    this.bindDockEvents();
     this.applyDrawingDefaults();
     this.updateActiveToolUI();
     this.updateHistoryButtons();
     this.updateBadge();
 
-    if (this.settings.isToolbarHidden) {
-      this.hideToolbar(false);
+    if (shouldBeOpen) {
+      this.setDrawingMode(true, false);
     } else {
-      this.setDrawingMode(shouldBeOpen, false);
+      this.hideToolbar(false);
     }
 
     if (this.settings.areAnnotationsVisible !== undefined) {
@@ -165,21 +132,21 @@ export class FloatingToolbar {
     if (settings.strokeSimplification !== undefined) {
       this.engine.setStrokeSimplification(settings.strokeSimplification);
     }
-    if (settings.isToolbarHidden) {
-      this.hideToolbar(false);
+    if (settings.isToolbarOpen) {
+      this.setDrawingMode(true, false);
     } else {
-      this.setDrawingMode(!!settings.isToolbarOpen, false);
+      this.hideToolbar(false);
     }
   }
 
   public updateBadge(): void {
     const count = this.engine.getElements().length;
-    if (!this.dockBadge) return;
+    if (!this.countBadge) return;
     if (count > 0) {
-      this.dockBadge.textContent = `${count}`;
-      this.dockBadge.style.display = 'inline-block';
+      this.countBadge.textContent = `${count}`;
+      this.countBadge.style.display = 'inline-block';
     } else {
-      this.dockBadge.style.display = 'none';
+      this.countBadge.style.display = 'none';
     }
   }
 
@@ -201,78 +168,36 @@ export class FloatingToolbar {
   public setDrawingMode(active: boolean, persist = true): void {
     this.engine.setActiveMode(active);
     if (active) {
-      this.expandToolbar();
+      this.showToolbar();
     } else {
-      this.dockToolbar();
+      this.hideToolbar();
     }
+    this.settings.isToolbarOpen = active;
     if (persist) {
-      this.settings.isToolbarOpen = active;
-      saveSettings({ isToolbarOpen: active, isToolbarHidden: false }).catch(() => {});
+      saveSettings({ isToolbarOpen: active }).catch(() => {});
     }
     this.callbacks.onToggleActive?.(active);
   }
 
   /**
-   * Removes the toolbar entirely, dock tab included. Unlike docking, nothing
-   * stays on the page — use the extension icon or a shortcut to bring it back.
+   * Removes the toolbar from the page. Use the extension icon or a shortcut
+   * to bring it back.
    */
   public hideToolbar(persist = true): void {
     this.engine.setActiveMode(false);
-    this.isDocked = false;
-    this.settings.isToolbarHidden = true;
-    this.wrapper.classList.remove('docked');
     this.wrapper.style.display = 'none';
     this.colorPopover.classList.remove('open');
     this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
+    this.settings.isToolbarOpen = false;
     if (persist) {
-      this.settings.isToolbarOpen = false;
-      saveSettings({ isToolbarOpen: false, isToolbarHidden: true }).catch(() => {});
+      saveSettings({ isToolbarOpen: false }).catch(() => {});
     }
-    this.updateDockUI();
     this.callbacks.onToggleActive?.(false);
   }
 
-  private showWrapper(): void {
-    this.settings.isToolbarHidden = false;
+  /** Shows the toolbar at its resting position. */
+  private showToolbar(): void {
     this.wrapper.style.display = 'block';
-  }
-
-  /** Collapses the toolbar into the left-edge dock tab. */
-  private dockToolbar(): void {
-    this.colorPopover.classList.remove('open');
-    this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
-    this.showWrapper();
-
-    if (this.isDocked) {
-      this.updateDockUI();
-      return;
-    }
-
-    const rect = this.wrapper.getBoundingClientRect();
-    let top = rect.top;
-    if (!top && this.settings.toolbarPosition) top = this.settings.toolbarPosition.y;
-    if (!Number.isFinite(top) || top <= 0) top = 24;
-
-    this.isDocked = true;
-    this.wrapper.classList.add('docked');
-    this.wrapper.style.transform = 'none';
-    this.wrapper.style.left = '0px';
-    this.wrapper.style.top = `${this.clampDockTop(top)}px`;
-    this.updateDockUI();
-  }
-
-  /** Restores the toolbar to the position it was docked from. */
-  private expandToolbar(): void {
-    this.showWrapper();
-
-    if (!this.isDocked) {
-      this.updateDockUI();
-      this.ensureVisibleInViewport();
-      return;
-    }
-
-    this.isDocked = false;
-    this.wrapper.classList.remove('docked');
 
     if (this.settings.toolbarPosition) {
       this.wrapper.style.transform = 'none';
@@ -284,26 +209,11 @@ export class FloatingToolbar {
       this.wrapper.style.top = '24px';
     }
 
-    this.updateDockUI();
     this.ensureVisibleInViewport();
-  }
-
-  private clampDockTop(top: number): number {
-    const height = this.dockTab?.offsetHeight || 44;
-    return Math.max(10, Math.min(Math.max(10, window.innerHeight - height - 10), top));
-  }
-
-  private updateDockUI(): void {
-    this.wrapper.classList.toggle('docked', this.isDocked);
-    this.dockTab.setAttribute('aria-expanded', this.isDocked ? 'false' : 'true');
-    this.dockTab.setAttribute('aria-label', this.isDocked ? 'Open drawing toolbar' : 'Collapse drawing toolbar');
-    const dragHandle = this.toolbar.querySelector('.pa-drag-handle') as HTMLElement | null;
-    dragHandle?.setAttribute('aria-expanded', this.isDocked ? 'false' : 'true');
   }
 
   public ensureVisibleInViewport(): void {
     if (!this.wrapper || this.wrapper.style.display === 'none') return;
-    if (this.isDocked) return;
     if (!this.settings.toolbarPosition) return;
 
     const rect = this.wrapper.getBoundingClientRect();
@@ -344,9 +254,7 @@ export class FloatingToolbar {
   }
 
   /**
-   * Docks the toolbar to the left edge, or restores it to the position it was
-   * docked from. The dock tab is the collapsed representation of the toolbar,
-   * so collapsing also parks drawing mode until the toolbar is restored.
+   * Shows the toolbar if it is hidden, and hides it if it is showing.
    */
   public toggleToolbarVisibility(): void {
     this.toggleDrawingMode();
@@ -357,7 +265,6 @@ export class FloatingToolbar {
     dragHandle.className = 'pa-drag-handle';
     dragHandle.setAttribute('role', 'button');
     dragHandle.setAttribute('tabindex', '0');
-    dragHandle.setAttribute('aria-expanded', 'true');
     dragHandle.setAttribute('aria-label', 'Move toolbar position. Drag or use arrow keys.');
     dragHandle.title = 'Move toolbar position (Arrow keys or drag)';
     setMarkup(dragHandle, ICONS.dragHandle);
@@ -408,6 +315,16 @@ export class FloatingToolbar {
       this.clearPageWithToast();
     });
     this.toolbar.appendChild(clearBtn);
+
+    // The count of drawings on this page, shown on the clear button so the
+    // user can tell what it would remove.
+    const countBadge = document.createElement('span');
+    countBadge.className = 'pa-count-badge';
+    countBadge.style.display = 'none';
+    countBadge.setAttribute('aria-label', 'Active annotations');
+    countBadge.textContent = '0';
+    clearBtn.appendChild(countBadge);
+    this.countBadge = countBadge;
 
     this.toolbar.appendChild(this.buildMoreMenu());
   }
@@ -1218,15 +1135,6 @@ export class FloatingToolbar {
         this.wrapper.style.top = `${newY}px`;
         this.persistToolbarPosition({ x: newX, y: newY });
       }
-    });
-  }
-
-  private bindDockEvents(): void {
-    this.dockTab.addEventListener('click', () => {
-      this.setDrawingMode(true, true);
-    });
-    this.dockClose.addEventListener('click', () => {
-      this.hideToolbar();
     });
   }
 }

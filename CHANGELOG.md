@@ -8,11 +8,12 @@ This project follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - The extension icon now toggles the in-page drawing toolbar directly, instead
-  of opening a dashboard popup. Clicking it again docks the toolbar against the
-  left edge, so it stops covering the page; the small tab there brings it back.
-  The separate "Dock to Left Edge" menu item was removed, since it did exactly
-  what the icon now does. Settings, saved pages, and backup live on the Options
-  page, reachable from the toolbar's "More" menu.
+  of opening a dashboard popup. Clicking it again hides the toolbar, so it
+  stops covering the page. Settings, saved pages, and backup live on the
+  Options page, reachable from the toolbar's "More" menu.
+- The left-edge dock is gone. The toolbar is either showing or hidden, and the
+  extension icon toggles between the two. The "Dock to Left Edge" menu item
+  went with it, since it did exactly what the icon now does.
 - The drawing toolbar is shorter and calmer. Shape tools moved into a "Shapes"
   menu, and secondary controls moved into a "More" menu, taking the bar from
   twenty buttons to thirteen. Selection chrome was muted so it stops

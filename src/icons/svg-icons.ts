@@ -13,7 +13,6 @@ import {
   Undo2,
   Redo2,
   Trash2,
-  Minimize2,
   GripVertical,
   Eye,
   EyeOff,
@@ -90,7 +89,6 @@ export const ICONS: Record<string, string> = {
 
   eye: toSvg(Eye),
   eyeOff: toSvg(EyeOff),
-  minimize: toSvg(Minimize2),
   close: toSvg(X, 16),
   dragHandle: dragHandleSvg(),
   selectAll: toSvg(BoxSelect),

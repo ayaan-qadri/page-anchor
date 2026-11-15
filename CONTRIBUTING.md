@@ -112,7 +112,7 @@ pnpm icons
 - **`src/ui/`**:
   - `styles.ts`: Shadow DOM isolated CSS.
   - `dom.ts`: Safe markup helpers that avoid `innerHTML` for dynamic values.
-  - `toolbar.ts`: Floating, draggable toolbar with a left-edge dock.
+  - `toolbar.ts`: Floating, draggable toolbar.
   - `text-editor.ts`: In-page text annotation overlay.
 - **`src/icons/`**:
   - `svg-icons.ts`: Inline Lucide SVG icon registry.

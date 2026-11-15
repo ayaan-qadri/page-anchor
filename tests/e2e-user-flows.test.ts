@@ -71,16 +71,19 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
     const shadow = host.shadowRoot!;
     expect(shadow).not.toBeNull();
 
-    const dockTab = shadow.querySelector('.pa-dock-tab') as HTMLButtonElement;
-    expect(dockTab).not.toBeNull();
-    dockTab.click();
+    // The toolbar starts hidden; the extension icon brings it up.
+    const toolbarWrapper = shadow.querySelector('.pa-toolbar-wrapper') as HTMLElement;
+    expect(toolbarWrapper.style.display).toBe('none');
+
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'd', altKey: true, shiftKey: true, bubbles: true, cancelable: true })
+    );
     await new Promise((r) => setTimeout(r, 20));
 
     const toolbar = shadow.querySelector('.pa-toolbar') as HTMLElement;
     expect(toolbar).not.toBeNull();
-    const toolbarWrapper = shadow.querySelector('.pa-toolbar-wrapper') as HTMLElement;
-    expect(toolbarWrapper.classList.contains('docked')).toBe(false);
-    const badge = shadow.querySelector('.pa-dock-badge') as HTMLElement;
+    expect(toolbarWrapper.style.display).toBe('block');
+    const badge = shadow.querySelector('.pa-count-badge') as HTMLElement;
     expect(badge).not.toBeNull();
 
     const activeCanvas = shadow.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
@@ -200,9 +203,10 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
 
     const host = document.getElementById('page-anchor-host') as HTMLElement;
     const shadow = host.shadowRoot!;
-    const dockTab = shadow?.querySelector('.pa-dock-tab') as HTMLButtonElement;
 
-    dockTab.click();
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'd', altKey: true, shiftKey: true, bubbles: true, cancelable: true })
+    );
     await new Promise((r) => setTimeout(r, 20));
 
     const toolbar = shadow.querySelector('.pa-toolbar') as HTMLElement;
@@ -222,7 +226,7 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
       new PointerEvent('pointerup', { clientX: 80, clientY: 80, pointerId: 1 })
     );
 
-    const badge = shadow.querySelector('.pa-dock-badge') as HTMLElement;
+    const badge = shadow.querySelector('.pa-count-badge') as HTMLElement;
     expect(badge).not.toBeNull();
     expect(badge.textContent).toBe('1');
   });

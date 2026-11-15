@@ -53,12 +53,16 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     await page.goto(`http://localhost:${serverPort}/portal`);
     await page.waitForLoadState('domcontentloaded');
 
-    const dockTab = page.locator('#page-anchor-host .pa-dock-tab');
-    await expect(dockTab).toBeVisible({ timeout: 10000 });
-
-    await dockTab.click();
-
+    // The toolbar starts hidden; the extension icon brings it up.
     const toolbar = page.locator('#page-anchor-host .pa-toolbar');
+    await expect(toolbar).toBeHidden();
+
+    const worker = context.serviceWorkers()[0];
+    const tabs = await worker.evaluate(() => chrome.tabs.query({ active: true, currentWindow: true }));
+    await worker.evaluate(
+      (tabId) => chrome.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_TOGGLE' }),
+      tabs[0].id
+    );
     await expect(toolbar).toBeVisible();
 
     // Shape tools live behind the toolbar's "Shapes" menu.
@@ -74,7 +78,7 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     await page.mouse.move(380, 320, { steps: 5 });
     await page.mouse.up();
 
-    const badge = page.locator('#page-anchor-host .pa-dock-badge');
+    const badge = page.locator('#page-anchor-host .pa-count-badge');
     await expect(badge).toHaveText('1');
 
     const penTool = page.locator('#page-anchor-host [data-tool="pen"]');
@@ -195,14 +199,10 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     });
     expect(background.hasDefaultPopup).toBe(false);
 
-    const dockTab = page.locator('#page-anchor-host .pa-dock-tab');
-    await expect(dockTab).toBeVisible({ timeout: 10000 });
-
     const toolbar = page.locator('#page-anchor-host .pa-toolbar');
     await expect(toolbar).toBeHidden();
 
-    // Clicking the action icon expands the toolbar, and clicking again docks
-    // it back to the left edge.
+    // Clicking the action icon shows the toolbar, and clicking again hides it.
     const clickActionIcon = async () => {
       const worker = context.serviceWorkers()[0];
       const tabs = await worker.evaluate(() =>
@@ -217,11 +217,9 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
 
     await clickActionIcon();
     await expect(toolbar).toBeVisible();
-    await expect(dockTab).toBeHidden();
 
     await clickActionIcon();
     await expect(toolbar).toBeHidden();
-    await expect(dockTab).toBeVisible();
 
     // The options page remains the home for settings and backup.
     const optionsPage = await context.newPage();

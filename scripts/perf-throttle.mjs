@@ -152,13 +152,24 @@ async function setCpu(cdp, rate) {
   await cdp.send('Emulation.setCPUThrottlingRate', { rate });
 }
 
-async function openDock(page) {
+/** Toggles the in-page toolbar in a tab, the way clicking the icon does. */
+async function toggleToolbar(background, page) {
+  const tabs = await background.evaluate(
+    (url) => chrome.tabs.query({ url }),
+    `${page.url().split('?')[0]}*`
+  );
+  if (!tabs.length) return;
+  await background.evaluate(
+    (tabId) => chrome.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_TOGGLE' }),
+    tabs[0].id
+  );
+}
+
+async function openToolbar(background, page) {
   const toolbar = page.locator('#page-anchor-host .pa-toolbar');
   if (await toolbar.isVisible().catch(() => false)) return;
-  const dock = page.locator('#page-anchor-host .pa-dock-tab');
-  await dock.waitFor({ state: 'visible', timeout: 15000 });
-  await dock.click();
-  await toolbar.waitFor({ state: 'visible', timeout: 10000 });
+  await toggleToolbar(background, page);
+  await toolbar.waitFor({ state: 'visible', timeout: 15000 });
 }
 
 async function drawStrokes(page, n) {
@@ -254,7 +265,7 @@ async function measureLoad(page, url) {
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await page.locator('#page-anchor-host').waitFor({ state: 'attached', timeout: 60000 });
   await page
-    .locator('#page-anchor-host .pa-dock-tab, #page-anchor-host .pa-toolbar')
+    .locator('#page-anchor-host .pa-toolbar')
     .first()
     .waitFor({ state: 'attached', timeout: 60000 });
   const dockMs = +(performance.now() - t0).toFixed(1);
@@ -300,7 +311,7 @@ async function main() {
 
   // ---- Baseline: light page, escalating CPU throttling ----
   await page.goto(lightUrl);
-  await openDock(page);
+  await openToolbar(background, page);
   for (const rate of [1, 4, 6]) {
     await setCpu(cdp, rate);
     await runPhase(cdp, page, `light/idle@${rate}x`, async () => {
@@ -333,7 +344,7 @@ async function main() {
   for (const rate of [1, 4, 6]) {
     await setCpu(cdp, 1);
     const load = await measureLoad(page, stressUrl);
-    await openDock(page);
+    await openToolbar(background, page);
     RESULTS.push({ phase: `stress/load@1x`, wallMs: load.dockMs, nav: load.nav, seeded: seeded.count });
     await setCpu(cdp, rate);
 
@@ -385,7 +396,7 @@ async function main() {
   // ---- Orphan storm: every anchor target disappears ----
   await setCpu(cdp, 1);
   await page.goto(stressUrl);
-  await openDock(page);
+  await openToolbar(background, page);
   for (const rate of [1, 4]) {
     await setCpu(cdp, rate);
     await runPhase(cdp, page, `stress/orphan-all-${CARDS}@${rate}x`, async () => {
@@ -400,7 +411,7 @@ async function main() {
   // ---- Huge text note ----
   await setCpu(cdp, 1);
   await page.goto(lightUrl);
-  await openDock(page);
+  await openToolbar(background, page);
   for (const rate of [1, 4]) {
     await setCpu(cdp, rate);
     await runPhase(cdp, page, `text/20k-chars@${rate}x`, async () => {

@@ -84,7 +84,6 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
     let engine: CanvasEngine;
     let history: HistoryManager;
     let textEditor: TextEditorOverlay;
-    let toolbar: FloatingToolbar;
 
     beforeEach(() => {
       container = document.createElement('div');
@@ -92,7 +91,7 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       engine = new CanvasEngine(container);
       history = new HistoryManager([]);
       textEditor = new TextEditorOverlay(container);
-      toolbar = new FloatingToolbar(container, engine, history, textEditor, DEFAULT_SETTINGS);
+      new FloatingToolbar(container, engine, history, textEditor, DEFAULT_SETTINGS);
     });
 
     afterEach(() => {
@@ -109,29 +108,17 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       expect(bar?.getAttribute('aria-label')).toBe('Drawing tools');
     });
 
-    it('should render the left-edge dock tab as a native button with aria-expanded', () => {
-      const dockTab = container.querySelector('.pa-dock-tab') as HTMLButtonElement;
-      expect(dockTab.tagName).toBe('BUTTON');
-      expect(dockTab.getAttribute('aria-label')).toBe('Open drawing toolbar');
-      expect(dockTab.getAttribute('aria-expanded')).toBe('false');
-
-      toolbar.setDrawingMode(true, false);
-      expect(dockTab.getAttribute('aria-expanded')).toBe('true');
-      expect(dockTab.getAttribute('aria-label')).toBe('Collapse drawing toolbar');
-    });
-
-    it('should expose labelled hide controls on the toolbar and dock', () => {
+    it('should expose a labelled hide control on the toolbar', () => {
       const hideBtn = container.querySelector('[data-action="hide"]') as HTMLButtonElement;
       expect(hideBtn.tagName).toBe('BUTTON');
       expect(hideBtn.getAttribute('aria-label')).toContain('Hide Toolbar');
-
-      const dockClose = container.querySelector('.pa-dock-close') as HTMLButtonElement;
-      expect(dockClose.tagName).toBe('BUTTON');
-      expect(dockClose.getAttribute('aria-label')).toBe('Hide toolbar');
     });
 
-    it('should not offer a separate dock action, since the extension icon already toggles it', () => {
+    it('should not expose any dock controls, since the extension icon toggles the toolbar', () => {
       expect(container.querySelector('[data-action="dock"]')).toBeNull();
+      expect(container.querySelector('.pa-dock-tab')).toBeNull();
+      expect(container.querySelector('.pa-dock-close')).toBeNull();
+      expect(container.querySelector('.pa-dock')).toBeNull();
     });
 
     it('should render tool buttons with aria-pressed state matching active tool', () => {

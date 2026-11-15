@@ -54,12 +54,23 @@ await options.goto(`chrome-extension://${extensionId}/options.html`);
 
 const store = (fn, arg) => options.evaluate(fn, arg);
 
+/** Toggles the in-page toolbar in a tab, the way clicking the icon does. */
+async function toggleToolbar() {
+  const tabs = await background.evaluate(
+    (url) => chrome.tabs.query({ url }),
+    `${base}*`
+  );
+  if (!tabs.length) return;
+  await background.evaluate(
+    (tabId) => chrome.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_TOGGLE' }),
+    tabs[0].id
+  );
+}
+
 async function openToolbar(page) {
   const toolbar = page.locator('#page-anchor-host .pa-toolbar');
   if (await toolbar.isVisible().catch(() => false)) return toolbar;
-  const dock = page.locator('#page-anchor-host .pa-dock-tab');
-  await dock.waitFor({ state: 'visible', timeout: 20000 });
-  await dock.click();
+  await toggleToolbar();
   await toolbar.waitFor({ state: 'visible', timeout: 10000 });
   return toolbar;
 }
@@ -155,7 +166,7 @@ const afterQuota = await store(() =>
     });
   })
 );
-const pageBadge = await page.locator('#page-anchor-host .pa-dock-badge').textContent();
+const pageBadge = await page.locator('#page-anchor-host .pa-count-badge').textContent();
 const quotaErrorSurfaced = await page.evaluate(() => {
   const host = document.getElementById('page-anchor-host');
   const toast = host?.shadowRoot?.querySelector('.pa-save-error');
@@ -311,7 +322,7 @@ await page.mouse.up();
 await page.waitForTimeout(700);
 const orphan = await page.evaluate(async () => {
   const card = document.getElementById('card-3');
-  const anchorEl = document.querySelector('#page-anchor-host .pa-dock-badge');
+  const anchorEl = document.querySelector('#page-anchor-host .pa-count-badge');
   card?.remove();
   await new Promise((r) => setTimeout(r, 400));
   const root = document.getElementById('page-anchor-host')?.shadowRoot;
