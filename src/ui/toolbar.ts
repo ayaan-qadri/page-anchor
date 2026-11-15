@@ -4,7 +4,7 @@ import { ToolType } from '../types/engine.types';
 import { ExtensionSettings } from '../types/storage.types';
 import { ToolbarCallbacks } from '../types/ui.types';
 import { ICONS } from '../icons/svg-icons';
-import { setIconWithTooltip, setMarkup } from './dom';
+import { buildTooltip, setIconWithTooltip, setMarkup } from './dom';
 import { TextEditorOverlay } from './text-editor';
 import { formatShortcutForDisplay } from '../core/shortcuts';
 import { DEFAULT_SETTINGS, saveSettings } from '../core/storage';
@@ -98,14 +98,17 @@ export class FloatingToolbar {
     this.buildToolbarContent();
 
     this.wrapper.appendChild(this.toolbar);
+    this.wrapper.appendChild(this.buildCornerCloseButton());
     this.wrapper.appendChild(this.colorPopover);
     this.container.appendChild(this.wrapper);
 
     this.initDragEvents();
+    this.initTooltipEvents();
     this.applyDrawingDefaults();
     this.updateActiveToolUI();
     this.updateHistoryButtons();
     this.updateBadge();
+    this.updateViewportPlacement();
 
     if (shouldBeOpen) {
       this.setDrawingMode(true, false);
@@ -120,6 +123,7 @@ export class FloatingToolbar {
     window.addEventListener('resize', () => {
       if (this.wrapper.style.display !== 'none') {
         this.ensureVisibleInViewport();
+        this.updateViewportPlacement();
       }
     }, { passive: true });
   }
@@ -216,6 +220,7 @@ export class FloatingToolbar {
     }
 
     this.ensureVisibleInViewport();
+    this.updateViewportPlacement();
   }
 
   public ensureVisibleInViewport(): void {
@@ -242,6 +247,7 @@ export class FloatingToolbar {
       this.wrapper.style.top = `${clampY}px`;
       this.persistToolbarPosition({ x: clampX, y: clampY });
     }
+    this.updateViewportPlacement();
   }
 
   private persistToolbarPosition(position: { x: number; y: number }): void {
@@ -272,8 +278,8 @@ export class FloatingToolbar {
     dragHandle.setAttribute('role', 'button');
     dragHandle.setAttribute('tabindex', '0');
     dragHandle.setAttribute('aria-label', 'Move toolbar position. Drag or use arrow keys.');
-    dragHandle.title = 'Move toolbar position (Arrow keys or drag)';
     setMarkup(dragHandle, ICONS.dragHandle);
+    dragHandle.appendChild(buildTooltip('Move toolbar', 'Arrow keys'));
     this.toolbar.appendChild(dragHandle);
 
     this.toolbar.appendChild(this.createToolButton('select', 'Select & Move', 'tool-select', ICONS.select));
@@ -293,10 +299,10 @@ export class FloatingToolbar {
 
     this.colorPreviewBtn.className = 'pa-color-preview-btn';
     this.colorPreviewBtn.style.backgroundColor = this.settings.defaultStrokeColor;
-    this.colorPreviewBtn.title = 'Drawing defaults';
     this.colorPreviewBtn.setAttribute('aria-label', 'Drawing defaults');
     this.colorPreviewBtn.setAttribute('aria-haspopup', 'dialog');
     this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
+    this.colorPreviewBtn.appendChild(buildTooltip('Drawing defaults'));
     this.colorPreviewBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.toggleColorPopover();
@@ -350,8 +356,7 @@ export class FloatingToolbar {
     trigger.setAttribute('aria-haspopup', 'menu');
     trigger.setAttribute('aria-expanded', 'false');
     trigger.setAttribute('aria-label', 'Shape tools');
-    trigger.title = 'Shape tools';
-    setMarkup(trigger, ICONS.shapes);
+    setIconWithTooltip(trigger, ICONS.shapes, 'Shape tools');
     wrapper.appendChild(trigger);
 
     const menu = document.createElement('div');
@@ -416,8 +421,7 @@ export class FloatingToolbar {
     trigger.setAttribute('aria-haspopup', 'menu');
     trigger.setAttribute('aria-expanded', 'false');
     trigger.setAttribute('aria-label', 'More options');
-    trigger.title = 'More options';
-    setMarkup(trigger, ICONS.more);
+    setIconWithTooltip(trigger, ICONS.more, 'More options');
     wrapper.appendChild(trigger);
 
     const menu = document.createElement('div');
@@ -508,27 +512,6 @@ export class FloatingToolbar {
     });
     menu.appendChild(settingsItem);
 
-    const closeItem = document.createElement('button');
-    closeItem.type = 'button';
-    closeItem.className = 'pa-menu-item';
-    closeItem.dataset.action = 'hide';
-    closeItem.setAttribute('role', 'menuitem');
-    closeItem.setAttribute('aria-label', 'Hide Toolbar');
-    setMarkup(closeItem, ICONS.close);
-    const closeLabel = document.createElement('span');
-    closeLabel.className = 'pa-menu-item-label';
-    closeLabel.textContent = 'Hide Toolbar';
-    closeItem.appendChild(closeLabel);
-    const closeHint = document.createElement('span');
-    closeHint.className = 'pa-menu-item-hint';
-    closeHint.textContent = 'removes the tab';
-    closeItem.appendChild(closeHint);
-    closeItem.addEventListener('click', () => {
-      this.closeMenus();
-      this.hideToolbar();
-    });
-    menu.appendChild(closeItem);
-
     wrapper.appendChild(menu);
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -546,13 +529,64 @@ export class FloatingToolbar {
     wrapper.classList.add('open');
     menu.classList.add('open');
     trigger.setAttribute('aria-expanded', 'true');
+    this.positionMenu(wrapper, menu);
+  }
+
+  private positionMenu(wrapper: HTMLElement, menu: HTMLElement): void {
+    const triggerRect = wrapper.getBoundingClientRect();
+    const curTop = triggerRect.top !== 0 ? triggerRect.top : (parseFloat(this.wrapper.style.top) || 0);
+    const triggerHeight = wrapper.offsetHeight || 32;
+    const menuHeight = menu.offsetHeight || 220;
+    const padding = 10;
+    const viewportHeight = window.innerHeight || 800;
+    const roomBelow = viewportHeight - (curTop + triggerHeight) - padding;
+    const roomAbove = curTop - padding;
+
+    const isAbove = roomBelow < menuHeight && roomAbove > roomBelow;
+    menu.classList.toggle('above', isAbove);
+
+    const availableHeight = isAbove ? roomAbove : roomBelow;
+    if (availableHeight < menuHeight && availableHeight > 0) {
+      menu.style.maxHeight = `${Math.max(120, availableHeight)}px`;
+      menu.style.overflowY = 'auto';
+    } else {
+      menu.style.maxHeight = '';
+      menu.style.overflowY = '';
+    }
+
+    // Horizontal clamping to prevent viewport overflow
+    menu.style.transform = '';
+    const menuRect = menu.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || 1200;
+
+    if (menuRect.left < padding && menuRect.left !== 0) {
+      const shift = padding - menuRect.left;
+      if (menu.classList.contains('pa-menu-right')) {
+        menu.style.transform = `translateX(${shift}px)`;
+      } else {
+        menu.style.transform = `translateX(calc(-50% + ${shift}px))`;
+      }
+    } else if (menuRect.right > viewportWidth - padding) {
+      const shift = menuRect.right - (viewportWidth - padding);
+      if (menu.classList.contains('pa-menu-right')) {
+        menu.style.transform = `translateX(-${shift}px)`;
+      } else {
+        menu.style.transform = `translateX(calc(-50% - ${shift}px))`;
+      }
+    }
   }
 
   /** Closes every open toolbar menu. */
   public closeMenus(): void {
     for (const wrapper of this.menuWrappers) {
       wrapper.classList.remove('open');
-      wrapper.querySelector('.pa-menu')?.classList.remove('open');
+      const menu = wrapper.querySelector('.pa-menu') as HTMLElement | null;
+      if (menu) {
+        menu.classList.remove('open', 'above');
+        menu.style.maxHeight = '';
+        menu.style.overflowY = '';
+        menu.style.transform = '';
+      }
       wrapper.querySelector('.pa-menu-trigger')?.setAttribute('aria-expanded', 'false');
     }
   }
@@ -617,6 +651,12 @@ export class FloatingToolbar {
       toast.appendChild(btn);
     }
 
+    const curTop = parseFloat(this.wrapper.style.top) || this.wrapper.getBoundingClientRect().top || 0;
+    const roomBelow = (window.innerHeight || 800) - (curTop + (this.wrapper.offsetHeight || 44));
+    if (roomBelow < 48) {
+      toast.classList.add('above');
+    }
+
     this.wrapper.appendChild(toast);
     this.toastElement = toast;
 
@@ -669,11 +709,36 @@ export class FloatingToolbar {
     }
   }
 
-  /** Flips the popover below the toolbar when there is not enough room above. */
+  /** Flips the popover below the toolbar when there is not enough room above and keeps it in viewport bounds. */
   private positionColorPopover(): void {
-    const roomAbove = this.wrapper.getBoundingClientRect().top;
-    const height = this.colorPopover.offsetHeight;
-    this.colorPopover.classList.toggle('below', roomAbove < height + 16);
+    const wrapperRect = this.wrapper.getBoundingClientRect();
+    const curTop = wrapperRect.top !== 0 ? wrapperRect.top : (parseFloat(this.wrapper.style.top) || 0);
+    const padding = 10;
+    const roomAbove = curTop - padding;
+    const viewportHeight = window.innerHeight || 800;
+    const wrapperHeight = this.wrapper.offsetHeight || 44;
+    const roomBelow = viewportHeight - (curTop + wrapperHeight) - padding;
+    const height = this.colorPopover.offsetHeight || 320;
+
+    const isBelow = roomAbove < height && (roomBelow >= roomAbove || roomAbove < 100);
+    this.colorPopover.classList.toggle('below', isBelow);
+
+    const availableHeight = isBelow ? roomBelow - 10 : roomAbove - 10;
+    if (availableHeight > 0) {
+      this.colorPopover.style.maxHeight = `${Math.max(160, Math.min(520, availableHeight))}px`;
+    }
+
+    // Horizontal clamping to prevent viewport overflow
+    this.colorPopover.style.transform = '';
+    const popoverRect = this.colorPopover.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || 1200;
+    if (popoverRect.left < padding && popoverRect.left !== 0) {
+      const shift = padding - popoverRect.left;
+      this.colorPopover.style.transform = `translateX(calc(-50% + ${shift}px))`;
+    } else if (popoverRect.right > viewportWidth - padding) {
+      const shift = popoverRect.right - (viewportWidth - padding);
+      this.colorPopover.style.transform = `translateX(calc(-50% - ${shift}px))`;
+    }
   }
 
   private buildColorPopover(): void {
@@ -854,6 +919,7 @@ export class FloatingToolbar {
 
   private closeColorPopover(): void {
     this.colorPopover.classList.remove('open');
+    this.colorPopover.style.transform = '';
     this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
   }
 
@@ -1125,8 +1191,11 @@ export class FloatingToolbar {
       : info.category === 'pen'
       ? 'Drawing defaults'
       : `${info.label} defaults`;
-    this.colorPreviewBtn.title = titleText;
     this.colorPreviewBtn.setAttribute('aria-label', titleText);
+    const colorTip = this.colorPreviewBtn.querySelector('.pa-tooltip');
+    if (colorTip) {
+      colorTip.textContent = titleText;
+    }
     this.colorPopover.setAttribute('aria-label', `${info.label} defaults`);
 
     // Update Header
@@ -1282,6 +1351,31 @@ export class FloatingToolbar {
     return btn;
   }
 
+  private buildCornerCloseButton(): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pa-toolbar-close-btn';
+    btn.dataset.action = 'hide';
+    btn.dataset.shortcut = 'action-toggle-toolbar';
+    const shortcutText = this.getShortcutDisplay('action-toggle-toolbar');
+    const title = 'Hide Toolbar';
+    btn.dataset.label = title;
+    btn.setAttribute('aria-label', `${title}${shortcutText ? ` (${shortcutText})` : ''}`);
+    setIconWithTooltip(btn, ICONS.close, title, shortcutText);
+
+    btn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+    });
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.closeMenus();
+      this.hideToolbar();
+    });
+
+    return btn;
+  }
+
   private createSeparator(): HTMLElement {
     const sep = document.createElement('div');
     sep.className = 'pa-separator';
@@ -1325,7 +1419,7 @@ export class FloatingToolbar {
   }
 
   public updateTooltips(): void {
-    this.toolbar.querySelectorAll('[data-shortcut]').forEach((el) => {
+    this.wrapper.querySelectorAll('[data-shortcut]').forEach((el) => {
       const btn = el as HTMLButtonElement;
       const shortcutId = btn.dataset.shortcut;
       if (shortcutId === undefined) return;
@@ -1377,6 +1471,7 @@ export class FloatingToolbar {
       lastY = newY;
       this.wrapper.style.left = `${newX}px`;
       this.wrapper.style.top = `${newY}px`;
+      this.updateViewportPlacement();
     });
 
     const finishDrag = (commit: boolean) => {
@@ -1417,7 +1512,87 @@ export class FloatingToolbar {
         this.wrapper.style.left = `${newX}px`;
         this.wrapper.style.top = `${newY}px`;
         this.persistToolbarPosition({ x: newX, y: newY });
+        this.updateViewportPlacement();
       }
     });
+  }
+
+  public updateViewportPlacement(): void {
+    if (!this.wrapper || this.wrapper.style.display === 'none') return;
+    const wrapperRect = this.wrapper.getBoundingClientRect();
+    const curTop = wrapperRect.top !== 0 ? wrapperRect.top : (parseFloat(this.wrapper.style.top) || 0);
+    const isNearTop = curTop < 48;
+    this.wrapper.classList.toggle('pa-placement-top', isNearTop);
+
+    if (this.colorPopover.classList.contains('open')) {
+      this.positionColorPopover();
+    }
+
+    for (const wrap of this.menuWrappers) {
+      if (wrap.classList.contains('open')) {
+        const menu = wrap.querySelector('.pa-menu') as HTMLElement | null;
+        if (menu) this.positionMenu(wrap, menu);
+      }
+    }
+  }
+
+  private initTooltipEvents(): void {
+    const handleTooltipTarget = (el: HTMLElement | null) => {
+      if (!el) return;
+      const target = el.closest?.('.pa-btn, .pa-toolbar-close-btn, .pa-drag-handle, .pa-color-preview-btn') as HTMLElement | null;
+      if (!target) return;
+      const tip = target.querySelector('.pa-tooltip') as HTMLElement | null;
+      if (!tip) return;
+      this.adjustTooltipPosition(target, tip);
+    };
+
+    this.wrapper.addEventListener(
+      'pointerenter',
+      (e) => {
+        handleTooltipTarget(e.target as HTMLElement);
+      },
+      true
+    );
+
+    this.wrapper.addEventListener(
+      'focusin',
+      (e) => {
+        handleTooltipTarget(e.target as HTMLElement);
+      },
+      true
+    );
+  }
+
+  public adjustTooltipPosition(btn: HTMLElement, tip: HTMLElement): void {
+    const btnRect = btn.getBoundingClientRect();
+    const curTop = btnRect.top !== 0 ? btnRect.top : (parseFloat(this.wrapper.style.top) || 0);
+    const padding = 8;
+    const isNearTop = curTop < 48 || this.wrapper.classList.contains('pa-placement-top');
+
+    tip.classList.toggle('pa-tooltip-below', isNearTop);
+
+    tip.style.left = '';
+    tip.style.right = '';
+    tip.style.transform = '';
+
+    const isCloseBtn = btn.classList.contains('pa-toolbar-close-btn');
+    const tipRect = tip.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || 1200;
+
+    if (tipRect.left < padding && tipRect.left !== 0) {
+      const shift = padding - tipRect.left;
+      if (isCloseBtn) {
+        tip.style.transform = `translateX(${shift}px)`;
+      } else {
+        tip.style.transform = `translateX(calc(-50% + ${shift}px))`;
+      }
+    } else if (tipRect.right > viewportWidth - padding) {
+      const shift = tipRect.right - (viewportWidth - padding);
+      if (isCloseBtn) {
+        tip.style.transform = `translateX(-${shift}px)`;
+      } else {
+        tip.style.transform = `translateX(calc(-50% - ${shift}px))`;
+      }
+    }
   }
 }

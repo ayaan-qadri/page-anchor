@@ -55,7 +55,7 @@ Page Anchor is a browser extension for marking up pages you don't own the source
 
 Click an icon, and a small toolbar appears. Draw a box around the broken button, arrow at the thing you mean, drop a note next to it, and leave. The next time you open that URL, everything is still there.
 
-Clicking the icon again hides the toolbar, so it stops covering the page you're reading. The toolbar's "More" menu has **Hide Toolbar** if you'd rather remove it from the page entirely.
+Clicking the icon again hides the toolbar, so it stops covering the page you're reading. The toolbar also has a **Close** (`X`) button if you'd rather remove it from the page entirely.
 
 All of it is local. There's no account, no sync server, no upload, and no telemetry.
 

@@ -58,7 +58,81 @@ export const SHADOW_STYLES = `
   box-shadow: var(--pa-panel-shadow);
 }
 
+.pa-toolbar-close-btn {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(26, 30, 44, 0.96);
+  border: 1.5px solid var(--pa-line-strong);
+  color: var(--pa-muted);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  transition: transform 0.12s var(--pa-ease), background-color 0.12s var(--pa-ease),
+    color 0.12s var(--pa-ease), border-color 0.12s var(--pa-ease);
+  z-index: 10;
+}
+
+.pa-toolbar-close-btn::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+}
+
+.pa-toolbar-close-btn:hover {
+  background: var(--pa-elevated);
+  color: var(--pa-text);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: scale(1.1);
+}
+
+.pa-toolbar-close-btn:active {
+  transform: scale(0.95);
+}
+
+.pa-toolbar-close-btn svg {
+  width: 11px;
+  height: 11px;
+  flex: none;
+}
+
+.pa-toolbar-close-btn .pa-tooltip {
+  left: auto;
+  right: 0;
+  transform: translateY(4px);
+}
+
+.pa-toolbar-close-btn:hover .pa-tooltip,
+.pa-toolbar-close-btn:focus-visible .pa-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.pa-toolbar-close-btn .pa-tooltip.pa-tooltip-below,
+.pa-placement-top .pa-toolbar-close-btn .pa-tooltip {
+  bottom: auto;
+  top: calc(100% + 10px);
+  transform: translateY(-4px);
+}
+
+.pa-toolbar-close-btn:hover .pa-tooltip.pa-tooltip-below,
+.pa-toolbar-close-btn:focus-visible .pa-tooltip.pa-tooltip-below,
+.pa-placement-top .pa-toolbar-close-btn:hover .pa-tooltip,
+.pa-placement-top .pa-toolbar-close-btn:focus-visible .pa-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .pa-drag-handle {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -158,12 +232,41 @@ export const SHADOW_STYLES = `
   line-height: 1.4;
 }
 
-.pa-btn:hover .pa-tooltip {
+.pa-btn:hover .pa-tooltip,
+.pa-btn:focus-visible .pa-tooltip,
+.pa-drag-handle:hover .pa-tooltip,
+.pa-drag-handle:focus-visible .pa-tooltip,
+.pa-color-preview-btn:hover .pa-tooltip,
+.pa-color-preview-btn:focus-visible .pa-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.pa-tooltip.pa-tooltip-below,
+.pa-placement-top .pa-tooltip {
+  bottom: auto;
+  top: calc(100% + 10px);
+  transform: translateX(-50%) translateY(-4px);
+}
+
+.pa-btn:hover .pa-tooltip.pa-tooltip-below,
+.pa-btn:focus-visible .pa-tooltip.pa-tooltip-below,
+.pa-drag-handle:hover .pa-tooltip.pa-tooltip-below,
+.pa-drag-handle:focus-visible .pa-tooltip.pa-tooltip-below,
+.pa-color-preview-btn:hover .pa-tooltip.pa-tooltip-below,
+.pa-color-preview-btn:focus-visible .pa-tooltip.pa-tooltip-below,
+.pa-placement-top .pa-btn:hover .pa-tooltip,
+.pa-placement-top .pa-btn:focus-visible .pa-tooltip,
+.pa-placement-top .pa-drag-handle:hover .pa-tooltip,
+.pa-placement-top .pa-drag-handle:focus-visible .pa-tooltip,
+.pa-placement-top .pa-color-preview-btn:hover .pa-tooltip,
+.pa-placement-top .pa-color-preview-btn:focus-visible .pa-tooltip {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
 
 .pa-color-preview-btn {
+  position: relative;
   width: 24px;
   height: 24px;
   margin: 0 4px;
@@ -507,6 +610,9 @@ export const SHADOW_STYLES = `
   display: none;
   flex-direction: column;
   min-width: 218px;
+  max-height: min(85vh, 480px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 5px;
   border-radius: 11px;
   background: rgba(26, 30, 44, 0.97);
@@ -515,6 +621,11 @@ export const SHADOW_STYLES = `
   border: 1px solid var(--pa-line-strong);
   box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.5);
   z-index: 102;
+}
+
+.pa-menu.above {
+  top: auto;
+  bottom: calc(100% + 8px);
 }
 
 .pa-menu.pa-menu-right {
@@ -660,6 +771,11 @@ export const SHADOW_STYLES = `
   z-index: 2147483647;
   pointer-events: auto;
   animation: pa-toast-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pa-toast.above {
+  top: auto;
+  bottom: calc(100% + 10px);
 }
 
 .pa-toast.pa-toast-hiding {

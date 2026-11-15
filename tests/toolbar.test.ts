@@ -124,13 +124,18 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     expect(wrapper.style.top).toBe('180px');
   });
 
-  it('hides the toolbar from the More menu', () => {
+  it('hides the toolbar via the close button on the top corner of the toolbar wrapper', () => {
     const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
     toolbar.setDrawingMode(true, false);
     expect(wrapper.style.display).toBe('block');
 
-    (container.querySelector('[data-action="more"]') as HTMLButtonElement).click();
-    (container.querySelector('[data-action="hide"]') as HTMLButtonElement).click();
+    expect(container.querySelector('.pa-menu [data-action="hide"]')).toBeNull();
+    expect(container.querySelector('.pa-toolbar [data-action="hide"]')).toBeNull();
+    const hideBtn = container.querySelector('.pa-toolbar-wrapper > [data-action="hide"]') as HTMLButtonElement;
+    expect(hideBtn).not.toBeNull();
+    expect(hideBtn.classList.contains('pa-toolbar-close-btn')).toBe(true);
+
+    hideBtn.click();
 
     expect(wrapper.style.display).toBe('none');
     expect(engine.getActiveMode()).toBe(false);
@@ -692,6 +697,73 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
       const hlWidthSlider = container.querySelector<HTMLInputElement>('input[data-setting="defaultHighlighterWidth"]')!;
       expect(hlWidthSlider.closest<HTMLElement>('.pa-slider-group')!.style.display).toBe('flex');
       expect(fontSizeSlider.closest<HTMLElement>('.pa-slider-group')!.style.display).toBe('none');
+    });
+  });
+
+  describe('Viewport-Aware Tooltips and Popups', () => {
+    it('sets pa-placement-top class when toolbar is near top of viewport', () => {
+      const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
+      wrapper.style.top = '20px';
+      toolbar.updateViewportPlacement();
+      expect(wrapper.classList.contains('pa-placement-top')).toBe(true);
+
+      wrapper.style.top = '120px';
+      toolbar.updateViewportPlacement();
+      expect(wrapper.classList.contains('pa-placement-top')).toBe(false);
+    });
+
+    it('positions tooltips below when near top and adjusts dynamically on hover', () => {
+      const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
+      wrapper.style.top = '24px';
+      toolbar.updateViewportPlacement();
+
+      const closeBtn = container.querySelector('[data-action="hide"]') as HTMLElement;
+      const tip = closeBtn.querySelector('.pa-tooltip') as HTMLElement;
+      expect(tip).not.toBeNull();
+
+      toolbar.adjustTooltipPosition(closeBtn, tip);
+      expect(tip.classList.contains('pa-tooltip-below')).toBe(true);
+
+      wrapper.style.top = '200px';
+      toolbar.updateViewportPlacement();
+      toolbar.adjustTooltipPosition(closeBtn, tip);
+      expect(tip.classList.contains('pa-tooltip-below')).toBe(false);
+    });
+
+    it('flips dropdown menus above when room below is limited', () => {
+      const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
+      wrapper.style.top = `${window.innerHeight - 80}px`;
+
+      const moreTrigger = container.querySelector('[data-action="more"]') as HTMLButtonElement;
+      moreTrigger.click();
+
+      const moreMenu = container.querySelector('.pa-menu.open') as HTMLElement;
+      expect(moreMenu).not.toBeNull();
+      expect(moreMenu.classList.contains('above')).toBe(true);
+
+      toolbar.closeMenus();
+      wrapper.style.top = '50px';
+      moreTrigger.click();
+      const openMenu = container.querySelector('.pa-menu.open') as HTMLElement;
+      expect(openMenu.classList.contains('above')).toBe(false);
+    });
+
+    it('positions color popover below when room above is constrained', () => {
+      const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
+      wrapper.style.top = '24px';
+
+      const colorBtn = container.querySelector('.pa-color-preview-btn') as HTMLButtonElement;
+      colorBtn.click();
+
+      const popover = container.querySelector('.pa-popover') as HTMLElement;
+      expect(popover.classList.contains('below')).toBe(true);
+    });
+
+    it('does not set default HTML title attributes on toolbar controls to prevent duplicate browser tooltips', () => {
+      const controls = container.querySelectorAll('.pa-toolbar-wrapper button, .pa-toolbar-wrapper .pa-drag-handle');
+      controls.forEach((el) => {
+        expect(el.getAttribute('title')).toBeNull();
+      });
     });
   });
 });
