@@ -387,17 +387,25 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     await expect(greenSwatch).toHaveClass(/active/);
     await expect(colorPreviewBtn).toHaveCSS('background-color', 'rgb(34, 197, 94)');
 
-    // 3. Test sliders (pen width, highlighter width, font size)
+    // 3. Test sliders (pen width, highlighter width, font size) scoped to active tool
     const penWidthSlider = pa(page, '[data-setting="defaultStrokeWidth"]');
     await expect(penWidthSlider).toBeVisible();
     await penWidthSlider.fill('8');
     await penWidthSlider.dispatchEvent('change');
 
+    // Switch to highlighter: popover adapts to highlighter controls
+    const hlBtn = pa(page, '[data-tool="highlighter"]');
+    await hlBtn.click();
     const hlWidthSlider = pa(page, '[data-setting="defaultHighlighterWidth"]');
+    await expect(hlWidthSlider).toBeVisible();
     await hlWidthSlider.fill('32');
     await hlWidthSlider.dispatchEvent('change');
 
+    // Switch to text: popover adapts to text controls
+    const textBtn = pa(page, '[data-tool="text"]');
+    await textBtn.click();
     const fontSlider = pa(page, '[data-setting="defaultFontSize"]');
+    await expect(fontSlider).toBeVisible();
     await fontSlider.fill('24');
     await fontSlider.dispatchEvent('change');
 
@@ -405,7 +413,9 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     const resetBtn = pa(page, '.pa-popover-reset');
     await resetBtn.click();
 
-    // Verify preview returned to default red (#ef4444) and width to 4
+    // Verify preview returned to default red (#ef4444) and width to 4 (switch back to pen)
+    const penBtn = pa(page, '[data-tool="pen"]');
+    await penBtn.click();
     await expect(colorPreviewBtn).toHaveCSS('background-color', 'rgb(239, 68, 68)');
     await expect(penWidthSlider).toHaveValue('4');
 

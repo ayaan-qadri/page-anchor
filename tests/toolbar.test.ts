@@ -544,4 +544,154 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     (container.querySelector('[data-action="open-options"]') as HTMLButtonElement).click();
     expect(mockCallbacks.onOpenOptions).toHaveBeenCalled();
   });
+
+  describe('Contextual drawing defaults popover scoped to active tool', () => {
+    it('shows Text Note in the popover header and only text controls when text tool is selected', () => {
+      const textBtn = container.querySelector('[data-tool="text"]') as HTMLButtonElement;
+      textBtn.click();
+
+      const colorBtn = container.querySelector('.pa-color-preview-btn') as HTMLButtonElement;
+      colorBtn.click();
+
+      // Header indicates current selected tool
+      const toolName = container.querySelector('.pa-popover-tool-name')!;
+      expect(toolName.textContent).toBe('Text Note');
+
+      const badge = container.querySelector('.pa-popover-badge')!;
+      expect(badge.textContent).toBe('Selected');
+
+      const target = container.querySelector('.pa-color-target')!;
+      expect(target.textContent).toBe('Text note colours');
+
+      // Controls visibility: text size and text colour are shown; pen width and highlighter are hidden
+      const fontSizeSlider = container.querySelector<HTMLInputElement>('input[data-setting="defaultFontSize"]')!;
+      const penWidthSlider = container.querySelector<HTMLInputElement>('input[data-setting="defaultStrokeWidth"]')!;
+      const hlWidthSlider = container.querySelector<HTMLInputElement>('input[data-setting="defaultHighlighterWidth"]')!;
+
+      expect(fontSizeSlider.closest<HTMLElement>('.pa-slider-group')!.style.display).toBe('flex');
+      expect(penWidthSlider.closest<HTMLElement>('.pa-slider-group')!.style.display).toBe('none');
+      expect(hlWidthSlider.closest<HTMLElement>('.pa-slider-group')!.style.display).toBe('none');
+
+      // Changing text font size in popover
+      fontSizeSlider.value = '24';
+      fontSizeSlider.dispatchEvent(new Event('change', { bubbles: true }));
+
+      expect((toolbar as any).settings.defaultFontSize).toBe(24);
+      expect((engine as any).fontSize).toBe(24);
+
+      // Picking color swatch while text tool is active updates text color
+      const swatches = container.querySelectorAll<HTMLButtonElement>('.pa-color-swatch');
+      swatches[2].click();
+      expect((toolbar as any).settings.defaultStrokeColor).toBe(swatches[2].dataset.color);
+      expect((engine as any).strokeColor).toBe(swatches[2].dataset.color);
+    });
+
+    it('shows Pen in the popover header and only pen controls when pen tool is selected', () => {
+      const penBtn = container.querySelector('[data-tool="pen"]') as HTMLButtonElement;
+      penBtn.click();
+
+      const colorBtn = container.querySelector('.pa-color-preview-btn') as HTMLButtonElement;
+      colorBtn.click();
+
+      const toolName = container.querySelector('.pa-popover-tool-name')!;
+      expect(toolName.textContent).toBe('Pen');
+      expect(container.querySelector('.pa-popover-badge')!.textContent).toBe('Selected');
+
+      const penWidthSlider = container.querySelector<HTMLInputElement>('input[data-setting="defaultStrokeWidth"]')!;
+      const fontSizeSlider = container.querySelector<HTMLInputElement>('input[data-setting="defaultFontSize"]')!;
+      const hlWidthSlider = container.querySelector<HTMLInputElement>('input[data-setting="defaultHighlighterWidth"]')!;
+
+      expect(penWidthSlider.closest<HTMLElement>('.pa-slider-group')!.style.display).toBe('flex');
+      expect(fontSizeSlider.closest<HTMLElement>('.pa-slider-group')!.style.display).toBe('none');
+      expect(hlWidthSlider.closest<HTMLElement>('.pa-slider-group')!.style.display).toBe('none');
+    });
+
+    it('shows Highlighter in the popover header and only highlighter controls when highlighter tool is selected', () => {
+      const hlBtn = container.querySelector('[data-tool="highlighter"]') as HTMLButtonElement;
+      hlBtn.click();
+
+      const colorBtn = container.querySelector('.pa-color-preview-btn') as HTMLButtonElement;
+      colorBtn.click();
+
+      const toolName = container.querySelector('.pa-popover-tool-name')!;
+      expect(toolName.textContent).toBe('Highlighter');
+      expect(container.querySelector('.pa-popover-badge')!.textContent).toBe('Selected');
+
+      const penWidthSlider = container.querySelector<HTMLInputElement>('input[data-setting="defaultStrokeWidth"]')!;
+      const fontSizeSlider = container.querySelector<HTMLInputElement>('input[data-setting="defaultFontSize"]')!;
+      const hlWidthSlider = container.querySelector<HTMLInputElement>('input[data-setting="defaultHighlighterWidth"]')!;
+
+      expect(hlWidthSlider.closest<HTMLElement>('.pa-slider-group')!.style.display).toBe('flex');
+      expect(penWidthSlider.closest<HTMLElement>('.pa-slider-group')!.style.display).toBe('none');
+      expect(fontSizeSlider.closest<HTMLElement>('.pa-slider-group')!.style.display).toBe('none');
+    });
+
+    it('shows shape info in header when a shape tool is active', () => {
+      engine.setTool('rect');
+      toolbar.updateActiveToolUI();
+
+      const colorBtn = container.querySelector('.pa-color-preview-btn') as HTMLButtonElement;
+      colorBtn.click();
+
+      const toolName = container.querySelector('.pa-popover-tool-name')!;
+      expect(toolName.textContent).toBe('Rectangle');
+      expect(container.querySelector('.pa-popover-badge')!.textContent).toBe('Selected');
+
+      const penWidthSlider = container.querySelector<HTMLInputElement>('input[data-setting="defaultStrokeWidth"]')!;
+      expect(penWidthSlider.closest<HTMLElement>('.pa-slider-group')!.style.display).toBe('flex');
+    });
+
+    it('shows empty notice and quick tool switch buttons when eraser tool is selected', () => {
+      const eraserBtn = container.querySelector('[data-tool="eraser"]') as HTMLButtonElement;
+      eraserBtn.click();
+
+      const colorBtn = container.querySelector('.pa-color-preview-btn') as HTMLButtonElement;
+      colorBtn.click();
+
+      const toolName = container.querySelector('.pa-popover-tool-name')!;
+      expect(toolName.textContent).toBe('Eraser');
+
+      const nonePanel = container.querySelector<HTMLElement>('.pa-tool-panel-empty')!;
+      expect(nonePanel.style.display).toBe('flex');
+
+      // Grid is hidden for tools without color settings
+      const grid = container.querySelector<HTMLElement>('.pa-color-grid')!;
+      expect(grid.style.display).toBe('none');
+
+      // Clicking quick button switches tool to pen immediately
+      const quickPenBtn = nonePanel.querySelector<HTMLButtonElement>('.pa-quick-tool-btn')!;
+      quickPenBtn.click();
+
+      expect(engine.getTool()).toBe('pen');
+      expect(toolName.textContent).toBe('Pen');
+      expect(grid.style.display).toBe('grid');
+    });
+
+    it('dynamically updates popover header and settings panel when tool is switched while popover is open', () => {
+      const colorBtn = container.querySelector('.pa-color-preview-btn') as HTMLButtonElement;
+      colorBtn.click();
+      expect(colorBtn.getAttribute('aria-expanded')).toBe('true');
+
+      // Initially pen
+      const toolName = container.querySelector('.pa-popover-tool-name')!;
+      expect(toolName.textContent).toBe('Pen');
+
+      // Switch to Text while popover is open
+      const textBtn = container.querySelector('[data-tool="text"]') as HTMLButtonElement;
+      textBtn.click();
+
+      expect(toolName.textContent).toBe('Text Note');
+      const fontSizeSlider = container.querySelector<HTMLInputElement>('input[data-setting="defaultFontSize"]')!;
+      expect(fontSizeSlider.closest<HTMLElement>('.pa-slider-group')!.style.display).toBe('flex');
+
+      // Switch to Highlighter while popover is open
+      const hlBtn = container.querySelector('[data-tool="highlighter"]') as HTMLButtonElement;
+      hlBtn.click();
+
+      expect(toolName.textContent).toBe('Highlighter');
+      const hlWidthSlider = container.querySelector<HTMLInputElement>('input[data-setting="defaultHighlighterWidth"]')!;
+      expect(hlWidthSlider.closest<HTMLElement>('.pa-slider-group')!.style.display).toBe('flex');
+      expect(fontSizeSlider.closest<HTMLElement>('.pa-slider-group')!.style.display).toBe('none');
+    });
+  });
 });

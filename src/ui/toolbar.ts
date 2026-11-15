@@ -40,6 +40,12 @@ export class FloatingToolbar {
   private toastElement: HTMLElement | null = null;
   private toastTimer: number | null = null;
   private menuWrappers: HTMLElement[] = [];
+  private strokeColorRow!: HTMLElement;
+  private strokeWidthGroup!: HTMLElement;
+  private hlColorRow!: HTMLElement;
+  private hlWidthGroup!: HTMLElement;
+  private fontSizeGroup!: HTMLElement;
+  private nonePanel!: HTMLElement;
 
   private isDragging = false;
   private dragOffset = { x: 0, y: 0 };
@@ -657,7 +663,10 @@ export class FloatingToolbar {
   private toggleColorPopover(): void {
     const isOpen = this.colorPopover.classList.toggle('open');
     this.colorPreviewBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-    if (isOpen) this.positionColorPopover();
+    if (isOpen) {
+      this.refreshColorControls();
+      this.positionColorPopover();
+    }
   }
 
   /** Flips the popover below the toolbar when there is not enough room above. */
@@ -668,15 +677,44 @@ export class FloatingToolbar {
   }
 
   private buildColorPopover(): void {
-    const body = document.createElement('div');
-    body.className = 'pa-popover-body';
+    const header = document.createElement('div');
+    header.className = 'pa-popover-header';
+
+    const headerRow = document.createElement('div');
+    headerRow.className = 'pa-popover-header-row';
+
+    const toolInfo = document.createElement('div');
+    toolInfo.className = 'pa-popover-tool-info';
+
+    const toolIcon = document.createElement('span');
+    toolIcon.className = 'pa-popover-tool-icon';
+    toolIcon.setAttribute('aria-hidden', 'true');
+
+    const toolName = document.createElement('span');
+    toolName.className = 'pa-popover-tool-name';
+
+    toolInfo.appendChild(toolIcon);
+    toolInfo.appendChild(toolName);
+
+    const badge = document.createElement('span');
+    badge.className = 'pa-popover-badge';
+    badge.textContent = 'Selected';
+
+    headerRow.appendChild(toolInfo);
+    headerRow.appendChild(badge);
+    header.appendChild(headerRow);
 
     // Names the tool the swatches below will change, so the grid is never
     // ambiguous about what it is about to recolour.
     const target = document.createElement('div');
     target.className = 'pa-color-target';
     target.setAttribute('aria-live', 'polite');
-    body.appendChild(target);
+    header.appendChild(target);
+
+    this.colorPopover.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'pa-popover-body';
 
     const grid = document.createElement('div');
     grid.className = 'pa-color-grid';
@@ -705,27 +743,90 @@ export class FloatingToolbar {
     });
     body.appendChild(grid);
 
-    body.appendChild(
-      this.buildColorRow('Pen colour', 'defaultStrokeColor', this.settings.defaultStrokeColor)
+    // 1. Stroke colour (used for Pen, Shapes, and Text note)
+    this.strokeColorRow = this.buildColorRow(
+      'Pen colour',
+      'defaultStrokeColor',
+      this.settings.defaultStrokeColor
     );
-    body.appendChild(
-      this.buildSliderField('Pen width', 'defaultStrokeWidth', 1, 30, this.settings.defaultStrokeWidth)
-    );
+    body.appendChild(this.strokeColorRow);
 
-    body.appendChild(this.buildPopoverDivider());
-
-    body.appendChild(
-      this.buildColorRow('Highlighter colour', 'defaultHighlighterColor', this.settings.defaultHighlighterColor)
+    // 2. Stroke width (used for Pen and Shapes)
+    this.strokeWidthGroup = this.buildSliderField(
+      'Pen width',
+      'defaultStrokeWidth',
+      1,
+      30,
+      this.settings.defaultStrokeWidth
     );
-    body.appendChild(
-      this.buildSliderField('Highlighter width', 'defaultHighlighterWidth', 8, 50, this.settings.defaultHighlighterWidth)
-    );
+    body.appendChild(this.strokeWidthGroup);
 
-    body.appendChild(this.buildPopoverDivider());
-
-    body.appendChild(
-      this.buildSliderField('Text note size', 'defaultFontSize', 12, 36, this.settings.defaultFontSize)
+    // 3. Highlighter colour
+    this.hlColorRow = this.buildColorRow(
+      'Highlighter colour',
+      'defaultHighlighterColor',
+      this.settings.defaultHighlighterColor
     );
+    body.appendChild(this.hlColorRow);
+
+    // 4. Highlighter width
+    this.hlWidthGroup = this.buildSliderField(
+      'Highlighter width',
+      'defaultHighlighterWidth',
+      8,
+      50,
+      this.settings.defaultHighlighterWidth
+    );
+    body.appendChild(this.hlWidthGroup);
+
+    // 5. Text note size (used for Text note)
+    this.fontSizeGroup = this.buildSliderField(
+      'Text note size',
+      'defaultFontSize',
+      12,
+      36,
+      this.settings.defaultFontSize
+    );
+    body.appendChild(this.fontSizeGroup);
+
+    // 6. None panel (for tools without stroke settings: eraser and select)
+    this.nonePanel = document.createElement('div');
+    this.nonePanel.className = 'pa-tool-panel-empty';
+
+    const emptyMsg = document.createElement('p');
+    emptyMsg.className = 'pa-tool-empty-msg';
+    emptyMsg.textContent = 'This tool has no drawing color or width settings.';
+    this.nonePanel.appendChild(emptyMsg);
+
+    const switchPrompt = document.createElement('p');
+    switchPrompt.className = 'pa-tool-switch-prompt';
+    switchPrompt.textContent = 'Configure defaults for:';
+    this.nonePanel.appendChild(switchPrompt);
+
+    const quickTools = document.createElement('div');
+    quickTools.className = 'pa-quick-tools';
+    const switchableTools: Array<{ tool: ToolType; label: string; icon: string }> = [
+      { tool: 'pen', label: 'Pen', icon: ICONS.pen },
+      { tool: 'highlighter', label: 'Highlighter', icon: ICONS.highlighter },
+      { tool: 'text', label: 'Text', icon: ICONS.text },
+    ];
+    switchableTools.forEach(({ tool, label, icon }) => {
+      const qBtn = document.createElement('button');
+      qBtn.type = 'button';
+      qBtn.className = 'pa-quick-tool-btn';
+      qBtn.setAttribute('aria-label', `Configure ${label} defaults`);
+      setMarkup(qBtn, icon);
+      const span = document.createElement('span');
+      span.textContent = label;
+      qBtn.appendChild(span);
+      qBtn.addEventListener('click', () => {
+        this.engine.setTool(tool);
+        this.updateActiveToolUI();
+      });
+      quickTools.appendChild(qBtn);
+    });
+    this.nonePanel.appendChild(quickTools);
+    body.appendChild(this.nonePanel);
 
     const footer = document.createElement('div');
     footer.className = 'pa-popover-footer';
@@ -919,29 +1020,211 @@ export class FloatingToolbar {
     this.refreshPenColorControls();
   }
 
-  /** Keeps the color preview button and preset swatches in step with the active tool's colour. */
-  public refreshColorControls(): void {
-    const isHl = this.isHighlighterActive();
-    const activeColor = isHl ? this.settings.defaultHighlighterColor : this.settings.defaultStrokeColor;
-    this.colorPreviewBtn.style.backgroundColor = activeColor;
-    this.colorPreviewBtn.title = isHl ? 'Highlighter defaults' : 'Drawing defaults';
-    this.colorPreviewBtn.setAttribute('aria-label', isHl ? 'Highlighter defaults' : 'Drawing defaults');
+  private getActiveToolInfo(): {
+    category: 'pen' | 'highlighter' | 'text' | 'shape' | 'none';
+    label: string;
+    targetText: string;
+    icon: string;
+    color: string;
+  } {
+    const current = this.engine.getTool();
+    switch (current) {
+      case 'highlighter':
+        return {
+          category: 'highlighter',
+          label: 'Highlighter',
+          targetText: 'Highlighter colours',
+          icon: ICONS.highlighter,
+          color: this.settings.defaultHighlighterColor,
+        };
+      case 'text':
+        return {
+          category: 'text',
+          label: 'Text Note',
+          targetText: 'Text note colours',
+          icon: ICONS.text,
+          color: this.settings.defaultStrokeColor,
+        };
+      case 'rect':
+        return {
+          category: 'shape',
+          label: 'Rectangle',
+          targetText: 'Rectangle colours',
+          icon: ICONS.rect,
+          color: this.settings.defaultStrokeColor,
+        };
+      case 'circle':
+        return {
+          category: 'shape',
+          label: 'Circle',
+          targetText: 'Circle colours',
+          icon: ICONS.circle,
+          color: this.settings.defaultStrokeColor,
+        };
+      case 'line':
+        return {
+          category: 'shape',
+          label: 'Line',
+          targetText: 'Line colours',
+          icon: ICONS.line,
+          color: this.settings.defaultStrokeColor,
+        };
+      case 'arrow':
+        return {
+          category: 'shape',
+          label: 'Arrow',
+          targetText: 'Arrow colours',
+          icon: ICONS.arrow,
+          color: this.settings.defaultStrokeColor,
+        };
+      case 'double-arrow':
+        return {
+          category: 'shape',
+          label: 'Double Arrow',
+          targetText: 'Double Arrow colours',
+          icon: ICONS.doubleArrow,
+          color: this.settings.defaultStrokeColor,
+        };
+      case 'select':
+        return {
+          category: 'none',
+          label: 'Select & Move',
+          targetText: 'Select & Move tool',
+          icon: ICONS.select,
+          color: this.settings.defaultStrokeColor,
+        };
+      case 'eraser':
+        return {
+          category: 'none',
+          label: 'Eraser',
+          targetText: 'Eraser tool',
+          icon: ICONS.eraser,
+          color: this.settings.defaultStrokeColor,
+        };
+      case 'pen':
+      default:
+        return {
+          category: 'pen',
+          label: 'Pen',
+          targetText: 'Pen colours',
+          icon: ICONS.pen,
+          color: this.settings.defaultStrokeColor,
+        };
+    }
+  }
 
-    const target = this.colorPopover.querySelector('.pa-color-target');
-    if (target) {
-      target.textContent = isHl ? 'Highlighter colours' : 'Pen colours';
+  /** Keeps the color preview button, popover header, and panel in step with the active tool. */
+  public refreshColorControls(): void {
+    const info = this.getActiveToolInfo();
+    const isHl = info.category === 'highlighter';
+    const isNone = info.category === 'none';
+
+    this.colorPreviewBtn.style.backgroundColor = info.color;
+    const titleText = isHl
+      ? 'Highlighter defaults'
+      : info.category === 'pen'
+      ? 'Drawing defaults'
+      : `${info.label} defaults`;
+    this.colorPreviewBtn.title = titleText;
+    this.colorPreviewBtn.setAttribute('aria-label', titleText);
+    this.colorPopover.setAttribute('aria-label', `${info.label} defaults`);
+
+    // Update Header
+    const toolIcon = this.colorPopover.querySelector('.pa-popover-tool-icon');
+    if (toolIcon) {
+      setMarkup(toolIcon as HTMLElement, info.icon);
+    }
+    const toolName = this.colorPopover.querySelector('.pa-popover-tool-name');
+    if (toolName) {
+      toolName.textContent = info.label;
     }
 
-    const grid = this.colorPopover.querySelector('.pa-color-grid');
+    const target = this.colorPopover.querySelector('.pa-color-target') as HTMLElement | null;
+    if (target) {
+      target.textContent = info.targetText;
+      target.style.display = isNone ? 'none' : 'block';
+    }
+
+    const grid = this.colorPopover.querySelector('.pa-color-grid') as HTMLElement | null;
     if (grid) {
-      grid.setAttribute('aria-label', isHl ? 'Preset highlighter colors' : 'Preset pen colors');
+      grid.style.display = isNone ? 'none' : 'grid';
+      grid.setAttribute(
+        'aria-label',
+        isHl
+          ? 'Preset highlighter colors'
+          : info.category === 'text'
+          ? 'Preset text colors'
+          : info.category === 'shape'
+          ? 'Preset shape colors'
+          : 'Preset pen colors'
+      );
+    }
+
+    // Toggle controls visibility & dynamic labels based on active tool category
+    if (this.strokeColorRow) {
+      const strokeColorLabel = this.strokeColorRow.querySelector<HTMLElement>('.pa-popover-label');
+      const strokeWidthLabel = this.strokeWidthGroup.querySelector<HTMLElement>('.pa-slider-label span:first-child');
+
+      if (info.category === 'pen') {
+        this.strokeColorRow.style.display = 'flex';
+        if (strokeColorLabel) strokeColorLabel.textContent = 'Pen colour';
+        this.strokeWidthGroup.style.display = 'flex';
+        if (strokeWidthLabel) strokeWidthLabel.textContent = 'Pen width';
+        this.hlColorRow.style.display = 'none';
+        this.hlWidthGroup.style.display = 'none';
+        this.fontSizeGroup.style.display = 'none';
+        this.nonePanel.style.display = 'none';
+      } else if (info.category === 'shape') {
+        this.strokeColorRow.style.display = 'flex';
+        if (strokeColorLabel) strokeColorLabel.textContent = 'Stroke colour';
+        this.strokeWidthGroup.style.display = 'flex';
+        if (strokeWidthLabel) strokeWidthLabel.textContent = 'Stroke width';
+        this.hlColorRow.style.display = 'none';
+        this.hlWidthGroup.style.display = 'none';
+        this.fontSizeGroup.style.display = 'none';
+        this.nonePanel.style.display = 'none';
+      } else if (info.category === 'highlighter') {
+        this.strokeColorRow.style.display = 'none';
+        this.strokeWidthGroup.style.display = 'none';
+        this.hlColorRow.style.display = 'flex';
+        this.hlWidthGroup.style.display = 'flex';
+        this.fontSizeGroup.style.display = 'none';
+        this.nonePanel.style.display = 'none';
+      } else if (info.category === 'text') {
+        this.strokeColorRow.style.display = 'flex';
+        if (strokeColorLabel) strokeColorLabel.textContent = 'Text colour';
+        this.strokeWidthGroup.style.display = 'none';
+        this.hlColorRow.style.display = 'none';
+        this.hlWidthGroup.style.display = 'none';
+        this.fontSizeGroup.style.display = 'flex';
+        this.nonePanel.style.display = 'none';
+      } else {
+        // none (eraser, select)
+        this.strokeColorRow.style.display = 'none';
+        this.strokeWidthGroup.style.display = 'none';
+        this.hlColorRow.style.display = 'none';
+        this.hlWidthGroup.style.display = 'none';
+        this.fontSizeGroup.style.display = 'none';
+        this.nonePanel.style.display = 'flex';
+      }
+    }
+
+    if (isNone) {
+      const emptyMsg = this.colorPopover.querySelector('.pa-tool-empty-msg');
+      if (emptyMsg) {
+        emptyMsg.textContent = `${info.label} has no drawing color or width settings.`;
+      }
     }
 
     this.colorPopover.querySelectorAll<HTMLButtonElement>('.pa-color-swatch').forEach((swatch) => {
-      const isActive = swatch.dataset.color === activeColor;
+      const isActive = swatch.dataset.color === info.color;
       swatch.classList.toggle('active', isActive);
       swatch.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
+
+    if (this.colorPopover.classList.contains('open')) {
+      this.positionColorPopover();
+    }
   }
 
   private refreshPenColorControls(): void {

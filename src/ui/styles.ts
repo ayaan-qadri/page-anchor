@@ -203,6 +203,132 @@ export const SHADOW_STYLES = `
   top: calc(100% + 10px);
 }
 
+.pa-popover-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--pa-line);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.pa-popover-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pa-popover-tool-info {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.pa-popover-tool-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--pa-surface-2);
+  color: var(--pa-accent-soft);
+  flex-shrink: 0;
+}
+
+.pa-popover-tool-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.pa-popover-tool-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pa-text);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pa-popover-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(91, 141, 239, 0.14);
+  border: 1px solid rgba(91, 141, 239, 0.3);
+  color: var(--pa-accent-soft);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.pa-tool-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pa-tool-panel-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 2px 0;
+  color: var(--pa-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.pa-tool-empty-msg {
+  color: var(--pa-faint);
+  font-size: 11px;
+}
+
+.pa-tool-switch-prompt {
+  font-weight: 600;
+  color: var(--pa-text);
+  font-size: 11px;
+}
+
+.pa-quick-tools {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.pa-quick-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--pa-surface-2);
+  border: 1px solid var(--pa-line);
+  color: var(--pa-text);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.13s var(--pa-ease), border-color 0.13s var(--pa-ease);
+}
+
+.pa-quick-tool-btn:hover {
+  background: var(--pa-elevated);
+  border-color: var(--pa-line-strong);
+}
+
+.pa-quick-tool-btn svg {
+  width: 13px;
+  height: 13px;
+  color: var(--pa-accent-soft);
+}
+
 .pa-popover-body {
   display: flex;
   flex-direction: column;
