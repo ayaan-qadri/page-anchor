@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   isPointNearElement,
   renderArrowHead,
+  renderFreehandStroke,
   renderSmoothSpline,
 } from '../src/core/geometry';
 import { ShapeElement, TextElement, Point } from '../src/types/engine.types';
@@ -22,6 +23,59 @@ describe('Geometry Engine: Render Helpers and Missing Hit-Test Branches', () => 
       closePath: vi.fn(),
     } as unknown as CanvasRenderingContext2D;
   };
+
+  describe('renderFreehandStroke', () => {
+    it('handles empty points array gracefully', () => {
+      const ctx = createMockCtx();
+      renderFreehandStroke(ctx, []);
+      expect(ctx.moveTo).not.toHaveBeenCalled();
+      expect(ctx.fill).not.toHaveBeenCalled();
+    });
+
+    it('renders single point as a filled circular dot', () => {
+      const ctx = createMockCtx();
+      renderFreehandStroke(ctx, [{ x: 40, y: 50 }], { size: 6 });
+      expect(ctx.beginPath).toHaveBeenCalled();
+      expect(ctx.arc).toHaveBeenCalledWith(40, 50, 3, 0, Math.PI * 2);
+      expect(ctx.fill).toHaveBeenCalled();
+    });
+
+    it('renders multiple points as a smooth outline polygon with curves and fill', () => {
+      const ctx = createMockCtx();
+      const points: Point[] = [
+        { x: 10, y: 10 },
+        { x: 40, y: 30 },
+        { x: 80, y: 20 },
+        { x: 120, y: 60 },
+      ];
+      renderFreehandStroke(ctx, points, {
+        size: 4,
+        thinning: 0.35,
+        smoothing: 0.65,
+        streamline: 0.55,
+      });
+      expect(ctx.beginPath).toHaveBeenCalled();
+      expect(ctx.moveTo).toHaveBeenCalled();
+      expect(ctx.quadraticCurveTo).toHaveBeenCalled();
+      expect(ctx.closePath).toHaveBeenCalled();
+      expect(ctx.fill).toHaveBeenCalled();
+    });
+
+    it('supports uniform-width highlighter configuration', () => {
+      const ctx = createMockCtx();
+      const points: Point[] = [
+        { x: 20, y: 50 },
+        { x: 100, y: 50 },
+      ];
+      renderFreehandStroke(ctx, points, {
+        size: 20,
+        thinning: 0,
+        simulatePressure: false,
+      });
+      expect(ctx.beginPath).toHaveBeenCalled();
+      expect(ctx.fill).toHaveBeenCalled();
+    });
+  });
 
   describe('renderSmoothSpline', () => {
     it('handles empty points array gracefully', () => {

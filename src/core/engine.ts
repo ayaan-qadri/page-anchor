@@ -15,7 +15,7 @@ import {
   intersectsBoundingBox,
   isPointNearElement,
   renderArrowHead,
-  renderSmoothSpline,
+  renderFreehandStroke,
   simplifyPointsRDP,
 } from './geometry';
 
@@ -350,6 +350,11 @@ export class CanvasEngine {
     const w = window.innerWidth;
     const h = window.innerHeight;
 
+    this.baseCanvas.style.width = `${w}px`;
+    this.baseCanvas.style.height = `${h}px`;
+    this.activeCanvas.style.width = `${w}px`;
+    this.activeCanvas.style.height = `${h}px`;
+
     if (this.baseCanvas.width !== w * this.dpr || this.baseCanvas.height !== h * this.dpr) {
       this.baseCanvas.width = Math.round(w * this.dpr);
       this.baseCanvas.height = Math.round(h * this.dpr);
@@ -385,10 +390,11 @@ export class CanvasEngine {
     window.addEventListener('pointercancel', this.onPointerUp.bind(this));
   }
 
-  private clientToDoc(clientX: number, clientY: number): Point {
+  private clientToDoc(clientX: number, clientY: number, pressure?: number): Point {
     return {
-      x: Math.round(clientX + window.scrollX),
-      y: Math.round(clientY + window.scrollY),
+      x: clientX + window.scrollX,
+      y: clientY + window.scrollY,
+      ...(pressure !== undefined && pressure > 0 ? { pressure } : {}),
     };
   }
 
@@ -455,7 +461,8 @@ export class CanvasEngine {
     }
 
     if (this.activeTool === 'pen' || this.activeTool === 'highlighter') {
-      this.currentStrokePoints = [docPt];
+      const docPtWithPressure = this.clientToDoc(e.clientX, e.clientY, e.pressure);
+      this.currentStrokePoints = [docPtWithPressure];
       this.drawActiveStroke();
       return;
     }
@@ -527,7 +534,11 @@ export class CanvasEngine {
 
     if (this.activeTool === 'pen' || this.activeTool === 'highlighter') {
       for (const ev of events) {
-        this.currentStrokePoints.push(this.clientToDoc(ev.clientX, ev.clientY));
+        const pt = this.clientToDoc(ev.clientX, ev.clientY, ev.pressure);
+        const last = this.currentStrokePoints[this.currentStrokePoints.length - 1];
+        if (!last || Math.hypot(pt.x - last.x, pt.y - last.y) >= 1) {
+          this.currentStrokePoints.push(pt);
+        }
       }
       this.drawActiveStroke();
       return;
@@ -608,7 +619,7 @@ export class CanvasEngine {
       if (this.currentStrokePoints.length > 0) {
         const isHighlighter = this.activeTool === 'highlighter';
         const simplified = this.strokeSimplification
-          ? simplifyPointsRDP(this.currentStrokePoints, 1.2)
+          ? simplifyPointsRDP(this.currentStrokePoints, 0.7)
           : this.currentStrokePoints.slice();
 
         const strokeElem: StrokeElement = {
@@ -763,8 +774,13 @@ export class CanvasEngine {
     ctx.lineJoin = 'round';
     ctx.globalAlpha = isHighlighter ? 0.35 : 1.0;
 
-    ctx.beginPath();
-    renderSmoothSpline(ctx, this.currentStrokePoints);
+    renderFreehandStroke(ctx, this.currentStrokePoints, {
+      size: isHighlighter ? this.highlighterWidth : this.strokeWidth,
+      thinning: isHighlighter ? 0 : 0.35,
+      smoothing: 0.65,
+      streamline: 0.55,
+      simulatePressure: !isHighlighter,
+    });
     ctx.restore();
   }
 
@@ -865,8 +881,13 @@ export class CanvasEngine {
       case 'highlighter': {
         const isHighlighter = el.type === 'highlighter';
         ctx.globalAlpha = isHighlighter ? (el.opacity || 0.35) : (el.opacity || 1.0);
-        ctx.beginPath();
-        renderSmoothSpline(ctx, el.points);
+        renderFreehandStroke(ctx, el.points, {
+          size: el.strokeWidth,
+          thinning: isHighlighter ? 0 : 0.35,
+          smoothing: 0.65,
+          streamline: 0.55,
+          simulatePressure: !isHighlighter,
+        });
         break;
       }
 

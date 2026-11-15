@@ -1,3 +1,4 @@
+import { getStroke, StrokeOptions } from 'perfect-freehand';
 import { AnchorElement, BoundingBox, Point, StrokeElement } from '../types/engine.types';
 
 /**
@@ -218,6 +219,65 @@ export function isPointNearElement(pt: Point, element: AnchorElement, threshold 
   }
 
   return false;
+}
+
+export interface FreehandStrokeRenderOptions {
+  size?: number;
+  thinning?: number;
+  smoothing?: number;
+  streamline?: number;
+  simulatePressure?: boolean;
+}
+
+/**
+ * Renders high-fidelity, pressure-sensitive freehand strokes with streamlined
+ * curve smoothing to eliminate mouse tremor, sensor jitter, and jagged edges.
+ */
+export function renderFreehandStroke(
+  ctx: CanvasRenderingContext2D,
+  points: Point[],
+  options?: FreehandStrokeRenderOptions
+): void {
+  if (!points || points.length === 0) return;
+
+  const size = options?.size ?? ctx.lineWidth ?? 4;
+
+  if (points.length === 1) {
+    ctx.beginPath();
+    ctx.arc(points[0].x, points[0].y, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
+
+  const strokeInput = points.map((p) => [p.x, p.y, p.pressure ?? 0.5]);
+  const strokeOptions: StrokeOptions = {
+    size,
+    thinning: options?.thinning ?? 0.35,
+    smoothing: options?.smoothing ?? 0.65,
+    streamline: options?.streamline ?? 0.55,
+    simulatePressure: options?.simulatePressure ?? true,
+    start: {
+      cap: true,
+      taper: 0,
+    },
+    end: {
+      cap: true,
+      taper: 0,
+    },
+  };
+
+  const outline = getStroke(strokeInput, strokeOptions);
+  if (outline.length === 0) return;
+
+  ctx.beginPath();
+  ctx.moveTo(outline[0][0], outline[0][1]);
+  for (let i = 0; i < outline.length; i++) {
+    const [x0, y0] = outline[i];
+    const [x1, y1] = outline[(i + 1) % outline.length];
+    ctx.quadraticCurveTo(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
+  }
+  ctx.closePath();
+  ctx.fill();
 }
 
 export function renderSmoothSpline(ctx: CanvasRenderingContext2D, points: Point[]): void {

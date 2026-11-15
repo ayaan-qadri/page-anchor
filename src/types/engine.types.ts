@@ -13,6 +13,7 @@ export type ToolType =
 export interface Point {
   x: number;
   y: number;
+  pressure?: number;
 }
 
 export interface BoundingBox {
