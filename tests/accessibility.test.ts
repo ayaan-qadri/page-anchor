@@ -120,11 +120,7 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       expect(dockTab.getAttribute('aria-label')).toBe('Collapse drawing toolbar');
     });
 
-    it('should expose labelled dock and hide controls on the toolbar and dock', () => {
-      const dockBtn = container.querySelector('[data-action="dock"]') as HTMLButtonElement;
-      expect(dockBtn.tagName).toBe('BUTTON');
-      expect(dockBtn.getAttribute('aria-label')).toContain('Dock to Left Edge');
-
+    it('should expose labelled hide controls on the toolbar and dock', () => {
       const hideBtn = container.querySelector('[data-action="hide"]') as HTMLButtonElement;
       expect(hideBtn.tagName).toBe('BUTTON');
       expect(hideBtn.getAttribute('aria-label')).toContain('Hide Toolbar');
@@ -132,6 +128,10 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       const dockClose = container.querySelector('.pa-dock-close') as HTMLButtonElement;
       expect(dockClose.tagName).toBe('BUTTON');
       expect(dockClose.getAttribute('aria-label')).toBe('Hide toolbar');
+    });
+
+    it('should not offer a separate dock action, since the extension icon already toggles it', () => {
+      expect(container.querySelector('[data-action="dock"]')).toBeNull();
     });
 
     it('should render tool buttons with aria-pressed state matching active tool', () => {

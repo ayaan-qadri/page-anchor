@@ -128,13 +128,12 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     expect(wrapper.style.top).toBe('180px');
   });
 
-  it('docks the toolbar to the left edge via the dock button', () => {
+  it('docks the toolbar to the left edge and restores it from the dock tab', () => {
     const wrapper = container.querySelector('.pa-toolbar-wrapper') as HTMLElement;
     expect(wrapper.classList.contains('docked')).toBe(false);
 
-    const dockBtn = container.querySelector('[data-action="dock"]') as HTMLButtonElement;
-    expect(dockBtn).not.toBeNull();
-    dockBtn.click();
+    // The extension icon toggles drawing mode, which docks the toolbar.
+    toolbar.toggleDrawingMode(false);
 
     expect(wrapper.classList.contains('docked')).toBe(true);
     expect(wrapper.style.left).toBe('0px');

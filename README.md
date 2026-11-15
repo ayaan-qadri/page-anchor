@@ -55,7 +55,7 @@ Page Anchor is a browser extension for marking up pages you don't own the source
 
 Click an icon, and a small toolbar appears. Draw a box around the broken button, arrow at the thing you mean, drop a note next to it, and leave. The next time you open that URL, everything is still there.
 
-Clicking the icon again docks the toolbar against the left edge, so it stops covering the page you're reading. Clicking the small tab there brings it back.
+Clicking the icon again docks the toolbar against the left edge, so it stops covering the page you're reading. Clicking the small tab there brings it back. The toolbar's "More" menu has **Hide Toolbar** if you'd rather remove it from the page entirely.
 
 All of it is local. There's no account, no sync server, no upload, and no telemetry.
 
@@ -142,8 +142,8 @@ The goal here was narrower: a light overlay that behaves like part of the page, 
 
 | Action | Default | Notes |
 | :--- | :---: | :--- |
-| Toggle drawing mode | `Alt + Shift + D` | Overlay on / off. Avoids `Alt + D`, which focuses the address bar |
-| Toggle toolbar | `Alt + Shift + T` | Dock the toolbar to the left edge, or restore it |
+| Toggle drawing mode | `Alt + Shift + D` | Same as clicking the extension icon. Avoids `Alt + D`, which focuses the address bar |
+| Toggle toolbar | `Alt + Shift + T` | Same as clicking the extension icon: dock the toolbar to the left edge, or restore it |
 | Select / move | `V` | Drag to reposition, `Delete` to remove |
 | Pen | `P` | Freehand |
 | Highlighter | `H` | Semi-transparent |

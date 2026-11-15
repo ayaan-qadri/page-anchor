@@ -368,7 +368,7 @@ export const SHADOW_STYLES = `
   transform: translateX(-50%);
   display: none;
   flex-direction: column;
-  min-width: 190px;
+  min-width: 218px;
   padding: 5px;
   border-radius: 11px;
   background: rgba(26, 30, 44, 0.97);

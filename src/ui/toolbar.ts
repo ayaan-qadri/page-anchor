@@ -568,27 +568,6 @@ export class FloatingToolbar {
     });
     menu.appendChild(anchorBtn);
 
-    const dockItem = document.createElement('button');
-    dockItem.type = 'button';
-    dockItem.className = 'pa-menu-item';
-    dockItem.dataset.action = 'dock';
-    dockItem.setAttribute('role', 'menuitem');
-    dockItem.setAttribute('aria-label', 'Dock to Left Edge');
-    setMarkup(dockItem, ICONS.minimize);
-    const dockLabel = document.createElement('span');
-    dockLabel.className = 'pa-menu-item-label';
-    dockLabel.textContent = 'Dock to Left Edge';
-    dockItem.appendChild(dockLabel);
-    const dockHint = document.createElement('span');
-    dockHint.className = 'pa-menu-item-hint';
-    dockHint.textContent = 'stops drawing';
-    dockItem.appendChild(dockHint);
-    dockItem.addEventListener('click', () => {
-      this.closeMenus();
-      this.setDrawingMode(false);
-    });
-    menu.appendChild(dockItem);
-
     const settingsItem = document.createElement('button');
     settingsItem.type = 'button';
     settingsItem.className = 'pa-menu-item';
@@ -617,6 +596,10 @@ export class FloatingToolbar {
     closeLabel.className = 'pa-menu-item-label';
     closeLabel.textContent = 'Hide Toolbar';
     closeItem.appendChild(closeLabel);
+    const closeHint = document.createElement('span');
+    closeHint.className = 'pa-menu-item-hint';
+    closeHint.textContent = 'removes the tab';
+    closeItem.appendChild(closeHint);
     closeItem.addEventListener('click', () => {
       this.closeMenus();
       this.hideToolbar();
