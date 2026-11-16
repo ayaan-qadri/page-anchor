@@ -18,6 +18,8 @@
   "include": [
     "entrypoints/**/*",
     "src/**/*",
-    "wxt.config.ts"
+    "wxt.config.ts",
+    "tests/**/*",
+    "e2e/**/*"
   ]
 }

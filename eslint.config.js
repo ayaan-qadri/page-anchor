@@ -25,11 +25,18 @@ export default [
       // The TS compiler already reports undefined identifiers.
       'no-undef': 'off',
       'no-empty': ['error', { allowEmptyCatch: true }],
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' },
       ],
+    },
+  },
+  {
+    // Test doubles stand in for loosely typed browser APIs.
+    files: ['tests/**/*.ts', 'e2e/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
   {
