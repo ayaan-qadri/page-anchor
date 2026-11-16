@@ -317,6 +317,11 @@ export class CanvasEngine {
     return [...this.elements];
   }
 
+  /** True while a pointer gesture (stroke, shape, drag, erase, marquee) is in progress. */
+  public isInteracting(): boolean {
+    return this.isPointerDown;
+  }
+
   public addElement(element: AnchorElement): void {
     let el = this.withMeasuredText(element);
     if (this.isDomAnchoringEnabled && !el.anchor) {

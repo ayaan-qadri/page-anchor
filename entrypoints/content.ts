@@ -6,12 +6,13 @@ import { ShortcutManager, isEditableTarget } from '../src/core/shortcuts';
 import {
   DEFAULT_SETTINGS,
   SETTINGS_STORAGE_KEY,
+  STORAGE_CHANGED_MESSAGE,
   getPageStorageKey,
   loadPageData,
   loadSettings,
   normalizeUrl,
   savePageData,
-  settingsFromStored,
+  type SyncBase,
 } from '../src/core/storage';
 import { AnchorElement, ExtensionSettings, PageAnchorData, ShortcutAction, ToolType } from '../src/types';
 import { SHADOW_STYLES } from '../src/ui/styles';
@@ -24,6 +25,7 @@ const HANDLED_MESSAGE_TYPES = new Set([
   'PAGE_ANCHOR_GET_STATUS',
   'PAGE_ANCHOR_CLEAR',
   'PAGE_ANCHOR_URL_CHANGED',
+  STORAGE_CHANGED_MESSAGE,
 ]);
 
 const HOST_ID = 'page-anchor-host';
@@ -33,8 +35,8 @@ const TAKEOVER_EVENT = 'page-anchor:takeover';
 
 const SAVE_DEBOUNCE_MS = 250;
 
-/** Marks that this tab's last own write removed the page's data key. */
-const REMOVED_MARKER = -1;
+/** Another tab's write is folded in quickly, but not mid-gesture. */
+const REMOTE_SYNC_DELAY_MS = 50;
 
 /** Pinned with !important so page CSS targeting `div` or `html > *` cannot hide or distort the overlay. */
 const HOST_STYLES: Record<string, string> = {
@@ -72,11 +74,6 @@ const TOOL_SHORTCUTS: Partial<Record<ShortcutAction, ToolType>> = {
   'tool-text': 'text',
   'tool-eraser': 'eraser',
 };
-
-interface StorageChange {
-  newValue?: unknown;
-  oldValue?: unknown;
-}
 
 type NavigationTarget = Window & { navigation?: EventTarget };
 
@@ -150,7 +147,11 @@ export default defineContentScript({
     let dirty = false;
     let editVersion = 0;
     let saveInFlight = 0;
-    let lastOwnWrite: number | null = null;
+    /** The stored version this tab's drawings derive from; saves merge against it so other tabs' edits survive. */
+    let syncBase: SyncBase = { elements: [], stamp: null };
+    /** Another tab changed this page while this tab was busy; fold it in on the next sync. */
+    let pendingRemote = false;
+    let syncChain: Promise<void> = Promise.resolve();
     let navToken = 0;
     let navigatingTo: string | null = null;
 
@@ -204,38 +205,70 @@ export default defineContentScript({
       showSaveError(error);
     };
 
-    const persist = async () => {
+    const showStored = (data: PageAnchorData | null) => {
+      applyPageData(data?.elements ?? [], data?.domAnchoringEnabled);
+      syncBase = { elements: engine.getElements(), stamp: data?.updatedAt ?? null };
+    };
+
+    /** Pushes local edits, or with nothing to push, folds in another tab's save; both go through the same merge. */
+    const syncWithStorage = async (forceWrite: boolean) => {
+      const version = editVersion;
+      const local = engine.getElements();
+      const result = await savePageData(
+        currentLoadedUrl,
+        local,
+        document.title,
+        engine.getDomAnchoringEnabled(),
+        syncBase,
+        !dirty
+      );
+      const stamp = result.data?.updatedAt ?? null;
+      if (!result.mergedRemote) {
+        syncBase = { elements: local, stamp };
+        if (version === editVersion) dirty = false;
+      } else if (version === editVersion && (forceWrite || !engine.isInteracting())) {
+        showStored(result.data);
+        dirty = false;
+      } else {
+        // Newer local edits arrived during the save; the next sync merges them against the old base.
+        pendingRemote = true;
+        scheduleSave(REMOTE_SYNC_DELAY_MS);
+      }
+    };
+
+    const syncOnce = async (forceWrite: boolean) => {
       if (saveTimeout !== null) {
         clearTimeout(saveTimeout);
         saveTimeout = null;
       }
-      if (!dirty || !loaded || torn) return;
+      if (!loaded || torn || (!dirty && !pendingRemote)) return;
 
-      const version = editVersion;
+      const hadPendingRemote = pendingRemote;
+      pendingRemote = false;
       saveInFlight++;
       try {
-        const written = await savePageData(
-          currentLoadedUrl,
-          engine.getElements(),
-          document.title,
-          engine.getDomAnchoringEnabled()
-        );
-        lastOwnWrite = written ? written.updatedAt : REMOVED_MARKER;
-        if (version === editVersion) dirty = false;
+        await syncWithStorage(forceWrite);
         if (!torn) toolbar.updateBadge();
       } catch (error) {
+        pendingRemote = pendingRemote || hadPendingRemote;
         handleSaveError(error);
       } finally {
         saveInFlight--;
       }
     };
 
-    const scheduleSave = () => {
+    /** Serialized so overlapping saves never merge against a base the other one is about to replace. */
+    const persist = (forceWrite = false): Promise<void> => {
+      syncChain = syncChain.then(() => syncOnce(forceWrite));
+      return syncChain;
+    };
+
+    const scheduleSave = (delay = SAVE_DEBOUNCE_MS) => {
       if (saveTimeout !== null) clearTimeout(saveTimeout);
       saveTimeout = window.setTimeout(() => {
         saveTimeout = null;
         void persist();
-      }, SAVE_DEBOUNCE_MS);
+      }, delay);
     };
 
     const markDirty = () => {
@@ -352,11 +385,14 @@ export default defineContentScript({
 
         setLoadedUrl(url);
         applyPageData(elements, saved?.domAnchoringEnabled);
-        lastOwnWrite = null;
+        syncBase = { elements: keepLocalEdits ? (saved?.elements ?? []) : engine.getElements(), stamp: saved?.updatedAt ?? null };
+        pendingRemote = false;
         loaded = true;
         hasLoadedOnce = true;
         dirty = keepLocalEdits;
         if (keepLocalEdits) scheduleSave();
+        // The URL can change again while this read is in flight; that navigation saw the old URL as current and bailed, so follow it now.
+        if (window.location.href !== url) void handleUrlChange();
       } catch {
         // Stay unloaded so nothing is written over drawings this tab could not read.
       } finally {
@@ -391,7 +427,7 @@ export default defineContentScript({
       navigatingTo = newUrl;
       try {
         ensureHostAttached();
-        if (loaded) await persist();
+        if (loaded) await persist(true);
         if (torn || window.location.href !== newUrl) return;
         loaded = false;
         dirty = false;
@@ -402,7 +438,7 @@ export default defineContentScript({
     };
 
     const flushIfDirty = () => {
-      if (dirty) void persist();
+      if (dirty) void persist(true);
     };
 
     window.addEventListener('beforeunload', flushIfDirty, { signal });
@@ -427,30 +463,24 @@ export default defineContentScript({
       { signal }
     );
 
-    const onStorageChanged = (changes: Record<string, StorageChange>, areaName: string) => {
-      if (torn || areaName !== 'local') return;
-
-      const settingsChange = changes[SETTINGS_STORAGE_KEY];
-      if (settingsChange) {
-        const next = settingsFromStored(settingsChange.newValue);
+    const onStorageChanged = async (keys: string[]) => {
+      if (torn) return;
+      if (keys.includes(SETTINGS_STORAGE_KEY)) {
+        const next = await loadSettings();
+        if (torn) return;
         if (JSON.stringify(next) !== JSON.stringify(settings)) {
           const modeChanged = next.urlMatchMode !== settings.urlMatchMode;
           applySettings(next);
           if (modeChanged && loaded && !dirty && saveInFlight === 0) {
             void loadPage(currentLoadedUrl);
+            return;
           }
         }
       }
-
-      const pageChange = changes[currentPageKey];
-      if (!pageChange || !loaded || dirty || saveInFlight > 0) return;
-
-      const incoming = pageChange.newValue as PageAnchorData | undefined;
-      const isOwnWrite = incoming ? incoming.updatedAt === lastOwnWrite : lastOwnWrite === REMOVED_MARKER;
-      if (isOwnWrite) return;
-
-      lastOwnWrite = null;
-      applyPageData(incoming?.elements ?? [], incoming?.domAnchoringEnabled);
+      if (loaded && keys.includes(currentPageKey)) {
+        pendingRemote = true;
+        scheduleSave(REMOTE_SYNC_DELAY_MS);
+      }
     };
 
     const onMessage = (msg: unknown, _sender: unknown, sendResponse: (response?: unknown) => void): boolean => {
@@ -481,6 +511,11 @@ export default defineContentScript({
           void handleUrlChange();
           sendResponse({ success: true });
           break;
+        case STORAGE_CHANGED_MESSAGE: {
+          const keys = (msg as { keys?: unknown }).keys;
+          if (Array.isArray(keys)) void onStorageChanged(keys.filter((k): k is string => typeof k === 'string'));
+          break;
+        }
       }
       // Every response above is sent synchronously, so the channel can close.
       return false;
@@ -488,9 +523,7 @@ export default defineContentScript({
 
     const api = getExtensionApi();
     const runtimeEvents = api?.runtime?.onMessage;
-    const storageEvents = api?.storage?.onChanged;
     runtimeEvents?.addListener(onMessage);
-    storageEvents?.addListener(onStorageChanged);
 
     function teardown(): void {
       if (torn) return;
@@ -506,7 +539,6 @@ export default defineContentScript({
       };
       safely(() => shortcutManager.detach());
       safely(() => runtimeEvents?.removeListener(onMessage));
-      safely(() => storageEvents?.removeListener(onStorageChanged));
       safely(() => textEditor.close());
       safely(() => toolbar.destroy());
       safely(() => engine.destroy());

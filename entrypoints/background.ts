@@ -1,6 +1,6 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { getExtensionApi, injectContentScript } from '../src/core/inject';
-import { rekeySavedPages } from '../src/core/storage';
+import { STORAGE_CHANGED_MESSAGE, rekeySavedPages, setStorageChangeRelay, type StorageChangedMessage } from '../src/core/storage';
 
 export default defineBackground(() => {
   const maybeExt = getExtensionApi();
@@ -46,12 +46,32 @@ export default defineBackground(() => {
 
   // The in-page toolbar's "Settings & Backup" item routes through the
   // background, because only an extension context can open the options page.
-  ext.runtime?.onMessage?.addListener((msg: unknown) => {
-    if ((msg as { type?: unknown } | null)?.type === 'PAGE_ANCHOR_OPEN_OPTIONS') {
+  ext.runtime?.onMessage?.addListener((msg: unknown, sender: { tab?: { id?: number } }) => {
+    const type = (msg as { type?: unknown } | null)?.type;
+    if (type === 'PAGE_ANCHOR_OPEN_OPTIONS') {
       ext.runtime.openOptionsPage?.();
+    } else if (type === STORAGE_CHANGED_MESSAGE) {
+      void relayStorageChange(msg as StorageChangedMessage, sender.tab?.id);
     }
     return false;
   });
+
+  setStorageChangeRelay((keys) => void relayStorageChange({ type: STORAGE_CHANGED_MESSAGE, keys }, undefined));
+
+  async function relayStorageChange(msg: StorageChangedMessage, fromTabId: number | undefined): Promise<void> {
+    if (!Array.isArray(msg.keys)) return;
+    const relayed: StorageChangedMessage = { type: STORAGE_CHANGED_MESSAGE, keys: msg.keys.filter((k) => typeof k === 'string') };
+    try {
+      const tabs = await ext.tabs.query({});
+      for (const tab of tabs) {
+        if (tab.id === undefined || tab.id === fromTabId) continue;
+        try {
+          const sent = ext.tabs.sendMessage(tab.id, relayed);
+          if (sent && typeof sent.catch === 'function') sent.catch(() => {});
+        } catch {}
+      }
+    } catch {}
+  }
 
   // Page scripts call history.pushState in the main world, which the content script cannot observe on every browser.
   ext.tabs?.onUpdated?.addListener((tabId: number, changeInfo: { url?: string }) => {

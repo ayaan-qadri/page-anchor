@@ -11,6 +11,8 @@ export interface PageAnchorData {
   updatedAt: number;
   elements: AnchorElement[];
   domAnchoringEnabled?: boolean;
+  /** Recently deleted element ids, so concurrent saves from several tabs cannot resurrect or lose drawings. */
+  deletedIds?: string[];
 }
 
 export interface PageMetadataSummary {

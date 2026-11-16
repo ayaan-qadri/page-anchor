@@ -7,6 +7,7 @@ import {
 } from '../types/storage.types';
 import { computeBoundingBox, isShapeType } from './geometry';
 import { getExtensionApi } from './inject';
+import { MAX_DELETED_IDS, mergeDeletedIds, mergePageElements, sameElements } from './merge';
 import { DEFAULT_SHORTCUTS, canonicalizeShortcut } from './shortcuts';
 
 export type { ExtensionSettings, PageAnchorData, PageMetadataSummary, UrlMatchMode };
@@ -122,16 +123,46 @@ async function storageGet(key: string | null): Promise<StoredItems> {
   return result ?? {};
 }
 
+/** Sent after every write and relayed by the background to the other tabs, which re-read only keys they display. */
+export const STORAGE_CHANGED_MESSAGE = 'PAGE_ANCHOR_STORAGE_CHANGED';
+
+export interface StorageChangedMessage {
+  type: typeof STORAGE_CHANGED_MESSAGE;
+  keys: string[];
+}
+
+/** storage.onChanged would hand every tab the full old and new value of each write, which costs every open tab hundreds of ms for a large page, so tabs get key names only. */
+let localRelay: ((keys: string[]) => void) | null = null;
+
+/** The background cannot message itself, so it relays its own writes directly. */
+export function setStorageChangeRelay(relay: (keys: string[]) => void): void {
+  localRelay = relay;
+}
+
+function announceChange(keys: string[]): void {
+  if (localRelay) {
+    localRelay(keys);
+    return;
+  }
+  const message: StorageChangedMessage = { type: STORAGE_CHANGED_MESSAGE, keys };
+  try {
+    const sent = getExtensionApi()?.runtime.sendMessage(message);
+    if (sent && typeof sent.catch === 'function') sent.catch(() => {});
+  } catch {}
+}
+
 async function storageSet(data: StoredItems): Promise<void> {
   const area = getStorageArea();
   if (!area) return;
   await area.set(data);
+  announceChange(Object.keys(data));
 }
 
 async function storageRemove(keys: string | string[]): Promise<void> {
   const area = getStorageArea();
   if (!area) return;
   await area.remove(keys);
+  announceChange(Array.isArray(keys) ? keys : [keys]);
 }
 
 let writeChain: Promise<unknown> = Promise.resolve();
@@ -227,39 +258,79 @@ export async function loadPageData(rawUrl: string): Promise<PageAnchorData | nul
 }
 
 /** Resolves with what was written, or `null` when the page was emptied and its key removed. */
+/** The stored version a tab's drawings derive from; `stamp` is its `updatedAt`, or null when nothing was stored. */
+export interface SyncBase {
+  elements: readonly AnchorElement[];
+  stamp: number | null;
+}
+
+export interface SaveResult {
+  /** What storage now holds for the page, or null when it holds nothing. */
+  data: PageAnchorData | null;
+  /** True when another tab's changes were folded in, so the caller should show `data` instead of its own state. */
+  mergedRemote: boolean;
+  /** False when storage already matched and nothing was written. */
+  wrote: boolean;
+}
+
 export async function savePageData(
   rawUrl: string,
   elements: AnchorElement[],
   pageTitle: string,
-  domAnchoringEnabled?: boolean
-): Promise<PageAnchorData | null> {
+  domAnchoringEnabled?: boolean,
+  base?: SyncBase,
+  /** Set when this tab has no edits of its own: storage is only touched if another tab's save needs folding in. */
+  onlyIfRemoteMoved = false
+): Promise<SaveResult> {
   return enqueueWrite(async () => {
     const settings = await readSettings();
     const normalized = normalizeUrl(rawUrl, settings.urlMatchMode);
     const key = getStorageKey(normalized);
 
-    if (elements.length === 0) {
-      await removePage(normalized);
-      return null;
-    }
-
     const existing = await storageGet(key);
     const existingData = existing[key] as PageAnchorData | undefined;
+    const remoteMoved = base !== undefined && (existingData?.updatedAt ?? null) !== base.stamp;
+    if (onlyIfRemoteMoved && !remoteMoved) return { data: existingData ?? null, mergedRemote: false, wrote: false };
+
+    const remoteElements = existingData?.elements ?? [];
+    const remoteDeleted = existingData?.deletedIds ?? [];
+    const next = remoteMoved ? mergePageElements(base.elements, elements, existingData ? remoteElements : null, remoteDeleted) : elements;
+    const deletedIds = base ? mergeDeletedIds(base.elements, elements, remoteDeleted) : remoteDeleted;
+    const mergedRemote = remoteMoved && !sameElements(next, elements);
+    const anchoring = domAnchoringEnabled !== undefined ? domAnchoringEnabled : existingData?.domAnchoringEnabled;
+
+    if (
+      remoteMoved &&
+      existingData &&
+      sameElements(next, remoteElements) &&
+      anchoring === existingData.domAnchoringEnabled &&
+      deletedIds.length === remoteDeleted.length
+    ) {
+      return { data: existingData, mergedRemote, wrote: false };
+    }
+
+    if (next.length === 0) {
+      if (!existingData) return { data: null, mergedRemote, wrote: false };
+      await removePage(normalized);
+      return { data: null, mergedRemote, wrote: true };
+    }
 
     const data: PageAnchorData = {
       url: rawUrl,
       normalizedUrl: normalized,
       pageTitle: pageTitle || (typeof document !== 'undefined' ? document.title : '') || rawUrl,
-      updatedAt: Date.now(),
-      elements,
-      domAnchoringEnabled: domAnchoringEnabled !== undefined ? domAnchoringEnabled : existingData?.domAnchoringEnabled,
+      // Strictly increasing, so a tab can tell its own write from another tab's write in the same millisecond.
+      updatedAt: Math.max(Date.now(), (existingData?.updatedAt ?? 0) + 1),
+      elements: next,
+      domAnchoringEnabled: anchoring,
+      ...(deletedIds.length > 0 ? { deletedIds } : {}),
     };
 
     await storageSet({ [key]: data });
     await updateIndex((index) => {
       index[normalized] = summarize(data);
     });
-    return data;
+    return { data, mergedRemote, wrote: true };
   });
 }
 
@@ -539,6 +610,9 @@ function sanitizePageData(raw: Record<string, unknown>): PageAnchorData {
       ? raw.elements.map(sanitizeElement).filter((e): e is AnchorElement => e !== null)
       : [],
     domAnchoringEnabled: typeof raw.domAnchoringEnabled === 'boolean' ? raw.domAnchoringEnabled : undefined,
+    ...(Array.isArray(raw.deletedIds)
+      ? { deletedIds: raw.deletedIds.filter((id): id is string => typeof id === 'string').slice(-MAX_DELETED_IDS) }
+      : {}),
   };
 }
 

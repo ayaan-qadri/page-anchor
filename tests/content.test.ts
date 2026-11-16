@@ -8,12 +8,10 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
   let mockChrome: any;
   let messageListener: ((msg: any, sender: any, sendResponse: (r?: any) => void) => boolean) | null = null;
   let mockLocalStorage: Record<string, any>;
-  let storageListener: ((changes: Record<string, any>, area: string) => void) | null = null;
 
   beforeEach(() => {
     mockLocalStorage = {};
     messageListener = null;
-    storageListener = null;
 
     mockChrome = {
       runtime: {
@@ -22,14 +20,9 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
             messageListener = fn;
           }),
         },
+        sendMessage: vi.fn(() => Promise.resolve()),
       },
       storage: {
-        onChanged: {
-          addListener: vi.fn((fn) => {
-            storageListener = fn;
-          }),
-          removeListener: vi.fn(),
-        },
         local: {
           get: vi.fn((key) => {
             if (typeof key === 'string') return Promise.resolve({ [key]: mockLocalStorage[key] });
@@ -328,30 +321,39 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
       expect(undoButton().disabled).toBe(false);
     });
 
+    const notify = (keys: string[]) => messageListener?.({ type: 'PAGE_ANCHOR_STORAGE_CHANGED', keys }, {}, vi.fn());
+
     it('live-reloads drawings saved by another tab when this tab has no local edits', async () => {
       contentDefinition.main(ctx);
       await wait(20);
       expect(status().count).toBe(0);
 
-      const incoming = { url: window.location.href, elements: [stroke('x'), stroke('y')], updatedAt: 99 };
-      storageListener?.({ [pageKey()]: { newValue: incoming } }, 'local');
+      mockLocalStorage[pageKey()] = { url: window.location.href, elements: [stroke('x'), stroke('y')], updatedAt: 99 };
+      notify([pageKey()]);
+      await wait(120);
       expect(status().count).toBe(2);
 
-      storageListener?.({ [pageKey()]: { oldValue: incoming } }, 'local');
+      delete mockLocalStorage[pageKey()];
+      notify([pageKey()]);
+      await wait(120);
       expect(status().count).toBe(0);
     });
 
-    it('ignores remote changes while it has unsaved edits', async () => {
+    it('merges another tab’s drawings into unsaved local edits instead of dropping either', async () => {
       mockLocalStorage[pageKey()] = { url: window.location.href, elements: [stroke('a')], updatedAt: 1 };
       contentDefinition.main(ctx);
       await wait(20);
 
       messageListener?.({ type: 'PAGE_ANCHOR_CLEAR' }, {}, vi.fn());
-      storageListener?.({ [pageKey()]: { newValue: { elements: [stroke('r1'), stroke('r2')], updatedAt: 50 } } }, 'local');
-      expect(status().count).toBe(0);
+      mockLocalStorage[pageKey()] = { url: window.location.href, elements: [stroke('a'), stroke('r1'), stroke('r2')], updatedAt: 50 };
+      notify([pageKey()]);
+      await wait(400);
+
+      expect(status().count).toBe(2);
+      expect(mockLocalStorage[pageKey()].elements.map((e: { id: string }) => e.id)).toEqual(['r1', 'r2']);
     });
 
-    it('ignores the change event caused by its own save', async () => {
+    it('keeps undo history when a notice arrives but its drawings did not change', async () => {
       mockLocalStorage[pageKey()] = { url: window.location.href, elements: [stroke('a')], updatedAt: 1 };
       contentDefinition.main(ctx);
       await wait(20);
@@ -360,15 +362,28 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
       await wait(320);
       expect(undoButton().disabled).toBe(false);
 
-      storageListener?.({ [pageKey()]: { oldValue: { elements: [stroke('a')] } } }, 'local');
+      notify([pageKey(), 'page_anchor_index']);
+      await wait(120);
       expect(undoButton().disabled).toBe(false);
+    });
+
+    it('ignores notices about other pages', async () => {
+      mockLocalStorage[pageKey()] = { url: window.location.href, elements: [stroke('a')], updatedAt: 1 };
+      contentDefinition.main(ctx);
+      await wait(20);
+      mockLocalStorage[pageKey()] = { url: window.location.href, elements: [], updatedAt: 7 };
+      notify(['page_anchor_data:https://elsewhere.example/']);
+      await wait(120);
+      expect(status().count).toBe(1);
     });
 
     it('applies settings changed in another tab', async () => {
       contentDefinition.main(ctx);
       await wait(20);
 
-      storageListener?.({ page_anchor_settings: { newValue: { shortcuts: { 'tool-pen': 'g' } } } }, 'local');
+      mockLocalStorage['page_anchor_settings'] = { shortcuts: { 'tool-pen': 'g' } };
+      notify(['page_anchor_settings']);
+      await wait(50);
       messageListener?.({ type: 'PAGE_ANCHOR_TOGGLE' }, {}, vi.fn());
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true, cancelable: true }));
 

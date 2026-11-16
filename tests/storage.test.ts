@@ -387,6 +387,32 @@ describe('Storage Engine: Persistence with Mocked Chrome Storage', () => {
       expect(Object.keys(mockStore).filter((k) => k.startsWith('page_anchor_data:'))).toHaveLength(0);
     });
 
+    it('merges another tab’s save instead of overwriting it', async () => {
+      const url = 'https://example.com/shared';
+      const a = el('a');
+      const first = await savePageData(url, [a], 'S');
+      const base = { elements: [a], stamp: first.data!.updatedAt };
+
+      const tabB = await savePageData(url, [a, el('from-b')], 'S', undefined, base);
+      expect(tabB.mergedRemote).toBe(false);
+
+      const tabA = await savePageData(url, [a, el('from-a')], 'S', undefined, base);
+      expect(tabA.mergedRemote).toBe(true);
+      expect(tabA.data!.elements.map((e) => e.id)).toEqual(['a', 'from-b', 'from-a']);
+      expect(tabA.data!.updatedAt).toBeGreaterThan(tabB.data!.updatedAt);
+      expect((await loadPageData(url))!.elements.map((e) => e.id)).toEqual(['a', 'from-b', 'from-a']);
+    });
+
+    it('skips the write when merging leaves storage unchanged', async () => {
+      const url = 'https://example.com/noop';
+      const a = el('a');
+      const first = await savePageData(url, [a], 'S');
+      const other = await savePageData(url, [a, el('b')], 'S');
+      const stale = await savePageData(url, [a], 'S', undefined, { elements: [a], stamp: first.data!.updatedAt });
+      expect(stale.wrote).toBe(false);
+      expect(stale.data!.updatedAt).toBe(other.data!.updatedAt);
+    });
+
     it('serializes concurrent saves so no index entry is lost', async () => {
       await Promise.all(
         Array.from({ length: 8 }, (_, i) => savePageData(`https://example.com/p${i}`, [el(`e${i}`)], `P${i}`))

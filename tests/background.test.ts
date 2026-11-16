@@ -8,6 +8,7 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
     onInstalled?: (details?: { reason?: string }) => Promise<void>;
     tabUpdated?: (tabId: number, changeInfo: { url?: string; status?: string }) => void;
     actionClick?: (tab?: any) => Promise<void>;
+    message?: (msg: unknown, sender: { tab?: { id?: number } }) => boolean;
   };
 
   beforeEach(() => {
@@ -41,6 +42,11 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
         },
       },
       runtime: {
+        onMessage: {
+          addListener: vi.fn((fn) => {
+            listeners.message = fn;
+          }),
+        },
         onInstalled: {
           addListener: vi.fn((fn) => {
             listeners.onInstalled = fn;
@@ -54,6 +60,19 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
 
   afterEach(() => {
     delete (globalThis as any).chrome;
+  });
+
+  it('relays storage change notices to every other tab, key names only', async () => {
+    backgroundDefinition.main();
+    mockChrome.tabs.query.mockResolvedValue([{ id: 1 }, { id: 2 }, { id: 3 }]);
+    mockChrome.tabs.sendMessage.mockResolvedValue(undefined);
+
+    listeners.message?.({ type: 'PAGE_ANCHOR_STORAGE_CHANGED', keys: ['page_anchor_data:https://a/', 42] }, { tab: { id: 2 } });
+    await new Promise((r) => setTimeout(r, 0));
+
+    const targets = mockChrome.tabs.sendMessage.mock.calls.map((c: [number, unknown]) => c[0]);
+    expect(targets).toEqual([1, 3]);
+    expect(mockChrome.tabs.sendMessage).toHaveBeenCalledWith(1, { type: 'PAGE_ANCHOR_STORAGE_CHANGED', keys: ['page_anchor_data:https://a/'] });
   });
 
   it('registers all required extension event listeners on background boot', () => {

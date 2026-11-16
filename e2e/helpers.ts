@@ -49,7 +49,14 @@ export async function readStorage(context: BrowserContext): Promise<Record<strin
 export async function writeStorage(context: BrowserContext, data: Record<string, unknown>): Promise<void> {
   const worker = await getServiceWorker(context);
   if (!worker) throw new Error('extension service worker not found');
-  await worker.evaluate((d) => chrome.storage.local.set(d), data);
+  await worker.evaluate(async (d) => {
+    await chrome.storage.local.set(d);
+    // Same notice every in-extension writer sends, so open tabs react as they would to a real change.
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (tab.id !== undefined) chrome.tabs.sendMessage(tab.id, { type: 'PAGE_ANCHOR_STORAGE_CHANGED', keys: Object.keys(d) }).catch(() => {});
+    }
+  }, data);
 }
 
 export async function clearStorage(context: BrowserContext): Promise<void> {
