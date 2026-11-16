@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from '@playwright/test';
 import type { AnchorElement, ShapeElement, StrokeElement, TextElement } from '../src/types/engine.types';
 import { test, expect } from './fixtures';
-import { drawStroke, openToolbar, pa, readStorage, startServer, storedElementCount, writeStorage } from './helpers';
+import { drawStroke, openToolbar, pa, readStorage, startServer, storedElementCount, waitForContentScript, writeStorage } from './helpers';
 
 const MISSING_ANCHOR = {
   selector: '#definitely-not-on-this-page',
@@ -67,7 +67,7 @@ async function openPage(context: BrowserContext, url: string): Promise<Page> {
   const page = context.pages()[0] || (await context.newPage());
   await page.goto(url);
   await page.waitForLoadState('domcontentloaded');
-  await expect(page.locator('#page-anchor-host')).toBeAttached();
+  await waitForContentScript(page);
   return page;
 }
 

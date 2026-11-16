@@ -61,10 +61,15 @@ async function toggleToolbar() {
     `${base}*`
   );
   if (!tabs.length) return;
-  await background.evaluate(
-    (tabId) => chrome.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_TOGGLE' }),
-    tabs[0].id
-  );
+  // The content script starts once the page is idle, so retry until it answers.
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const delivered = await background.evaluate(
+      (tabId) => chrome.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_TOGGLE' }).then(() => true, () => false),
+      tabs[0].id
+    );
+    if (delivered) return;
+    await new Promise((r) => setTimeout(r, 100));
+  }
 }
 
 async function openToolbar(page) {

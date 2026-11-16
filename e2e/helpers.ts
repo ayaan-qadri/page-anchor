@@ -24,6 +24,28 @@ export async function sendToggle(page: Page, context: BrowserContext): Promise<v
   }, page.url());
 }
 
+/** Waits until the content script in `page` answers; it builds no DOM on pages without drawings, so the host element is not a readiness signal. */
+export async function waitForContentScript(page: Page): Promise<void> {
+  const worker = await getServiceWorker(page.context());
+  if (!worker) throw new Error('extension service worker not found');
+  await expect
+    .poll(
+      () =>
+        worker.evaluate(async (url: string) => {
+          const tabs = await chrome.tabs.query({});
+          const tab = tabs.find((t) => t.url === url);
+          if (tab?.id === undefined) return false;
+          try {
+            return !!(await chrome.tabs.sendMessage(tab.id, { type: 'PAGE_ANCHOR_GET_STATUS' }));
+          } catch {
+            return false;
+          }
+        }, page.url()),
+      { timeout: 10000 }
+    )
+    .toBe(true);
+}
+
 export async function openToolbar(page: Page, context: BrowserContext): Promise<void> {
   const toolbar = pa(page, '.pa-toolbar');
   if (await toolbar.isVisible()) return;

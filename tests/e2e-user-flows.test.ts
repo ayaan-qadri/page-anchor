@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import contentDefinition from '../entrypoints/content';
+import contentDefinition from '../entrypoints/page-app';
 
-const ctx = {} as import('wxt/utils/content-script-context').ContentScriptContext;
 import { loadPageData } from '../src/core/storage';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -65,22 +64,21 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
   });
 
   it('EXECUTES COMPLETE REAL USER LIFECYCLE: Open Toolbar -> Draw Pen & Shapes -> Add Text -> Select & Move -> Eraser -> Undo/Redo -> Persistence', async () => {
-    contentDefinition.main(ctx);
+    contentDefinition.main();
     await new Promise((r) => setTimeout(r, 20));
 
-    const host = document.getElementById('page-anchor-host') as HTMLElement;
-    expect(host).not.toBeNull();
-    const shadow = host.shadowRoot!;
-    expect(shadow).not.toBeNull();
-
-    // The toolbar starts hidden; the extension icon brings it up.
-    const toolbarWrapper = shadow.querySelector('.pa-toolbar-wrapper') as HTMLElement;
-    expect(toolbarWrapper.style.display).toBe('none');
+    // Nothing is built on a page without drawings until the user asks for the toolbar.
+    expect(document.getElementById('page-anchor-host')).toBeNull();
 
     window.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'd', altKey: true, shiftKey: true, bubbles: true, cancelable: true })
     );
     await new Promise((r) => setTimeout(r, 20));
+
+    const host = document.getElementById('page-anchor-host') as HTMLElement;
+    expect(host).not.toBeNull();
+    const shadow = host.shadowRoot!;
+    const toolbarWrapper = shadow.querySelector('.pa-toolbar-wrapper') as HTMLElement;
 
     const toolbar = shadow.querySelector('.pa-toolbar') as HTMLElement;
     expect(toolbar).not.toBeNull();
@@ -200,16 +198,14 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
   });
 
   it('VERIFIES SMART DOM ANCHORING: Annotations dynamically follow moving elements', async () => {
-    contentDefinition.main(ctx);
+    contentDefinition.main();
     await new Promise((r) => setTimeout(r, 20));
-
-    const host = document.getElementById('page-anchor-host') as HTMLElement;
-    const shadow = host.shadowRoot!;
 
     window.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'd', altKey: true, shiftKey: true, bubbles: true, cancelable: true })
     );
     await new Promise((r) => setTimeout(r, 20));
+    const shadow = (document.getElementById('page-anchor-host') as HTMLElement).shadowRoot!;
 
     const toolbar = shadow.querySelector('.pa-toolbar') as HTMLElement;
     expect(toolbar).not.toBeNull();

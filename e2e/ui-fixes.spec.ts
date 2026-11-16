@@ -1,7 +1,7 @@
 import fs from 'fs';
 import type { BrowserContext, Page } from '@playwright/test';
 import { test, expect } from './fixtures';
-import { drawStroke, openToolbar, pa, readStorage, sendToggle, startServer, storedElementCount, writeStorage } from './helpers';
+import { drawStroke, openToolbar, pa, readStorage, sendToggle, startServer, storedElementCount, waitForContentScript, writeStorage } from './helpers';
 
 const SETTINGS_KEY = 'page_anchor_settings';
 
@@ -36,8 +36,7 @@ async function firstPage(context: BrowserContext): Promise<Page> {
 
 /** Waits until the content script has mounted and had time to apply stored settings. */
 async function waitForMount(page: Page): Promise<void> {
-  await expect(page.locator('#page-anchor-host')).toBeAttached();
-  await page.waitForTimeout(500);
+  await waitForContentScript(page);
 }
 
 test.describe('UI review fixes', () => {

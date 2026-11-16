@@ -8,10 +8,22 @@ import {
 import { computeBoundingBox, isShapeType } from './geometry';
 import { getExtensionApi } from './inject';
 import { MAX_DELETED_IDS, mergeDeletedIds, mergePageElements, sameElements } from './merge';
+import {
+  DATA_KEY_PREFIX,
+  INDEX_KEY,
+  SETTINGS_STORAGE_KEY,
+  STORAGE_CHANGED_MESSAGE,
+  STORAGE_NAMESPACE,
+  getPageStorageKey,
+  getStorageKey,
+  normalizeUrl,
+  type StorageChangedMessage,
+} from './page-key';
 import { DEFAULT_SHORTCUTS, canonicalizeShortcut } from './shortcuts';
 
 export type { ExtensionSettings, PageAnchorData, PageMetadataSummary, UrlMatchMode };
-export { DEFAULT_SHORTCUTS };
+export { DEFAULT_SHORTCUTS, SETTINGS_STORAGE_KEY, STORAGE_CHANGED_MESSAGE, getPageStorageKey, normalizeUrl };
+export type { StorageChangedMessage };
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   shortcuts: DEFAULT_SHORTCUTS,
@@ -28,71 +40,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   orphanedAnchorMode: 'hide',
 };
 
-const TRACKING_PARAMS = new Set([
-  'utm_source',
-  'utm_medium',
-  'utm_campaign',
-  'utm_term',
-  'utm_content',
-  'fbclid',
-  'gclid',
-  'msclkid',
-  'mc_eid',
-]);
-
-/** Hash routers (`#/path`, `#!path`) put the page identity in the fragment. */
-function isRouteHash(hash: string): boolean {
-  return hash.startsWith('#/') || hash.startsWith('#!');
-}
-
-export function normalizeUrl(rawUrl: string, mode: UrlMatchMode = 'clean'): string {
-  try {
-    const parsed = new URL(rawUrl);
-
-    if (mode === 'domain') {
-      return parsed.origin;
-    }
-
-    if (mode === 'exact') {
-      return parsed.href;
-    }
-
-    const keysToRemove: string[] = [];
-    parsed.searchParams.forEach((_, key) => {
-      if (TRACKING_PARAMS.has(key.toLowerCase()) || key.startsWith('utm_')) {
-        keysToRemove.push(key);
-      }
-    });
-    keysToRemove.forEach((k) => parsed.searchParams.delete(k));
-
-    parsed.searchParams.sort();
-    if (!isRouteHash(parsed.hash)) parsed.hash = '';
-    if (parsed.pathname.length > 1 && parsed.pathname.endsWith('/')) {
-      parsed.pathname = parsed.pathname.replace(/\/+$/, '') || '/';
-    }
-
-    return parsed.href;
-  } catch {
-    return rawUrl;
-  }
-}
-
-/** Namespace owning every key; also the backup export/import allowlist. */
-const STORAGE_NAMESPACE = 'page_anchor_';
-
-const INDEX_KEY = `${STORAGE_NAMESPACE}index`;
-export const SETTINGS_STORAGE_KEY = `${STORAGE_NAMESPACE}settings`;
 const SETTINGS_KEY = SETTINGS_STORAGE_KEY;
-const DATA_KEY_PREFIX = `${STORAGE_NAMESPACE}data:`;
-
-function getStorageKey(normalizedUrl: string): string {
-  return `${DATA_KEY_PREFIX}${normalizedUrl}`;
-}
-
-/** Storage key holding the drawings for `rawUrl` under `mode`. */
-export function getPageStorageKey(rawUrl: string, mode: UrlMatchMode): string {
-  return getStorageKey(normalizeUrl(rawUrl, mode));
-}
 
 /**
  * True only for absolute `http:`/`https:` URLs. Stored URLs can originate from
@@ -122,15 +70,6 @@ async function storageGet(key: string | null): Promise<StoredItems> {
   return result ?? {};
 }
 
-/** Sent after every write and relayed by the background to the other tabs, which re-read only keys they display. */
-export const STORAGE_CHANGED_MESSAGE = 'PAGE_ANCHOR_STORAGE_CHANGED';
-
-export interface StorageChangedMessage {
-  type: typeof STORAGE_CHANGED_MESSAGE;
-  keys: string[];
-}
-
-/** storage.onChanged would hand every tab the full old and new value of each write, which costs every open tab hundreds of ms for a large page, so tabs get key names only. */
 let localRelay: ((keys: string[]) => void) | null = null;
 
 /** The background cannot message itself, so it relays its own writes directly. */
@@ -138,6 +77,7 @@ export function setStorageChangeRelay(relay: (keys: string[]) => void): void {
   localRelay = relay;
 }
 
+/** storage.onChanged would hand every tab the full old and new value of each write, which costs every open tab hundreds of ms for a large page, so tabs get key names only. */
 function announceChange(keys: string[]): void {
   if (localRelay) {
     localRelay(keys);

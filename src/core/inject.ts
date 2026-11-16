@@ -4,6 +4,12 @@ export type ExtensionApi = typeof Browser;
 
 const CONTENT_SCRIPT_PATH = 'content-scripts/content.js';
 
+/** The drawing app, injected into a tab only once the page has drawings or the user opens the toolbar. */
+export const APP_SCRIPT_PATH = 'page-app.js';
+
+/** Sent by the boot script to ask the background to inject the app into its tab. */
+export const LOAD_APP_MESSAGE = 'PAGE_ANCHOR_LOAD_APP';
+
 /** Resolved per call because the globals can be swapped (tests) or vanish (invalidated context). */
 export function getExtensionApi(): ExtensionApi | null {
   const scope = globalThis as unknown as { browser?: ExtensionApi; chrome?: ExtensionApi };
@@ -28,18 +34,18 @@ interface LegacyTabsApi {
   executeScript?: (tabId: number, details: { file: string }) => Promise<unknown>;
 }
 
-export async function injectContentScript(ext: ExtensionApi, tabId: number): Promise<boolean> {
+export async function injectContentScript(ext: ExtensionApi, tabId: number, file = CONTENT_SCRIPT_PATH): Promise<boolean> {
   try {
     if (ext.scripting?.executeScript) {
       await ext.scripting.executeScript({
         target: { tabId },
-        files: [CONTENT_SCRIPT_PATH],
+        files: [file],
       });
       return true;
     }
     const legacyTabs = ext.tabs as unknown as LegacyTabsApi | undefined;
     if (legacyTabs?.executeScript) {
-      await legacyTabs.executeScript(tabId, { file: CONTENT_SCRIPT_PATH });
+      await legacyTabs.executeScript(tabId, { file });
       return true;
     }
   } catch {

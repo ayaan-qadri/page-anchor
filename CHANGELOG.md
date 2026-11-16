@@ -7,6 +7,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Pages without drawings no longer pay for the extension. A tiny script checks
+  for saved drawings; the toolbar and drawing engine load only on pages that
+  have drawings or when you open the toolbar.
 - The toolbar never opens by itself when a page loads, even if it was open
   last time. Click the extension icon or use the shortcut to bring it up. The
   "Keep toolbar open by default" setting was removed.

@@ -296,7 +296,8 @@ Temporary add-ons are removed when Firefox closes. For a persistent install you'
 page-anchor/
 ├── entrypoints/
 │   ├── background.ts            # Service worker, commands, cross-tab messaging
-│   ├── content.ts               # Content script: mounts the overlay on each page
+│   ├── content.ts               # Tiny boot script on every page: loads the app only where needed
+│   ├── page-app.ts              # The drawing app, injected on demand
 │   ├── popup/                   # (removed — the icon now opens the in-page toolbar)
 │   └── options/                 # Settings page: shortcuts, persistence, saved pages, backup
 │       ├── index.html
@@ -355,9 +356,9 @@ If you're changing anything in the renderer or the anchoring logic, the perf and
 ## Security & Privacy
 
 - **Local only.** Drawings, notes, and settings live in `browser.storage.local`. Nothing is sent anywhere; there are no accounts and no telemetry.
-- **Narrow, explained permissions.** `storage` for annotations and settings, `activeTab` to activate the toolbar on the current tab, and `scripting` on Chromium builds. The content script matches all URLs — that's what makes it possible to draw on arbitrary pages — but it only mounts the overlay and reads the annotations it stored itself. No network requests are made at runtime.
+- **Narrow, explained permissions.** `storage` for annotations and settings, `activeTab` to activate the toolbar on the current tab, and `scripting` on Chromium builds. The boot script matches all URLs, which is what makes it possible to draw on arbitrary pages, but it only checks whether the page has saved drawings and waits for you to open the toolbar. The drawing app is loaded into a tab only when that page has drawings or you open the toolbar. No network requests are made at runtime.
 - **Encapsulated UI.** The overlay lives inside a shadow root, so it can't be styled by, or leak styles into, the page you're annotating.
-- **Minimal page mutation.** The extension adds its own host element and canvases to the page; it doesn't rewrite or restyle the site's own DOM.
+- **Minimal page mutation.** On pages without drawings the extension adds nothing to the page. Where it does run, it adds its own host element and canvases; it doesn't rewrite or restyle the site's own DOM.
 
 Full details: [Privacy Policy](PRIVACY.md) and [Security Policy](SECURITY.md).
 

@@ -620,6 +620,8 @@ async function scenarioReinjection() {
   const outcomes = [];
   for (let i = 0; i < 15; i++) outcomes.push(await inject());
   await page.waitForTimeout(600);
+  // The newest copy stays dormant until the toolbar is opened, so count instances after opening it.
+  await openToolbar(page);
   const shape = await page.evaluate(() => {
     const hosts = document.querySelectorAll('#page-anchor-host');
     const root = hosts[0]?.shadowRoot;
@@ -629,7 +631,6 @@ async function scenarioReinjection() {
       activeCanvases: root?.querySelectorAll('.page-anchor-active-canvas').length ?? 0,
     };
   });
-  await openToolbar(page);
   await page.keyboard.press('p');
   await stroke(page, 300, 300);
   await page.waitForTimeout(700);

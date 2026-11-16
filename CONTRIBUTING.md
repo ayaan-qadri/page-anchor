@@ -102,8 +102,9 @@ pnpm icons
 ## Project Architecture
 
 - **`entrypoints/`**:
-  - `background.ts`: Service worker that routes the toggle command and injects the overlay into open tabs.
-  - `content.ts`: Content script that mounts the Shadow DOM host and drives the drawing engine.
+  - `background.ts`: Service worker that routes the toggle command, injects the boot script into open tabs and the app on request, and relays storage change notices between tabs.
+  - `content.ts`: Tiny boot script that runs on every page. It checks for saved drawings and listens for the toolbar toggle, and asks the background to inject the app when needed. Keep it small: everything it imports runs on every site.
+  - `page-app.ts`: The drawing app (Shadow DOM host, engine, toolbar), injected into a tab on demand.
   - `options/`: Settings, shortcut rebinding, saved-page management, and backup.
 - **`src/core/`**:
   - `engine.ts`: Fixed-viewport dual-canvas rendering engine with frustum culling.

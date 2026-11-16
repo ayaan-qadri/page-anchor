@@ -5,6 +5,7 @@
  * the live built extension loaded in a real Chromium browser context.
  */
 import { test, expect } from './fixtures';
+import { waitForContentScript } from './helpers';
 import http from 'http';
 
 function pa(page: any, selector: string) {
@@ -135,9 +136,9 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     await page.goto(`http://localhost:${serverPort}/portal`);
     await page.waitForLoadState('domcontentloaded');
 
-    // 1. Verify extension host mounts into page
-    const host = page.locator('#page-anchor-host');
-    await expect(host).toBeAttached();
+    // 1. The extension is running, but builds nothing on a page without drawings
+    await waitForContentScript(page);
+    await expect(page.locator('#page-anchor-host')).toHaveCount(0);
 
     // 2. Toolbar starts hidden; open it via service worker action
     const toolbar = pa(page, '.pa-toolbar');

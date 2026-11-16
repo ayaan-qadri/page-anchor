@@ -8,7 +8,7 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
     onInstalled?: (details?: { reason?: string }) => Promise<void>;
     tabUpdated?: (tabId: number, changeInfo: { url?: string; status?: string }) => void;
     actionClick?: (tab?: any) => Promise<void>;
-    message?: (msg: unknown, sender: { tab?: { id?: number } }) => boolean;
+    message?: (msg: unknown, sender: { tab?: { id?: number } }, sendResponse?: (r?: unknown) => void) => boolean;
   };
 
   beforeEach(() => {
@@ -60,6 +60,16 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
 
   afterEach(() => {
     delete (globalThis as any).chrome;
+  });
+
+  it('injects the drawing app into the asking tab only, and reports the result', async () => {
+    backgroundDefinition.main();
+    const sendResponse = vi.fn();
+    const keepOpen = listeners.message?.({ type: 'PAGE_ANCHOR_LOAD_APP' }, { tab: { id: 9 } }, sendResponse);
+    expect(keepOpen).toBe(true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockChrome.scripting.executeScript).toHaveBeenCalledWith({ target: { tabId: 9 }, files: ['page-app.js'] });
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true });
   });
 
   it('relays storage change notices to every other tab, key names only', async () => {

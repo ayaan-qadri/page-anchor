@@ -8,6 +8,7 @@ import {
   readStorage,
   startServer,
   storedElementCount,
+  waitForContentScript,
   writeStorage,
   type TestServer,
 } from './helpers';
@@ -70,7 +71,7 @@ async function seedPage(context: BrowserContext, normalizedUrl: string, elements
 async function gotoReady(page: Page, url: string): Promise<void> {
   await page.goto(url);
   await page.waitForLoadState('domcontentloaded');
-  await expect(page.locator('#page-anchor-host')).toBeAttached();
+  await waitForContentScript(page);
 }
 
 async function drawOne(page: Page, context: BrowserContext, expected: string): Promise<void> {
@@ -146,9 +147,11 @@ test.describe('Page Anchor: content script fixes', () => {
     await expect(pa(tabB, '.pa-count-badge')).toHaveText('1');
   });
 
-  test('a re-injected content script takes over and keeps saving', async ({ context }) => {
+  test('a second copy of the boot script never tears down an open toolbar', async ({ context }) => {
     const page = context.pages()[0] || (await context.newPage());
     await gotoReady(page, `${server.origin}/takeover`);
+    await openToolbar(page, context);
+    await expect(page.locator('#page-anchor-host')).toHaveCount(1);
 
     const worker = await getServiceWorker(context);
     if (!worker) throw new Error('extension service worker not found');
@@ -159,7 +162,10 @@ test.describe('Page Anchor: content script fixes', () => {
       await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content-scripts/content.js'] });
     }, page.url());
 
+    // Same as the icon being clicked before the page finished loading: the first copy keeps the tab.
+    await page.waitForTimeout(300);
     await expect(page.locator('#page-anchor-host')).toHaveCount(1);
+    await expect(pa(page, '.pa-toolbar')).toBeVisible();
     await drawOne(page, context, '1');
     await expect(page.locator('#page-anchor-host')).toHaveCount(1);
     await expect.poll(() => storedElementCount(context, '/takeover')).toBe(1);

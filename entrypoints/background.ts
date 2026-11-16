@@ -1,5 +1,5 @@
 import { defineBackground } from 'wxt/utils/define-background';
-import { getExtensionApi, injectContentScript } from '../src/core/inject';
+import { APP_SCRIPT_PATH, LOAD_APP_MESSAGE, getExtensionApi, injectContentScript } from '../src/core/inject';
 import { STORAGE_CHANGED_MESSAGE, rekeySavedPages, setStorageChangeRelay, type StorageChangedMessage } from '../src/core/storage';
 
 export default defineBackground(() => {
@@ -46,8 +46,15 @@ export default defineBackground(() => {
 
   // The in-page toolbar's "Settings & Backup" item routes through the
   // background, because only an extension context can open the options page.
-  ext.runtime?.onMessage?.addListener((msg: unknown, sender: { tab?: { id?: number } }) => {
+  ext.runtime?.onMessage?.addListener((msg: unknown, sender: { tab?: { id?: number } }, sendResponse: (response?: unknown) => void) => {
     const type = (msg as { type?: unknown } | null)?.type;
+    if (type === LOAD_APP_MESSAGE) {
+      const tabId = sender.tab?.id;
+      if (tabId === undefined) return false;
+      void injectContentScript(ext, tabId, APP_SCRIPT_PATH).then((ok) => sendResponse({ ok }));
+      // Keeps the channel open for the asynchronous injection result.
+      return true;
+    }
     if (type === 'PAGE_ANCHOR_OPEN_OPTIONS') {
       ext.runtime.openOptionsPage?.();
     } else if (type === STORAGE_CHANGED_MESSAGE) {
