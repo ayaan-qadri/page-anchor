@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { CanvasEngine } from '../src/core/engine';
 import { AnchorElement, StrokeElement, ShapeElement, TextElement } from '../src/types/engine.types';
 
 describe('Selection & Move All Engine: Multi-Select and Batch Manipulation', () => {
   let container: HTMLElement;
   let engine: CanvasEngine;
-  let mockChange: ReturnType<typeof vi.fn>;
+  let mockChange: Mock<(elements: AnchorElement[]) => void>;
 
   const sampleStroke: StrokeElement = {
     id: 'stroke-1',
@@ -101,19 +101,70 @@ describe('Selection & Move All Engine: Multi-Select and Batch Manipulation', () 
     engine.selectAll();
     expect(engine.getSelectedElements()).toHaveLength(3);
 
-    const canvas = container.querySelector('canvas:last-child') as HTMLCanvasElement;
+    const canvas = container.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
     expect(canvas).not.toBeNull();
+    engine.setDomAnchoringEnabled(false);
+    const before = engine.getElements();
 
-    const dx = 50;
-    const dy = -20;
-
-    (engine as any).selectedElements.forEach((el: AnchorElement) => {
-      (engine as any).moveElement(el, dx, dy);
-    });
+    // Press inside the rectangle, then drag everything by (50, -20).
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { clientX: 75, clientY: 65, button: 0, pointerId: 1 }));
+    window.dispatchEvent(new PointerEvent('pointermove', { clientX: 125, clientY: 45, pointerId: 1 }));
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: 125, clientY: 45, pointerId: 1 }));
 
     const elements = engine.getElements();
     const stroke = elements.find((el) => el.id === 'stroke-1') as StrokeElement;
+    const rect = elements.find((el) => el.id === 'shape-rect-1') as ShapeElement;
+    const text = elements.find((el) => el.id === 'text-1') as TextElement;
     expect(stroke.points[0]).toEqual({ x: 60, y: -10 });
+    expect(rect.startX).toBe(100);
+    expect(text.y).toBe(180);
+    expect(mockChange).toHaveBeenCalledTimes(1);
+
+    // Moving produces new objects; the pre-drag elements are untouched.
+    expect((before[0] as StrokeElement).points[0]).toEqual({ x: 10, y: 10 });
+    expect(before[0]).not.toBe(stroke);
+    expect(engine.getSelectedElements().map((el) => el.id)).toEqual(['stroke-1', 'shape-rect-1', 'text-1']);
+    expect(engine.getSelectedElements()[0]).toBe(stroke);
+  });
+
+  it('moveAll does not mutate the element objects it was given', () => {
+    const before = engine.getElements();
+    engine.moveAll(10, 10);
+    expect((before[1] as ShapeElement).startX).toBe(50);
+    expect((engine.getElements()[1] as ShapeElement).startX).toBe(60);
+  });
+
+  it('selectAll skips orphaned elements hidden by the orphan mode', () => {
+    const orphan: ShapeElement = {
+      ...sampleRect,
+      id: 'orphan-rect',
+      anchor: { selector: '#definitely-missing-node', initialRect: { left: 0, top: 0, width: 10, height: 10 } },
+    };
+    engine.setElements([JSON.parse(JSON.stringify(sampleStroke)), orphan]);
+
+    engine.setOrphanedAnchorMode('hide');
+    engine.selectAll();
+    expect(engine.getSelectedElements().map((el) => el.id)).toEqual(['stroke-1']);
+
+    engine.setOrphanedAnchorMode('dimmed');
+    engine.selectAll();
+    expect(engine.getSelectedElements().map((el) => el.id)).toEqual(['stroke-1', 'orphan-rect']);
+
+    // Switching back to hide drops the now-invisible orphan from the selection.
+    engine.setOrphanedAnchorMode('hide');
+    expect(engine.getSelectedElements().map((el) => el.id)).toEqual(['stroke-1']);
+  });
+
+  it('selectAll is a no-op when every element is a hidden orphan', () => {
+    const orphan: ShapeElement = {
+      ...sampleRect,
+      anchor: { selector: '#definitely-missing-node', initialRect: { left: 0, top: 0, width: 10, height: 10 } },
+    };
+    engine.setElements([orphan]);
+    engine.setTool('pen');
+    engine.selectAll();
+    expect(engine.getSelectedElements()).toHaveLength(0);
+    expect(engine.getTool()).toBe('pen');
   });
 
   it('deleteSelected removes all selected elements in one batch', () => {

@@ -53,7 +53,6 @@ export interface BaseElement {
 export interface StrokeElement extends BaseElement {
   type: 'pen' | 'highlighter';
   points: Point[];
-  smoothed?: boolean;
 }
 
 export interface ShapeElement extends BaseElement {
@@ -81,7 +80,6 @@ export type AnchorElement = StrokeElement | ShapeElement | TextElement;
 
 export interface EngineCallbacks {
   onElementsChange?: (elements: AnchorElement[]) => void;
-  onSelectionChange?: (selected: AnchorElement | null, selectedList?: AnchorElement[]) => void;
   onTextCreateRequested?: (pt: Point) => void;
   onDomAnchoringToggle?: (enabled: boolean) => void;
 }

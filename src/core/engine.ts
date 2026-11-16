@@ -12,11 +12,17 @@ import { OrphanedAnchorMode } from '../types/storage.types';
 import { DOMAnchorManager } from './anchor';
 import {
   computeBoundingBox,
+  FreehandOutline,
+  FreehandStrokeRenderOptions,
+  getFreehandOutline,
   intersectsBoundingBox,
   isPointNearElement,
+  isShapeElement,
+  isShapeType,
   renderArrowHead,
   renderFreehandStroke,
   simplifyPointsRDP,
+  translateFreehandOutline,
 } from './geometry';
 
 export type { EngineCallbacks };
@@ -28,11 +34,55 @@ export type { EngineCallbacks };
 const SELECTION_COLOR = '#8fa6cc';
 const SELECTION_BADGE_BG = 'rgba(56, 70, 106, 0.94)';
 
+const ORPHAN_DIM_FACTOR = 0.35;
+const TEXT_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+const TEXT_PADDING = 6;
+const TEXT_MIN_WIDTH = 60;
+const TEXT_MIN_HEIGHT = 30;
+
+interface EffectiveBBox {
+  bbox: BoundingBox;
+  deltaX: number;
+  deltaY: number;
+  isOrphaned: boolean;
+}
+
+function strokeRenderOptions(type: StrokeElement['type'], width: number): FreehandStrokeRenderOptions {
+  const isHighlighter = type === 'highlighter';
+  return {
+    size: width,
+    thinning: isHighlighter ? 0 : 0.35,
+    smoothing: 0.65,
+    streamline: 0.55,
+    simulatePressure: !isHighlighter,
+  };
+}
+
+function baseOpacity(el: AnchorElement): number {
+  return el.opacity || (el.type === 'highlighter' ? 0.35 : 1);
+}
+
+function textFont(fontSize: number): string {
+  return `600 ${fontSize}px ${TEXT_FONT_FAMILY}`;
+}
+
+/** Point the anchor lookup falls back to when the bbox centre hits no usable DOM node. */
+function anchorHint(el: AnchorElement): Point | undefined {
+  if (isShapeElement(el)) return { x: el.startX, y: el.startY };
+  if (el.type === 'text') return { x: el.x, y: el.y };
+  return el.points[0];
+}
+
+function sameBBox(a: BoundingBox, b: BoundingBox): boolean {
+  return a.minX === b.minX && a.minY === b.minY && a.maxX === b.maxX && a.maxY === b.maxY;
+}
+
+// Committed elements are never mutated (changes produce new objects) because history snapshots share element references.
 export class CanvasEngine {
   private baseCanvas: HTMLCanvasElement;
-  private baseCtx: CanvasRenderingContext2D;
+  private baseCtx: CanvasRenderingContext2D | null;
   private activeCanvas: HTMLCanvasElement;
-  private activeCtx: CanvasRenderingContext2D;
+  private activeCtx: CanvasRenderingContext2D | null;
   private container: HTMLElement;
 
   private elements: AnchorElement[] = [];
@@ -70,8 +120,14 @@ export class CanvasEngine {
 
   private scrollRafId: number | null = null;
   private resizeRafId: number | null = null;
+  private strokeRafId: number | null = null;
+  private resizeObserver: ResizeObserver | null = null;
   private textMetricsCache = new Map<string, { width: number; height: number }>();
+  private measureCtx: CanvasRenderingContext2D | null | undefined;
+  private strokeOutlines = new WeakMap<StrokeElement, FreehandOutline>();
   private dpr = 1;
+  private viewportWidth = 0;
+  private viewportHeight = 0;
   private callbacks: EngineCallbacks;
 
   private anchorManager: DOMAnchorManager;
@@ -85,41 +141,35 @@ export class CanvasEngine {
       this.renderBase();
     });
 
-    this.baseCanvas = document.createElement('canvas');
-    this.baseCanvas.className = 'page-anchor-base-canvas';
-    this.baseCanvas.setAttribute('aria-hidden', 'true');
-    this.baseCanvas.style.position = 'fixed';
-    this.baseCanvas.style.top = '0';
-    this.baseCanvas.style.left = '0';
-    this.baseCanvas.style.width = '100vw';
-    this.baseCanvas.style.height = '100vh';
-    this.baseCanvas.style.pointerEvents = 'none';
-    this.baseCanvas.style.zIndex = '2147483640';
-
-    this.activeCanvas = document.createElement('canvas');
-    this.activeCanvas.className = 'page-anchor-active-canvas';
-    this.activeCanvas.setAttribute('aria-hidden', 'true');
-    this.activeCanvas.style.position = 'fixed';
-    this.activeCanvas.style.top = '0';
-    this.activeCanvas.style.left = '0';
-    this.activeCanvas.style.width = '100vw';
-    this.activeCanvas.style.height = '100vh';
-    this.activeCanvas.style.pointerEvents = 'none';
-    this.activeCanvas.style.zIndex = '2147483641';
+    this.baseCanvas = this.createLayer('page-anchor-base-canvas', '2147483640');
+    this.activeCanvas = this.createLayer('page-anchor-active-canvas', '2147483641');
 
     this.container.appendChild(this.baseCanvas);
     this.container.appendChild(this.activeCanvas);
 
-    this.baseCtx = this.baseCanvas.getContext('2d', { alpha: true })!;
-    this.activeCtx = this.activeCanvas.getContext('2d', { alpha: true })!;
+    this.baseCtx = this.baseCanvas.getContext('2d', { alpha: true });
+    this.activeCtx = this.activeCanvas.getContext('2d', { alpha: true });
 
     this.updateDprAndSize();
     this.bindEvents();
   }
 
+  private createLayer(className: string, zIndex: string): HTMLCanvasElement {
+    const canvas = document.createElement('canvas');
+    canvas.className = className;
+    canvas.setAttribute('aria-hidden', 'true');
+    canvas.style.position = 'fixed';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.pointerEvents = 'none';
+    canvas.style.zIndex = zIndex;
+    return canvas;
+  }
+
   public setDomAnchoringEnabled(enabled: boolean): void {
     this.isDomAnchoringEnabled = enabled;
     this.anchorManager.invalidateCache();
+    this.pruneHiddenSelection();
     this.renderBase();
     this.callbacks.onDomAnchoringToggle?.(enabled);
   }
@@ -130,6 +180,7 @@ export class CanvasEngine {
 
   public setOrphanedAnchorMode(mode: OrphanedAnchorMode): void {
     this.orphanedAnchorMode = mode;
+    this.pruneHiddenSelection();
     this.renderBase();
   }
 
@@ -137,12 +188,7 @@ export class CanvasEngine {
     return this.orphanedAnchorMode;
   }
 
-  public getElementEffectiveBBox(el: AnchorElement): {
-    bbox: BoundingBox;
-    deltaX: number;
-    deltaY: number;
-    isOrphaned: boolean;
-  } {
+  public getElementEffectiveBBox(el: AnchorElement): EffectiveBBox {
     let deltaX = 0;
     let deltaY = 0;
     let isOrphaned = false;
@@ -170,7 +216,20 @@ export class CanvasEngine {
     };
   }
 
+  private isHidden(eff: EffectiveBBox): boolean {
+    return eff.isOrphaned && this.orphanedAnchorMode === 'hide';
+  }
+
+  private isRendered(el: AnchorElement): boolean {
+    return !this.isHidden(this.getElementEffectiveBBox(el));
+  }
+
+  private pruneHiddenSelection(): void {
+    this.selectedElements = this.selectedElements.filter((el) => this.isRendered(el));
+  }
+
   public setTool(tool: ToolType): void {
+    this.resetGesture(true);
     this.activeTool = tool;
     if (tool !== 'select') {
       this.selectedElements = [];
@@ -218,6 +277,7 @@ export class CanvasEngine {
   }
 
   public setActiveMode(active: boolean): void {
+    this.resetGesture(true);
     this.isActiveMode = active;
     if (active) {
       this.activeCanvas.style.pointerEvents = 'auto';
@@ -246,7 +306,9 @@ export class CanvasEngine {
   }
 
   public setElements(elements: AnchorElement[]): void {
-    this.elements = elements;
+    // Replacing the page (undo, redo, navigation) supersedes any half-finished gesture.
+    this.resetGesture(false);
+    this.elements = elements.map((el) => this.withMeasuredText(el));
     this.selectedElements = [];
     this.renderBase();
   }
@@ -256,40 +318,37 @@ export class CanvasEngine {
   }
 
   public addElement(element: AnchorElement): void {
-    if (this.isDomAnchoringEnabled && !element.anchor) {
-      const pt = element.type === 'text' ? { x: element.x, y: element.y } : undefined;
-      element.anchor = this.anchorManager.captureAnchor(element.bbox, pt);
+    let el = this.withMeasuredText(element);
+    if (this.isDomAnchoringEnabled && !el.anchor) {
+      el = { ...el, anchor: this.anchorManager.captureAnchor(el.bbox, anchorHint(el)) };
     }
-    this.elements.push(element);
-    this.callbacks.onElementsChange?.(this.elements);
+    this.elements.push(el);
+    this.emitChange();
     this.renderBase();
   }
 
   public clear(): void {
+    this.resetGesture(false);
     this.elements = [];
     this.selectedElements = [];
-    this.clearActiveCanvas();
-    this.callbacks.onElementsChange?.(this.elements);
+    this.emitChange();
     this.renderBase();
   }
 
-  /**
-   * Selects all elements on the canvas and puts the engine into 'select' mode
-   * so all elements can be dragged and moved together in unison.
-   */
+  /** Selects every rendered element (hidden orphans excluded) and switches to the select tool. */
   public selectAll(): void {
-    if (this.elements.length === 0) return;
+    const visible = this.elements.filter((el) => this.isRendered(el));
+    if (visible.length === 0) return;
+    this.resetGesture(true);
     this.activeTool = 'select';
     this.updateCursor();
-    this.selectedElements = [...this.elements];
-    this.callbacks.onSelectionChange?.(this.selectedElements[0] || null, this.selectedElements);
+    this.selectedElements = visible;
     this.renderBase();
   }
 
   public clearSelection(): void {
     if (this.selectedElements.length > 0) {
       this.selectedElements = [];
-      this.callbacks.onSelectionChange?.(null, []);
       this.renderBase();
     }
   }
@@ -300,21 +359,26 @@ export class CanvasEngine {
 
   public moveAll(dx: number, dy: number): void {
     if (this.elements.length === 0 || (dx === 0 && dy === 0)) return;
+    const replacements = new Map<AnchorElement, AnchorElement>();
     for (const el of this.elements) {
-      this.moveElement(el, dx, dy);
+      replacements.set(el, this.movedElement(el, dx, dy));
     }
-    this.callbacks.onElementsChange?.(this.elements);
+    this.replaceElements(replacements);
+    this.emitChange();
     this.renderBase();
   }
 
   public deleteSelected(): void {
     if (this.selectedElements.length === 0) return;
-    const selectedIds = new Set(this.selectedElements.map((el) => el.id));
-    this.elements = this.elements.filter((el) => !selectedIds.has(el.id));
+    const selected = new Set(this.selectedElements);
+    this.elements = this.elements.filter((el) => !selected.has(el));
     this.selectedElements = [];
-    this.callbacks.onSelectionChange?.(null, []);
-    this.callbacks.onElementsChange?.(this.elements);
+    this.emitChange();
     this.renderBase();
+  }
+
+  private emitChange(): void {
+    this.callbacks.onElementsChange?.(this.elements);
   }
 
   private updateCursor(): void {
@@ -322,72 +386,74 @@ export class CanvasEngine {
       this.activeCanvas.style.cursor = 'default';
       return;
     }
-    switch (this.activeTool) {
-      case 'select':
-        this.activeCanvas.style.cursor = 'default';
-        break;
-      case 'pen':
-      case 'highlighter':
-      case 'rect':
-      case 'circle':
-      case 'line':
-      case 'arrow':
-      case 'double-arrow':
-        this.activeCanvas.style.cursor = 'crosshair';
-        break;
-      case 'text':
-        this.activeCanvas.style.cursor = 'text';
-        break;
-      case 'eraser':
-        this.activeCanvas.style.cursor = 'pointer';
-        break;
+    const tool = this.activeTool;
+    if (tool === 'pen' || tool === 'highlighter' || isShapeType(tool)) {
+      this.activeCanvas.style.cursor = 'crosshair';
+    } else if (tool === 'text') {
+      this.activeCanvas.style.cursor = 'text';
+    } else if (tool === 'eraser') {
+      this.activeCanvas.style.cursor = 'pointer';
+    } else {
+      this.activeCanvas.style.cursor = 'default';
     }
   }
 
   private updateDprAndSize(): void {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2.5);
 
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    // The root's client box excludes page scrollbars, so the overlay never covers (and blocks) them.
+    const root = document.compatMode === 'BackCompat' ? document.body : document.documentElement;
+    const w = Math.min(root?.clientWidth || window.innerWidth, window.innerWidth);
+    const h = Math.min(root?.clientHeight || window.innerHeight, window.innerHeight);
+    this.viewportWidth = w;
+    this.viewportHeight = h;
 
-    this.baseCanvas.style.width = `${w}px`;
-    this.baseCanvas.style.height = `${h}px`;
-    this.activeCanvas.style.width = `${w}px`;
-    this.activeCanvas.style.height = `${h}px`;
+    for (const canvas of [this.baseCanvas, this.activeCanvas]) {
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+    }
 
-    if (this.baseCanvas.width !== w * this.dpr || this.baseCanvas.height !== h * this.dpr) {
-      this.baseCanvas.width = Math.round(w * this.dpr);
-      this.baseCanvas.height = Math.round(h * this.dpr);
-      this.activeCanvas.width = Math.round(w * this.dpr);
-      this.activeCanvas.height = Math.round(h * this.dpr);
+    const pixelW = Math.round(w * this.dpr);
+    const pixelH = Math.round(h * this.dpr);
+    if (this.baseCanvas.width !== pixelW || this.baseCanvas.height !== pixelH) {
+      this.baseCanvas.width = pixelW;
+      this.baseCanvas.height = pixelH;
+      this.activeCanvas.width = pixelW;
+      this.activeCanvas.height = pixelH;
 
       this.renderBase();
     }
   }
 
+  private readonly onResize = (): void => {
+    if (this.resizeRafId !== null) return;
+    this.resizeRafId = requestAnimationFrame(() => {
+      this.resizeRafId = null;
+      this.updateDprAndSize();
+    });
+  };
+
+  private readonly onScroll = (): void => {
+    if (this.scrollRafId !== null) return;
+    this.scrollRafId = requestAnimationFrame(() => {
+      this.scrollRafId = null;
+      this.renderBase();
+    });
+  };
+
   private bindEvents(): void {
-    const handleResize = () => {
-      if (this.resizeRafId) return;
-      this.resizeRafId = requestAnimationFrame(() => {
-        this.resizeRafId = null;
-        this.updateDprAndSize();
-      });
-    };
-    window.addEventListener('resize', handleResize, { passive: true });
+    window.addEventListener('resize', this.onResize, { passive: true });
+    window.addEventListener('scroll', this.onScroll, { passive: true });
+    this.activeCanvas.addEventListener('pointerdown', this.onPointerDown);
+    window.addEventListener('pointermove', this.onPointerMove);
+    window.addEventListener('pointerup', this.onPointerUp);
+    window.addEventListener('pointercancel', this.onPointerUp);
 
-    const handleScroll = () => {
-      if (this.scrollRafId) return;
-      this.scrollRafId = requestAnimationFrame(() => {
-        this.scrollRafId = null;
-        this.renderBase();
-      });
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-
-    this.activeCanvas.addEventListener('pointerdown', this.onPointerDown.bind(this));
-    window.addEventListener('pointermove', this.onPointerMove.bind(this));
-    window.addEventListener('pointerup', this.onPointerUp.bind(this));
-    window.addEventListener('pointercancel', this.onPointerUp.bind(this));
+    // Window resize misses a scrollbar appearing when the page grows; the root's box changes then.
+    if (typeof ResizeObserver !== 'undefined' && document.documentElement) {
+      this.resizeObserver = new ResizeObserver(this.onResize);
+      this.resizeObserver.observe(document.documentElement);
+    }
   }
 
   private clientToDoc(clientX: number, clientY: number, pressure?: number): Point {
@@ -398,86 +464,83 @@ export class CanvasEngine {
     };
   }
 
-  private onPointerDown(e: PointerEvent): void {
+  /** `commitPending` reports edits already applied mid-gesture (drag, erase sweep) so they are saved and undoable rather than lost. */
+  private resetGesture(commitPending: boolean): void {
+    if (commitPending) {
+      this.commitDrag();
+      this.commitErase();
+    }
+    this.hasMovedElements = false;
+    this.isErasingGesture = false;
+    this.eraseChangedPending = false;
+
+    if (this.pointerId !== null && this.activeCanvas.hasPointerCapture?.(this.pointerId)) {
+      this.activeCanvas.releasePointerCapture(this.pointerId);
+    }
+    this.isPointerDown = false;
+    this.pointerId = null;
+
+    this.currentStrokePoints = [];
+    this.shapeStartPoint = null;
+    this.currentShape = null;
+    this.isDraggingSelected = false;
+    this.dragStartPoint = null;
+    this.isMarqueeSelecting = false;
+    this.marqueeStartPoint = null;
+    this.currentMarqueeBBox = null;
+
+    if (this.strokeRafId !== null) {
+      cancelAnimationFrame(this.strokeRafId);
+      this.strokeRafId = null;
+    }
+    this.clearActiveCanvas();
+  }
+
+  private readonly onPointerDown = (e: PointerEvent): void => {
     if (!this.isActiveMode) return;
     if (e.button !== 0) return;
+    if (this.isPointerDown) {
+      // A second finger or pen must not hijack the gesture already in progress.
+      if (e.pointerId !== this.pointerId) return;
+      // Same pointer pressed again: its pointerup was lost, so start afresh.
+      this.resetGesture(true);
+    }
 
     this.isPointerDown = true;
     this.pointerId = e.pointerId;
-    this.activeCanvas.setPointerCapture(e.pointerId);
+    this.activeCanvas.setPointerCapture?.(e.pointerId);
 
     const docPt = this.clientToDoc(e.clientX, e.clientY);
+    const tool = this.activeTool;
 
-    if (this.activeTool === 'select') {
-      const hit = this.hitTest(docPt);
-      if (hit) {
-        if (e.shiftKey || e.ctrlKey || e.metaKey) {
-          const idx = this.selectedElements.findIndex((el) => el.id === hit.id);
-          if (idx >= 0) {
-            this.selectedElements.splice(idx, 1);
-          } else {
-            this.selectedElements.push(hit);
-          }
-        } else if (!this.selectedElements.some((el) => el.id === hit.id)) {
-          this.selectedElements = [hit];
-        }
-
-        this.isDraggingSelected = true;
-        this.hasMovedElements = false;
-        this.dragStartPoint = docPt;
-        this.callbacks.onSelectionChange?.(this.selectedElements[0] || null, this.selectedElements);
-        this.renderBase();
-        return;
-      }
-
-      if (this.selectedElements.length > 1 && this.isPointInsideUnionBBox(docPt)) {
-        this.isDraggingSelected = true;
-        this.hasMovedElements = false;
-        this.dragStartPoint = docPt;
-        return;
-      }
-
-      this.selectedElements = [];
-      this.isMarqueeSelecting = true;
-      this.marqueeStartPoint = docPt;
-      this.currentMarqueeBBox = null;
-      this.callbacks.onSelectionChange?.(null, []);
-      this.renderBase();
+    if (tool === 'select') {
+      this.beginSelectGesture(docPt, e.shiftKey || e.ctrlKey || e.metaKey);
       return;
     }
 
-    if (this.activeTool === 'text') {
+    if (tool === 'text') {
       this.callbacks.onTextCreateRequested?.(docPt);
       return;
     }
 
-    if (this.activeTool === 'eraser') {
-      // Flush any stale pending change before starting a new sweep.
-      this.commitErase();
+    if (tool === 'eraser') {
       this.isErasingGesture = true;
       this.eraseChangedPending = false;
       this.eraseAtPoints([docPt]);
       return;
     }
 
-    if (this.activeTool === 'pen' || this.activeTool === 'highlighter') {
-      const docPtWithPressure = this.clientToDoc(e.clientX, e.clientY, e.pressure);
-      this.currentStrokePoints = [docPtWithPressure];
-      this.drawActiveStroke();
+    if (tool === 'pen' || tool === 'highlighter') {
+      this.currentStrokePoints = [this.clientToDoc(e.clientX, e.clientY, e.pressure)];
+      this.scheduleActiveStrokeDraw();
       return;
     }
 
-    if (
-      this.activeTool === 'rect' ||
-      this.activeTool === 'circle' ||
-      this.activeTool === 'line' ||
-      this.activeTool === 'arrow' ||
-      this.activeTool === 'double-arrow'
-    ) {
+    if (isShapeType(tool)) {
       this.shapeStartPoint = docPt;
       this.currentShape = {
         id: `shape_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        type: this.activeTool,
+        type: tool,
         bbox: { minX: docPt.x, minY: docPt.y, maxX: docPt.x, maxY: docPt.y },
         strokeColor: this.strokeColor,
         strokeWidth: this.strokeWidth,
@@ -488,16 +551,50 @@ export class CanvasEngine {
         endX: docPt.x,
         endY: docPt.y,
       };
+    }
+  };
+
+  private beginSelectGesture(docPt: Point, toggle: boolean): void {
+    const hit = this.hitTest(docPt);
+    if (hit) {
+      if (toggle) {
+        const idx = this.selectedElements.indexOf(hit);
+        if (idx >= 0) {
+          this.selectedElements.splice(idx, 1);
+        } else {
+          this.selectedElements.push(hit);
+        }
+      } else if (!this.selectedElements.includes(hit)) {
+        this.selectedElements = [hit];
+      }
+
+      this.isDraggingSelected = true;
+      this.hasMovedElements = false;
+      this.dragStartPoint = docPt;
+      this.renderBase();
       return;
     }
+
+    if (this.selectedElements.length > 1 && this.isPointInsideUnionBBox(docPt)) {
+      this.isDraggingSelected = true;
+      this.hasMovedElements = false;
+      this.dragStartPoint = docPt;
+      return;
+    }
+
+    this.selectedElements = [];
+    this.isMarqueeSelecting = true;
+    this.marqueeStartPoint = docPt;
+    this.currentMarqueeBBox = null;
+    this.renderBase();
   }
 
-  private onPointerMove(e: PointerEvent): void {
+  private readonly onPointerMove = (e: PointerEvent): void => {
     if (!this.isPointerDown || !this.isActiveMode) return;
-    if (this.pointerId !== null && e.pointerId !== this.pointerId) return;
+    if (e.pointerId !== this.pointerId) return;
 
     const coalesced = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
-    const events = (coalesced && coalesced.length > 0 ? coalesced : [e]) as PointerEvent[];
+    const events = coalesced.length > 0 ? coalesced : [e];
 
     if (this.activeTool === 'eraser') {
       this.eraseAtPoints(events.map((ev) => this.clientToDoc(ev.clientX, ev.clientY)));
@@ -505,30 +602,7 @@ export class CanvasEngine {
     }
 
     if (this.activeTool === 'select') {
-      const currentDocPt = this.clientToDoc(e.clientX, e.clientY);
-      if (this.isDraggingSelected && this.selectedElements.length > 0 && this.dragStartPoint) {
-        const dx = currentDocPt.x - this.dragStartPoint.x;
-        const dy = currentDocPt.y - this.dragStartPoint.y;
-        if (dx !== 0 || dy !== 0) {
-          for (const el of this.selectedElements) {
-            this.moveElement(el, dx, dy);
-          }
-          this.hasMovedElements = true;
-        }
-        this.dragStartPoint = currentDocPt;
-        this.renderBase();
-        return;
-      }
-
-      if (this.isMarqueeSelecting && this.marqueeStartPoint) {
-        const minX = Math.min(this.marqueeStartPoint.x, currentDocPt.x);
-        const minY = Math.min(this.marqueeStartPoint.y, currentDocPt.y);
-        const maxX = Math.max(this.marqueeStartPoint.x, currentDocPt.x);
-        const maxY = Math.max(this.marqueeStartPoint.y, currentDocPt.y);
-        this.currentMarqueeBBox = { minX, minY, maxX, maxY };
-        this.drawMarquee();
-        return;
-      }
+      this.continueSelectGesture(this.clientToDoc(e.clientX, e.clientY));
       return;
     }
 
@@ -540,7 +614,7 @@ export class CanvasEngine {
           this.currentStrokePoints.push(pt);
         }
       }
-      this.drawActiveStroke();
+      this.scheduleActiveStrokeDraw();
       return;
     }
 
@@ -553,7 +627,7 @@ export class CanvasEngine {
           const maxDim = Math.max(Math.abs(dx), Math.abs(dy));
           docPt.x = this.shapeStartPoint.x + Math.sign(dx || 1) * maxDim;
           docPt.y = this.shapeStartPoint.y + Math.sign(dy || 1) * maxDim;
-        } else if (this.currentShape.type === 'line' || this.currentShape.type === 'arrow' || this.currentShape.type === 'double-arrow') {
+        } else {
           const angle = Math.atan2(dy, dx);
           const snap = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
           const len = Math.hypot(dx, dy);
@@ -565,118 +639,143 @@ export class CanvasEngine {
       this.currentShape.endY = docPt.y;
       this.currentShape.bbox = computeBoundingBox(this.currentShape);
       this.drawActiveShape();
-      return;
     }
-  }
+  };
 
-  private onPointerUp(_e: PointerEvent): void {
-    if (!this.isPointerDown) return;
-    this.isPointerDown = false;
-    this.pointerId = null;
-
-    if (this.isErasingGesture) {
-      this.commitErase();
-      return;
-    }
-
-    if (this.activeTool === 'select') {
-      if (this.isDraggingSelected) {
-        this.isDraggingSelected = false;
-        this.dragStartPoint = null;
-        // A click that selected an element without displacing it is not an
-        // edit, so it must not cost the user an undo step.
-        if (this.hasMovedElements) {
-          this.hasMovedElements = false;
-          if (this.isDomAnchoringEnabled) {
-            for (const el of this.selectedElements) {
-              el.anchor = this.anchorManager.captureAnchor(el.bbox);
-            }
-          }
-          this.callbacks.onElementsChange?.(this.elements);
+  private continueSelectGesture(docPt: Point): void {
+    if (this.isDraggingSelected && this.selectedElements.length > 0 && this.dragStartPoint) {
+      const dx = docPt.x - this.dragStartPoint.x;
+      const dy = docPt.y - this.dragStartPoint.y;
+      if (dx !== 0 || dy !== 0) {
+        const replacements = new Map<AnchorElement, AnchorElement>();
+        for (const el of this.selectedElements) {
+          replacements.set(el, this.movedElement(el, dx, dy));
         }
+        this.replaceElements(replacements);
+        this.hasMovedElements = true;
       }
-      if (this.isMarqueeSelecting && this.currentMarqueeBBox) {
-        const w = this.currentMarqueeBBox.maxX - this.currentMarqueeBBox.minX;
-        const h = this.currentMarqueeBBox.maxY - this.currentMarqueeBBox.minY;
-        if (w > 3 || h > 3) {
-          this.selectedElements = this.elements.filter((el) => {
-            const eff = this.getElementEffectiveBBox(el);
-            if (eff.isOrphaned && this.orphanedAnchorMode === 'hide') return false;
-            return intersectsBoundingBox(eff.bbox, this.currentMarqueeBBox!);
-          });
-          this.callbacks.onSelectionChange?.(this.selectedElements[0] || null, this.selectedElements);
-        }
-        this.isMarqueeSelecting = false;
-        this.marqueeStartPoint = null;
-        this.currentMarqueeBBox = null;
-        this.clearActiveCanvas();
-        this.renderBase();
-      }
-      return;
-    }
-
-    if (this.activeTool === 'pen' || this.activeTool === 'highlighter') {
-      if (this.currentStrokePoints.length > 0) {
-        const isHighlighter = this.activeTool === 'highlighter';
-        const simplified = this.strokeSimplification
-          ? simplifyPointsRDP(this.currentStrokePoints, 0.7)
-          : this.currentStrokePoints.slice();
-
-        const strokeElem: StrokeElement = {
-          id: `stroke_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-          type: this.activeTool,
-          points: simplified,
-          strokeColor: isHighlighter ? this.highlighterColor : this.strokeColor,
-          strokeWidth: isHighlighter ? this.highlighterWidth : this.strokeWidth,
-          opacity: isHighlighter ? 0.35 : 1.0,
-          createdAt: Date.now(),
-          bbox: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
-        };
-        strokeElem.bbox = computeBoundingBox(strokeElem);
-
-        if (this.isDomAnchoringEnabled) {
-          strokeElem.anchor = this.anchorManager.captureAnchor(
-            strokeElem.bbox,
-            strokeElem.points[0]
-          );
-        }
-
-        this.elements.push(strokeElem);
-        this.currentStrokePoints = [];
-        this.clearActiveCanvas();
-        this.callbacks.onElementsChange?.(this.elements);
-        this.renderBase();
-      }
-      return;
-    }
-
-    if (this.currentShape) {
-      const dist = Math.hypot(
-        this.currentShape.endX - this.currentShape.startX,
-        this.currentShape.endY - this.currentShape.startY
-      );
-      if (dist >= 4) {
-        if (this.isDomAnchoringEnabled) {
-          this.currentShape.anchor = this.anchorManager.captureAnchor(this.currentShape.bbox, {
-            x: this.currentShape.startX,
-            y: this.currentShape.startY,
-          });
-        }
-        this.elements.push(this.currentShape);
-        this.callbacks.onElementsChange?.(this.elements);
-      }
-      this.currentShape = null;
-      this.shapeStartPoint = null;
-      this.clearActiveCanvas();
+      this.dragStartPoint = docPt;
       this.renderBase();
       return;
     }
+
+    if (this.isMarqueeSelecting && this.marqueeStartPoint) {
+      this.currentMarqueeBBox = {
+        minX: Math.min(this.marqueeStartPoint.x, docPt.x),
+        minY: Math.min(this.marqueeStartPoint.y, docPt.y),
+        maxX: Math.max(this.marqueeStartPoint.x, docPt.x),
+        maxY: Math.max(this.marqueeStartPoint.y, docPt.y),
+      };
+      this.drawMarquee();
+    }
+  }
+
+  private readonly onPointerUp = (e: PointerEvent): void => {
+    if (!this.isPointerDown || e.pointerId !== this.pointerId) return;
+
+    const tool = this.activeTool;
+    if (tool === 'select') {
+      this.finishMarquee();
+    } else if (tool === 'pen' || tool === 'highlighter') {
+      this.commitStroke(tool);
+    } else {
+      this.commitShape();
+    }
+    this.resetGesture(true);
+  };
+
+  private finishMarquee(): void {
+    const box = this.currentMarqueeBBox;
+    if (!this.isMarqueeSelecting || !box) return;
+    if (box.maxX - box.minX > 3 || box.maxY - box.minY > 3) {
+      this.selectedElements = this.elements.filter((el) => {
+        const eff = this.getElementEffectiveBBox(el);
+        return !this.isHidden(eff) && intersectsBoundingBox(eff.bbox, box);
+      });
+    }
+    this.clearActiveCanvas();
+    this.renderBase();
+  }
+
+  /** Reports a finished drag, re-anchoring each moved element where it now appears. */
+  private commitDrag(): void {
+    if (!this.hasMovedElements) return;
+    this.hasMovedElements = false;
+    if (this.isDomAnchoringEnabled) {
+      const replacements = new Map<AnchorElement, AnchorElement>();
+      for (const el of this.selectedElements) {
+        // Bake the live anchor offset into the stored coordinates, or the element would jump back by it once re-anchored.
+        const { deltaX, deltaY } = this.getElementEffectiveBBox(el);
+        const placed = this.movedElement(el, deltaX, deltaY);
+        placed.anchor = this.anchorManager.captureAnchor(placed.bbox, anchorHint(placed));
+        replacements.set(el, placed);
+      }
+      this.replaceElements(replacements);
+    }
+    this.emitChange();
+    this.renderBase();
+  }
+
+  private commitStroke(type: StrokeElement['type']): void {
+    const raw = this.currentStrokePoints;
+    if (raw.length === 0) return;
+
+    const isHighlighter = type === 'highlighter';
+    const width = isHighlighter ? this.highlighterWidth : this.strokeWidth;
+    const points = this.strokeSimplification ? simplifyPointsRDP(raw, 0.7) : raw.slice();
+
+    const stroke: StrokeElement = {
+      id: `stroke_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      type,
+      points,
+      strokeColor: isHighlighter ? this.highlighterColor : this.strokeColor,
+      strokeWidth: width,
+      opacity: isHighlighter ? 0.35 : 1.0,
+      createdAt: Date.now(),
+      bbox: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
+    };
+    stroke.bbox = computeBoundingBox(stroke);
+
+    if (this.isDomAnchoringEnabled) {
+      stroke.anchor = this.anchorManager.captureAnchor(stroke.bbox, points[0]);
+    }
+
+    // The preview was traced from the raw points; reusing that outline stops the stroke reshaping on lift.
+    if (raw.length > 1) {
+      this.strokeOutlines.set(stroke, getFreehandOutline(raw, strokeRenderOptions(type, width)));
+    }
+
+    this.elements.push(stroke);
+    this.clearActiveCanvas();
+    this.emitChange();
+    this.renderBase();
+  }
+
+  private commitShape(): void {
+    const shape = this.currentShape;
+    if (!shape) return;
+    const dist = Math.hypot(shape.endX - shape.startX, shape.endY - shape.startY);
+    if (dist >= 4) {
+      if (this.isDomAnchoringEnabled) {
+        shape.anchor = this.anchorManager.captureAnchor(shape.bbox, anchorHint(shape));
+      }
+      this.elements.push(shape);
+      this.emitChange();
+    }
+    this.clearActiveCanvas();
+    this.renderBase();
   }
 
   private eraseAtPoints(points: Point[]): void {
     const prevCount = this.elements.length;
-    this.elements = this.elements.filter((el) => !points.some((pt) => this.isPointErasing(el, pt)));
+    this.elements = this.elements.filter((el) => {
+      const local = this.toElementSpace(el);
+      if (!local) return true;
+      return !points.some((pt) => isPointNearElement({ x: pt.x - local.x, y: pt.y - local.y }, el, 12));
+    });
     if (this.elements.length !== prevCount) {
+      const remaining = new Set(this.elements);
+      this.selectedElements = this.selectedElements.filter((el) => remaining.has(el));
       this.eraseChangedPending = true;
       this.renderBase();
     }
@@ -690,109 +789,131 @@ export class CanvasEngine {
     this.isErasingGesture = false;
     if (!this.eraseChangedPending) return;
     this.eraseChangedPending = false;
-    this.callbacks.onElementsChange?.(this.elements);
+    this.emitChange();
   }
 
-  private isPointErasing(el: AnchorElement, pt: Point): boolean {
-    let testPt = pt;
-    if (this.isDomAnchoringEnabled && el.anchor) {
-      const eff = this.getElementEffectiveBBox(el);
-      if (eff.isOrphaned && this.orphanedAnchorMode === 'hide') {
-        return false;
-      }
-      testPt = { x: pt.x - eff.deltaX, y: pt.y - eff.deltaY };
-    }
-    return isPointNearElement(testPt, el, 12);
+  /** Live anchor offset of a rendered element, or null when it is hidden. */
+  private toElementSpace(el: AnchorElement): Point | null {
+    const eff = this.getElementEffectiveBBox(el);
+    if (this.isHidden(eff)) return null;
+    return { x: eff.deltaX, y: eff.deltaY };
   }
 
   private hitTest(pt: Point): AnchorElement | null {
     for (let i = this.elements.length - 1; i >= 0; i--) {
       const el = this.elements[i];
-      let testPt = pt;
-      if (this.isDomAnchoringEnabled && el.anchor) {
-        const eff = this.getElementEffectiveBBox(el);
-        if (eff.isOrphaned && this.orphanedAnchorMode === 'hide') {
-          continue;
-        }
-        testPt = { x: pt.x - eff.deltaX, y: pt.y - eff.deltaY };
-      }
-      if (isPointNearElement(testPt, el, 8)) {
+      const offset = this.toElementSpace(el);
+      if (offset && isPointNearElement({ x: pt.x - offset.x, y: pt.y - offset.y }, el, 8)) {
         return el;
       }
     }
     return null;
   }
 
-  private moveElement(el: AnchorElement, dx: number, dy: number): void {
-    if (el.type === 'pen' || el.type === 'highlighter') {
-      el.points.forEach((p) => {
-        p.x += dx;
-        p.y += dy;
-      });
+  /** Returns a moved copy; committed elements are never mutated. */
+  private movedElement(el: AnchorElement, dx: number, dy: number): AnchorElement {
+    let moved: AnchorElement;
+    if (isShapeElement(el)) {
+      moved = { ...el, startX: el.startX + dx, startY: el.startY + dy, endX: el.endX + dx, endY: el.endY + dy };
     } else if (el.type === 'text') {
-      el.x += dx;
-      el.y += dy;
-    } else if (
-      el.type === 'rect' ||
-      el.type === 'circle' ||
-      el.type === 'line' ||
-      el.type === 'arrow' ||
-      el.type === 'double-arrow'
-    ) {
-      el.startX += dx;
-      el.startY += dy;
-      el.endX += dx;
-      el.endY += dy;
+      moved = { ...el, x: el.x + dx, y: el.y + dy };
+    } else {
+      const stroke: StrokeElement = { ...el, points: el.points.map((p) => ({ ...p, x: p.x + dx, y: p.y + dy })) };
+      const outline = this.strokeOutlines.get(el);
+      if (outline) this.strokeOutlines.set(stroke, translateFreehandOutline(outline, dx, dy));
+      moved = stroke;
     }
-    el.bbox = computeBoundingBox(el);
+    moved.bbox = computeBoundingBox(moved);
+    return moved;
+  }
+
+  private replaceElements(replacements: Map<AnchorElement, AnchorElement>): void {
+    this.elements = this.elements.map((el) => replacements.get(el) ?? el);
+    this.selectedElements = this.selectedElements.map((el) => replacements.get(el) ?? el);
+  }
+
+  private withMeasuredText(el: AnchorElement): AnchorElement {
+    if (el.type !== 'text') return el;
+    const { width, height } = this.measureTextBox(el.text, el.fontSize);
+    const measured: TextElement = { ...el, width, height };
+    measured.bbox = computeBoundingBox(measured);
+    if (el.width === width && el.height === height && sameBBox(el.bbox, measured.bbox)) return el;
+    return measured;
+  }
+
+  private measureTextBox(text: string, fontSize: number): { width: number; height: number } {
+    const cacheKey = `${fontSize}\u0000${text}`;
+    const cached = this.textMetricsCache.get(cacheKey);
+    if (cached) return cached;
+
+    if (this.measureCtx === undefined) {
+      this.measureCtx = document.createElement('canvas').getContext('2d');
+    }
+    const lines = text.split('\n');
+    let maxWidth = 0;
+    if (this.measureCtx) {
+      this.measureCtx.font = textFont(fontSize);
+      for (const line of lines) {
+        maxWidth = Math.max(maxWidth, this.measureCtx.measureText(line).width);
+      }
+    } else {
+      // No 2D context (e.g. a headless DOM): estimate from an average glyph width.
+      maxWidth = Math.max(...lines.map((line) => line.length)) * fontSize * 0.6;
+    }
+
+    const box = {
+      width: Math.max(maxWidth + TEXT_PADDING * 2, TEXT_MIN_WIDTH),
+      height: Math.max(lines.length * fontSize * 1.35 + TEXT_PADDING * 2, TEXT_MIN_HEIGHT),
+    };
+    if (this.textMetricsCache.size > 500) this.textMetricsCache.clear();
+    this.textMetricsCache.set(cacheKey, box);
+    return box;
   }
 
   private clearActiveCanvas(): void {
-    if (this.activeCtx) {
-      this.activeCtx.clearRect(0, 0, this.activeCanvas.width, this.activeCanvas.height);
-    }
+    this.activeCtx?.clearRect(0, 0, this.activeCanvas.width, this.activeCanvas.height);
   }
 
-  /**
-   * Real-time preview rendering of the stroke in progress.
-   * Only clears and paints the active canvas layer for maximum FPS.
-   */
-  private drawActiveStroke(): void {
-    this.clearActiveCanvas();
-    if (this.currentStrokePoints.length === 0 || !this.activeCtx) return;
-
-    const ctx = this.activeCtx;
+  /** Saves `ctx` and maps document coordinates onto the viewport-fixed canvas; pair with `ctx.restore()`. */
+  private beginDocTransform(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     ctx.scale(this.dpr, this.dpr);
     ctx.translate(-window.scrollX, -window.scrollY);
+  }
+
+  /** perfect-freehand reprocesses the whole stroke, so redraw at most once per frame. */
+  private scheduleActiveStrokeDraw(): void {
+    if (this.strokeRafId !== null) return;
+    this.strokeRafId = requestAnimationFrame(() => {
+      this.strokeRafId = null;
+      this.drawActiveStroke();
+    });
+  }
+
+  private drawActiveStroke(): void {
+    this.clearActiveCanvas();
+    const ctx = this.activeCtx;
+    if (this.currentStrokePoints.length === 0 || !ctx) return;
+    if (this.activeTool !== 'pen' && this.activeTool !== 'highlighter') return;
 
     const isHighlighter = this.activeTool === 'highlighter';
-    ctx.strokeStyle = isHighlighter ? this.highlighterColor : this.strokeColor;
-    ctx.fillStyle = ctx.strokeStyle;
-    ctx.lineWidth = isHighlighter ? this.highlighterWidth : this.strokeWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    this.beginDocTransform(ctx);
+    ctx.fillStyle = isHighlighter ? this.highlighterColor : this.strokeColor;
     ctx.globalAlpha = isHighlighter ? 0.35 : 1.0;
-
-    renderFreehandStroke(ctx, this.currentStrokePoints, {
-      size: isHighlighter ? this.highlighterWidth : this.strokeWidth,
-      thinning: isHighlighter ? 0 : 0.35,
-      smoothing: 0.65,
-      streamline: 0.55,
-      simulatePressure: !isHighlighter,
-    });
+    renderFreehandStroke(
+      ctx,
+      this.currentStrokePoints,
+      strokeRenderOptions(this.activeTool, isHighlighter ? this.highlighterWidth : this.strokeWidth)
+    );
     ctx.restore();
   }
 
   private drawActiveShape(): void {
     this.clearActiveCanvas();
-    if (!this.currentShape || !this.activeCtx) return;
-
     const ctx = this.activeCtx;
-    ctx.save();
-    ctx.scale(this.dpr, this.dpr);
-    ctx.translate(-window.scrollX, -window.scrollY);
+    if (!this.currentShape || !ctx) return;
 
+    this.beginDocTransform(ctx);
     this.renderSingleElement(ctx, this.currentShape);
     ctx.restore();
   }
@@ -802,74 +923,48 @@ export class CanvasEngine {
     if (!ctx) return;
 
     ctx.clearRect(0, 0, this.baseCanvas.width, this.baseCanvas.height);
+    this.beginDocTransform(ctx);
 
-    ctx.save();
-    ctx.scale(this.dpr, this.dpr);
-    ctx.translate(-window.scrollX, -window.scrollY);
-
-    const scrollX = window.scrollX;
-    const scrollY = window.scrollY;
     const viewportBox: BoundingBox = {
-      minX: scrollX - 20,
-      minY: scrollY - 20,
-      maxX: scrollX + window.innerWidth + 20,
-      maxY: scrollY + window.innerHeight + 20,
+      minX: window.scrollX - 20,
+      minY: window.scrollY - 20,
+      maxX: window.scrollX + this.viewportWidth + 20,
+      maxY: window.scrollY + this.viewportHeight + 20,
     };
 
-    for (let i = 0; i < this.elements.length; i++) {
-      const el = this.elements[i];
+    for (const el of this.elements) {
       const eff = this.getElementEffectiveBBox(el);
-
-      if (eff.isOrphaned && this.orphanedAnchorMode === 'hide') {
-        continue;
-      }
-
+      if (this.isHidden(eff)) continue;
       // Viewport frustum culling is always on: an element whose effective
       // bounding box misses the padded viewport cannot be visible.
-      if (!intersectsBoundingBox(eff.bbox, viewportBox)) {
-        continue;
-      }
-      this.renderSingleElementWithOffset(ctx, el, eff.deltaX, eff.deltaY, eff.isOrphaned);
+      if (!intersectsBoundingBox(eff.bbox, viewportBox)) continue;
+      this.renderSingleElementWithOffset(ctx, el, eff);
     }
 
-    if (this.selectedElements.length > 0) {
-      this.renderSelection(ctx);
-    }
-
+    this.renderSelection(ctx);
     ctx.restore();
   }
 
-  private renderSingleElementWithOffset(
-    ctx: CanvasRenderingContext2D,
-    el: AnchorElement,
-    deltaX: number,
-    deltaY: number,
-    isOrphaned = false
-  ): void {
+  private renderSingleElementWithOffset(ctx: CanvasRenderingContext2D, el: AnchorElement, eff: EffectiveBBox): void {
     ctx.save();
-    if (deltaX !== 0 || deltaY !== 0) {
-      ctx.translate(deltaX, deltaY);
+    if (eff.deltaX !== 0 || eff.deltaY !== 0) {
+      ctx.translate(eff.deltaX, eff.deltaY);
     }
-    if (isOrphaned) {
-      ctx.globalAlpha = (el.opacity || 1) * 0.35;
-    }
-    this.renderSingleElement(ctx, el);
+    this.renderSingleElement(ctx, el, eff.isOrphaned ? ORPHAN_DIM_FACTOR : 1);
 
-    if (isOrphaned) {
-      ctx.save();
+    if (eff.isOrphaned) {
       ctx.strokeStyle = 'rgba(239, 68, 68, 0.65)';
       ctx.lineWidth = 1.5;
       ctx.setLineDash([4, 4]);
       const b = el.bbox;
       ctx.strokeRect(b.minX - 3, b.minY - 3, b.maxX - b.minX + 6, b.maxY - b.minY + 6);
-      ctx.restore();
     }
     ctx.restore();
   }
 
-  private renderSingleElement(ctx: CanvasRenderingContext2D, el: AnchorElement): void {
+  private renderSingleElement(ctx: CanvasRenderingContext2D, el: AnchorElement, alphaFactor = 1): void {
     ctx.save();
-    ctx.globalAlpha = el.opacity || 1;
+    ctx.globalAlpha = baseOpacity(el) * alphaFactor;
     ctx.strokeStyle = el.strokeColor;
     ctx.fillStyle = el.strokeColor;
     ctx.lineWidth = el.strokeWidth;
@@ -878,18 +973,9 @@ export class CanvasEngine {
 
     switch (el.type) {
       case 'pen':
-      case 'highlighter': {
-        const isHighlighter = el.type === 'highlighter';
-        ctx.globalAlpha = isHighlighter ? (el.opacity || 0.35) : (el.opacity || 1.0);
-        renderFreehandStroke(ctx, el.points, {
-          size: el.strokeWidth,
-          thinning: isHighlighter ? 0 : 0.35,
-          smoothing: 0.65,
-          streamline: 0.55,
-          simulatePressure: !isHighlighter,
-        });
+      case 'highlighter':
+        this.renderStroke(ctx, el);
         break;
-      }
 
       case 'rect': {
         const x = Math.min(el.startX, el.endX);
@@ -923,78 +1009,52 @@ export class CanvasEngine {
         break;
       }
 
-      case 'line': {
-        ctx.beginPath();
-        ctx.moveTo(el.startX, el.startY);
-        ctx.lineTo(el.endX, el.endY);
-        ctx.stroke();
-        break;
-      }
-
-      case 'arrow': {
-        ctx.beginPath();
-        ctx.moveTo(el.startX, el.startY);
-        ctx.lineTo(el.endX, el.endY);
-        ctx.stroke();
-
-        const angle = Math.atan2(el.endY - el.startY, el.endX - el.startX);
-        const headSize = Math.max(12, el.strokeWidth * 3.5);
-        renderArrowHead(ctx, el.endX, el.endY, angle, headSize);
-        break;
-      }
-
+      case 'line':
+      case 'arrow':
       case 'double-arrow': {
         ctx.beginPath();
         ctx.moveTo(el.startX, el.startY);
         ctx.lineTo(el.endX, el.endY);
         ctx.stroke();
 
-        const angle = Math.atan2(el.endY - el.startY, el.endX - el.startX);
-        const headSize = Math.max(12, el.strokeWidth * 3.5);
-        renderArrowHead(ctx, el.endX, el.endY, angle, headSize);
-        renderArrowHead(ctx, el.startX, el.startY, angle + Math.PI, headSize);
+        if (el.type !== 'line') {
+          const angle = Math.atan2(el.endY - el.startY, el.endX - el.startX);
+          const headSize = Math.max(12, el.strokeWidth * 3.5);
+          renderArrowHead(ctx, el.endX, el.endY, angle, headSize);
+          if (el.type === 'double-arrow') {
+            renderArrowHead(ctx, el.startX, el.startY, angle + Math.PI, headSize);
+          }
+        }
         break;
       }
 
-      case 'text': {
+      case 'text':
         this.renderTextElement(ctx, el);
         break;
-      }
     }
 
     ctx.restore();
   }
 
-  private renderTextElement(ctx: CanvasRenderingContext2D, el: TextElement): void {
-    ctx.font = `600 ${el.fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-    ctx.textBaseline = 'top';
+  private renderStroke(ctx: CanvasRenderingContext2D, el: StrokeElement): void {
+    const options = strokeRenderOptions(el.type, el.strokeWidth);
+    if (el.points.length < 2) {
+      renderFreehandStroke(ctx, el.points, options);
+      return;
+    }
+    let outline = this.strokeOutlines.get(el);
+    if (!outline) {
+      outline = getFreehandOutline(el.points, options);
+      this.strokeOutlines.set(el, outline);
+    }
+    renderFreehandStroke(ctx, el.points, options, outline);
+  }
 
+  private renderTextElement(ctx: CanvasRenderingContext2D, el: TextElement): void {
     const lines = el.text.split('\n');
     const lineHeight = el.fontSize * 1.35;
-    const padding = 6;
-
-    const cacheKey = `${el.fontSize}\u0000${el.text}`;
-    let measured = this.textMetricsCache.get(cacheKey);
-    if (!measured) {
-      let maxWidth = 0;
-      for (const line of lines) {
-        const met = ctx.measureText(line);
-        if (met.width > maxWidth) maxWidth = met.width;
-      }
-      measured = { width: maxWidth, height: lines.length * lineHeight };
-      if (this.textMetricsCache.size > 500) this.textMetricsCache.clear();
-      this.textMetricsCache.set(cacheKey, measured);
-    }
-
-    const boxW = Math.max(measured.width + padding * 2, el.width || 60);
-    const boxH = Math.max(measured.height + padding * 2, el.height || 30);
-
-    // Text sizing is measured lazily here (canvas metrics are only available at
-    // draw time). The result is deterministic for a given text/font, so the
-    // write-back keeps hit-testing and culling bboxes accurate.
-    el.width = boxW;
-    el.height = boxH;
-    el.bbox = computeBoundingBox(el);
+    const boxW = el.width ?? TEXT_MIN_WIDTH;
+    const boxH = el.height ?? TEXT_MIN_HEIGHT;
 
     ctx.save();
     ctx.fillStyle = el.bgColor || 'rgba(15, 23, 42, 0.85)';
@@ -1005,33 +1065,44 @@ export class CanvasEngine {
     ctx.stroke();
     ctx.restore();
 
+    ctx.font = textFont(el.fontSize);
+    ctx.textBaseline = 'top';
     ctx.fillStyle = el.fontColor || '#ffffff';
     for (let i = 0; i < lines.length; i++) {
-      ctx.fillText(lines[i], el.x + padding, el.y + padding + i * lineHeight);
+      ctx.fillText(lines[i], el.x + TEXT_PADDING, el.y + TEXT_PADDING + i * lineHeight);
     }
   }
 
-  private isPointInsideUnionBBox(pt: Point): boolean {
-    if (this.selectedElements.length === 0) return false;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const el of this.selectedElements) {
+  /** Effective bounds covering every rendered element in `elements`, or null if none is rendered. */
+  private unionBBox(elements: AnchorElement[]): BoundingBox | null {
+    let union: BoundingBox | null = null;
+    for (const el of elements) {
       const eff = this.getElementEffectiveBBox(el);
-      minX = Math.min(minX, eff.bbox.minX);
-      minY = Math.min(minY, eff.bbox.minY);
-      maxX = Math.max(maxX, eff.bbox.maxX);
-      maxY = Math.max(maxY, eff.bbox.maxY);
+      if (this.isHidden(eff)) continue;
+      union = union
+        ? {
+            minX: Math.min(union.minX, eff.bbox.minX),
+            minY: Math.min(union.minY, eff.bbox.minY),
+            maxX: Math.max(union.maxX, eff.bbox.maxX),
+            maxY: Math.max(union.maxY, eff.bbox.maxY),
+          }
+        : eff.bbox;
     }
-    return pt.x >= minX - 8 && pt.x <= maxX + 8 && pt.y >= minY - 8 && pt.y <= maxY + 8;
+    return union;
+  }
+
+  private isPointInsideUnionBBox(pt: Point): boolean {
+    const union = this.unionBBox(this.selectedElements);
+    if (!union) return false;
+    return pt.x >= union.minX - 8 && pt.x <= union.maxX + 8 && pt.y >= union.minY - 8 && pt.y <= union.maxY + 8;
   }
 
   private drawMarquee(): void {
     this.clearActiveCanvas();
-    if (!this.currentMarqueeBBox || !this.activeCtx) return;
-
     const ctx = this.activeCtx;
-    ctx.save();
-    ctx.scale(this.dpr, this.dpr);
-    ctx.translate(-window.scrollX, -window.scrollY);
+    if (!this.currentMarqueeBBox || !ctx) return;
+
+    this.beginDocTransform(ctx);
 
     const b = this.currentMarqueeBBox;
     const w = b.maxX - b.minX;
@@ -1049,28 +1120,25 @@ export class CanvasEngine {
   }
 
   private renderSelection(ctx: CanvasRenderingContext2D): void {
-    if (this.selectedElements.length === 1) {
-      this.renderSingleSelectionOutline(ctx, this.selectedElements[0]);
+    const visible = this.selectedElements.filter((el) => this.isRendered(el));
+    if (visible.length === 0) return;
+    if (visible.length === 1) {
+      this.renderSingleSelectionOutline(ctx, visible[0]);
       return;
     }
 
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const el of this.selectedElements) {
-      const eff = this.getElementEffectiveBBox(el);
-      minX = Math.min(minX, eff.bbox.minX);
-      minY = Math.min(minY, eff.bbox.minY);
-      maxX = Math.max(maxX, eff.bbox.maxX);
-      maxY = Math.max(maxY, eff.bbox.maxY);
-
+    for (const el of visible) {
       this.renderIndividualItemOutline(ctx, el);
     }
 
+    const union = this.unionBBox(visible);
+    if (!union) return;
     const pad = 8;
     const unionBBox: BoundingBox = {
-      minX: minX - pad,
-      minY: minY - pad,
-      maxX: maxX + pad,
-      maxY: maxY + pad,
+      minX: union.minX - pad,
+      minY: union.minY - pad,
+      maxX: union.maxX + pad,
+      maxY: union.maxY + pad,
     };
 
     ctx.save();
@@ -1097,8 +1165,8 @@ export class CanvasEngine {
       ctx.strokeRect(c.x - 4, c.y - 4, 8, 8);
     }
 
-    const badgeText = `${this.selectedElements.length} elements selected (drag to move all)`;
-    ctx.font = '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    const badgeText = `${visible.length} elements selected (drag to move all)`;
+    ctx.font = textFont(12);
     const textWidth = ctx.measureText(badgeText).width;
     const badgeW = textWidth + 18;
     const badgeH = 24;
@@ -1176,11 +1244,28 @@ export class CanvasEngine {
     ctx.closePath();
   }
 
+  /** Fully detaches the engine so a replacement instance can take over the page. */
   public destroy(): void {
-    if (this.scrollRafId) cancelAnimationFrame(this.scrollRafId);
-    if (this.resizeRafId) cancelAnimationFrame(this.resizeRafId);
+    this.resetGesture(false);
+    window.removeEventListener('resize', this.onResize);
+    window.removeEventListener('scroll', this.onScroll);
+    this.activeCanvas.removeEventListener('pointerdown', this.onPointerDown);
+    window.removeEventListener('pointermove', this.onPointerMove);
+    window.removeEventListener('pointerup', this.onPointerUp);
+    window.removeEventListener('pointercancel', this.onPointerUp);
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+
+    if (this.scrollRafId !== null) cancelAnimationFrame(this.scrollRafId);
+    if (this.resizeRafId !== null) cancelAnimationFrame(this.resizeRafId);
+    this.scrollRafId = null;
+    this.resizeRafId = null;
+
     this.anchorManager.destroy();
     this.textMetricsCache.clear();
+    this.elements = [];
+    this.selectedElements = [];
+    this.callbacks = {};
     this.baseCanvas.remove();
     this.activeCanvas.remove();
   }

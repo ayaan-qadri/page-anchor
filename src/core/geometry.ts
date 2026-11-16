@@ -1,5 +1,15 @@
 import { getStroke, StrokeOptions } from 'perfect-freehand';
-import { AnchorElement, BoundingBox, Point, StrokeElement } from '../types/engine.types';
+import { AnchorElement, BoundingBox, Point, ShapeElement, ToolType } from '../types/engine.types';
+
+const SHAPE_TYPES: ReadonlySet<ToolType> = new Set<ToolType>(['rect', 'circle', 'line', 'arrow', 'double-arrow']);
+
+export function isShapeType(type: ToolType): type is ShapeElement['type'] {
+  return SHAPE_TYPES.has(type);
+}
+
+export function isShapeElement(el: AnchorElement): el is ShapeElement {
+  return isShapeType(el.type);
+}
 
 /**
  * Fast Axis-Aligned Bounding Box (AABB) intersection check.
@@ -30,7 +40,7 @@ export function computeBoundingBox(element: AnchorElement): BoundingBox {
   const halfWidth = (element.strokeWidth || 2) / 2 + 4;
 
   if (element.type === 'pen' || element.type === 'highlighter') {
-    const stroke = element as StrokeElement;
+    const stroke = element;
     if (!stroke.points || stroke.points.length === 0) {
       return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
     }
@@ -55,13 +65,7 @@ export function computeBoundingBox(element: AnchorElement): BoundingBox {
     };
   }
 
-  if (
-    element.type === 'rect' ||
-    element.type === 'circle' ||
-    element.type === 'line' ||
-    element.type === 'arrow' ||
-    element.type === 'double-arrow'
-  ) {
+  if (isShapeElement(element)) {
     const minX = Math.min(element.startX, element.endX) - halfWidth;
     const maxX = Math.max(element.startX, element.endX) + halfWidth;
     const minY = Math.min(element.startY, element.endY) - halfWidth;
@@ -195,7 +199,12 @@ export function isPointNearElement(pt: Point, element: AnchorElement, threshold 
     const rx = Math.abs(element.endX - element.startX) / 2;
     const ry = Math.abs(element.endY - element.startY) / 2;
 
-    if (rx === 0 || ry === 0) return false;
+    // A flat ellipse renders as a line, so hit-test it as one.
+    if (rx === 0 || ry === 0) {
+      const v = { x: element.startX, y: element.startY };
+      const w = { x: element.endX, y: element.endY };
+      return distToSegmentSquared(pt, v, w) <= effThreshSq;
+    }
 
     const normDist = ((pt.x - cx) / rx) ** 2 + ((pt.y - cy) / ry) ** 2;
     // As with rectangles, the enclosed area belongs to the shape.
@@ -229,14 +238,46 @@ export interface FreehandStrokeRenderOptions {
   simulatePressure?: boolean;
 }
 
-/**
- * Renders high-fidelity, pressure-sensitive freehand strokes with streamlined
- * curve smoothing to eliminate mouse tremor, sensor jitter, and jagged edges.
- */
+/** Polygon outline of a freehand stroke, as produced by perfect-freehand. */
+export type FreehandOutline = number[][];
+
+export function getFreehandOutline(points: Point[], options?: FreehandStrokeRenderOptions): FreehandOutline {
+  const strokeInput = points.map((p) => [p.x, p.y, p.pressure ?? 0.5]);
+  const strokeOptions: StrokeOptions = {
+    size: options?.size ?? 4,
+    thinning: options?.thinning ?? 0.35,
+    smoothing: options?.smoothing ?? 0.65,
+    streamline: options?.streamline ?? 0.55,
+    simulatePressure: options?.simulatePressure ?? true,
+    start: { cap: true, taper: 0 },
+    end: { cap: true, taper: 0 },
+  };
+  return getStroke(strokeInput, strokeOptions);
+}
+
+export function translateFreehandOutline(outline: FreehandOutline, dx: number, dy: number): FreehandOutline {
+  return outline.map(([x, y]) => [x + dx, y + dy]);
+}
+
+export function fillFreehandOutline(ctx: CanvasRenderingContext2D, outline: FreehandOutline): void {
+  if (outline.length === 0) return;
+  ctx.beginPath();
+  ctx.moveTo(outline[0][0], outline[0][1]);
+  for (let i = 0; i < outline.length; i++) {
+    const [x0, y0] = outline[i];
+    const [x1, y1] = outline[(i + 1) % outline.length];
+    ctx.quadraticCurveTo(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+/** A precomputed `outline` skips the perfect-freehand pass. */
 export function renderFreehandStroke(
   ctx: CanvasRenderingContext2D,
   points: Point[],
-  options?: FreehandStrokeRenderOptions
+  options?: FreehandStrokeRenderOptions,
+  outline?: FreehandOutline
 ): void {
   if (!points || points.length === 0) return;
 
@@ -249,66 +290,7 @@ export function renderFreehandStroke(
     return;
   }
 
-  const strokeInput = points.map((p) => [p.x, p.y, p.pressure ?? 0.5]);
-  const strokeOptions: StrokeOptions = {
-    size,
-    thinning: options?.thinning ?? 0.35,
-    smoothing: options?.smoothing ?? 0.65,
-    streamline: options?.streamline ?? 0.55,
-    simulatePressure: options?.simulatePressure ?? true,
-    start: {
-      cap: true,
-      taper: 0,
-    },
-    end: {
-      cap: true,
-      taper: 0,
-    },
-  };
-
-  const outline = getStroke(strokeInput, strokeOptions);
-  if (outline.length === 0) return;
-
-  ctx.beginPath();
-  ctx.moveTo(outline[0][0], outline[0][1]);
-  for (let i = 0; i < outline.length; i++) {
-    const [x0, y0] = outline[i];
-    const [x1, y1] = outline[(i + 1) % outline.length];
-    ctx.quadraticCurveTo(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
-  }
-  ctx.closePath();
-  ctx.fill();
-}
-
-export function renderSmoothSpline(ctx: CanvasRenderingContext2D, points: Point[]): void {
-  if (points.length === 0) return;
-
-  if (points.length === 1) {
-    ctx.arc(points[0].x, points[0].y, ctx.lineWidth / 2, 0, Math.PI * 2);
-    ctx.fill();
-    return;
-  }
-
-  if (points.length === 2) {
-    ctx.moveTo(points[0].x, points[0].y);
-    ctx.lineTo(points[1].x, points[1].y);
-    ctx.stroke();
-    return;
-  }
-
-  ctx.moveTo(points[0].x, points[0].y);
-
-  for (let i = 1; i < points.length - 1; i++) {
-    const p0 = points[i];
-    const p1 = points[i + 1];
-    const midX = (p0.x + p1.x) / 2;
-    const midY = (p0.y + p1.y) / 2;
-    ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
-  }
-
-  const last = points[points.length - 1];
-  ctx.lineTo(last.x, last.y);
-  ctx.stroke();
+  fillFreehandOutline(ctx, outline ?? getFreehandOutline(points, { ...options, size }));
 }
 
 export function renderArrowHead(

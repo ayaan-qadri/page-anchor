@@ -136,4 +136,66 @@ describe('TextEditorOverlay: In-Place Text Editing', () => {
     editor.open({ x: 50, y: 50 }, { fontSize: 14, fontColor: '#fff' }, vi.fn());
     expect(container.querySelectorAll('.pa-text-input-wrapper')).toHaveLength(1);
   });
+
+  it('commits the typed text of an open editor when a new editor is opened', () => {
+    const firstCommit = vi.fn();
+    const firstCancel = vi.fn();
+    editor.open({ x: 10, y: 10 }, { fontSize: 14, fontColor: '#fff' }, firstCommit, firstCancel);
+    (container.querySelector('.pa-text-textarea') as HTMLTextAreaElement).value = 'First note';
+
+    const secondCommit = vi.fn();
+    editor.open({ x: 300, y: 300 }, { fontSize: 14, fontColor: '#fff' }, secondCommit);
+
+    expect(firstCommit).toHaveBeenCalledTimes(1);
+    expect(firstCommit.mock.calls[0][0].text).toBe('First note');
+    expect(firstCommit.mock.calls[0][0].x).toBe(10);
+    expect(firstCancel).not.toHaveBeenCalled();
+    expect(secondCommit).not.toHaveBeenCalled();
+
+    const wrappers = container.querySelectorAll('.pa-text-input-wrapper');
+    expect(wrappers).toHaveLength(1);
+    expect((wrappers[0] as HTMLElement).style.left).toBe('300px');
+  });
+
+  it('cancels an empty open editor when a new editor is opened', () => {
+    const firstCommit = vi.fn();
+    const firstCancel = vi.fn();
+    editor.open({ x: 10, y: 10 }, { fontSize: 14, fontColor: '#fff' }, firstCommit, firstCancel);
+    editor.open({ x: 300, y: 300 }, { fontSize: 14, fontColor: '#fff' }, vi.fn());
+
+    expect(firstCommit).not.toHaveBeenCalled();
+    expect(firstCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not commit twice when the replaced textarea also fires blur', () => {
+    const firstCommit = vi.fn();
+    editor.open({ x: 10, y: 10 }, { fontSize: 14, fontColor: '#fff' }, firstCommit);
+    const first = container.querySelector('.pa-text-textarea') as HTMLTextAreaElement;
+    first.value = 'Once';
+
+    editor.open({ x: 300, y: 300 }, { fontSize: 14, fontColor: '#fff' }, vi.fn());
+    first.dispatchEvent(new Event('blur'));
+
+    expect(firstCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores Enter while an IME composition is active', () => {
+    const onCommit = vi.fn();
+    editor.open({ x: 50, y: 50 }, { fontSize: 16, fontColor: '#ffffff' }, onCommit);
+    const textarea = container.querySelector('.pa-text-textarea') as HTMLTextAreaElement;
+    textarea.value = 'にほん';
+
+    const composing = new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true, cancelable: true });
+    textarea.dispatchEvent(composing);
+    expect(composing.defaultPrevented).toBe(false);
+
+    const legacy = new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, bubbles: true, cancelable: true });
+    textarea.dispatchEvent(legacy);
+
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(container.querySelector('.pa-text-input-wrapper')).not.toBeNull();
+
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    expect(onCommit).toHaveBeenCalledTimes(1);
+  });
 });

@@ -1,10 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import * as freehand from 'perfect-freehand';
+import { CanvasEngine } from '../src/core/engine';
 import {
   intersectsBoundingBox,
   isPointNearElement,
   simplifyPointsRDP,
 } from '../src/core/geometry';
-import { AnchorElement, BoundingBox, Point, ShapeElement } from '../src/types/engine.types';
+import { AnchorElement, BoundingBox, Point, ShapeElement, StrokeElement } from '../src/types/engine.types';
+
+vi.mock('perfect-freehand', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('perfect-freehand')>();
+  return { ...actual, getStroke: vi.fn(actual.getStroke) };
+});
 
 describe('Performance Benchmarks: Zero-Lag Low-End Device Validation', () => {
   it('BENCHMARK: Viewport Frustum Culling across 10,000 elements executes in under 5ms', () => {
@@ -174,5 +181,118 @@ describe('Performance Benchmarks: Zero-Lag Low-End Device Validation', () => {
 
     expect(elapsed).toBeLessThan(60.0);
     expect(parsed).toHaveLength(500);
+  });
+});
+
+describe('Render cost: stroke outline cache and preview throttling', () => {
+  const getStrokeSpy = vi.mocked(freehand.getStroke);
+
+  function withRenderingContext() {
+    const noop = () => {};
+    const ctx = new Proxy({} as Record<string | symbol, unknown>, {
+      get: (target, prop) => (prop in target ? target[prop] : prop === 'measureText' ? () => ({ width: 10 }) : noop),
+      set: (target, prop, value) => {
+        target[prop] = value;
+        return true;
+      },
+    }) as unknown as CanvasRenderingContext2D;
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation((() => ctx) as unknown as HTMLCanvasElement['getContext']);
+  }
+
+  function makeStroke(i: number): StrokeElement {
+    const points: Point[] = [];
+    for (let p = 0; p < 50; p++) points.push({ x: 10 + p * 3, y: 10 + i * 5 + Math.sin(p) * 2 });
+    return {
+      id: `s${i}`,
+      type: 'pen',
+      points,
+      strokeColor: '#000',
+      strokeWidth: 4,
+      opacity: 1,
+      createdAt: 0,
+      bbox: { minX: 0, minY: 0, maxX: 200, maxY: 600 },
+    };
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    getStrokeSpy.mockClear();
+  });
+
+  it('re-rendering (e.g. on scroll) reuses cached outlines instead of re-running getStroke', () => {
+    withRenderingContext();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const engine = new CanvasEngine(container);
+    engine.setDomAnchoringEnabled(false);
+
+    engine.setElements(Array.from({ length: 100 }, (_, i) => makeStroke(i)));
+    const afterFirstRender = getStrokeSpy.mock.calls.length;
+    expect(afterFirstRender).toBe(100);
+
+    for (let frame = 0; frame < 20; frame++) engine.renderBase();
+    expect(getStrokeSpy.mock.calls.length).toBe(afterFirstRender);
+
+    // Moving reuses the translated outline rather than recomputing it.
+    engine.moveAll(15, 0);
+    expect(getStrokeSpy.mock.calls.length).toBe(afterFirstRender);
+
+    engine.destroy();
+    container.remove();
+  });
+
+  it('a committed stroke renders from the outline computed at lift, without recomputing', () => {
+    withRenderingContext();
+    vi.stubGlobal('requestAnimationFrame', () => 1);
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const engine = new CanvasEngine(container);
+    engine.setDomAnchoringEnabled(false);
+    engine.setActiveMode(true);
+    engine.setTool('pen');
+    const canvas = container.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
+
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { clientX: 10, clientY: 10, button: 0, pointerId: 1 }));
+    for (let i = 1; i <= 30; i++) {
+      window.dispatchEvent(new PointerEvent('pointermove', { clientX: 10 + i * 4, clientY: 10 + (i % 3), pointerId: 1 }));
+    }
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: 130, clientY: 10, pointerId: 1 }));
+
+    // One outline at lift for the cache; the committed render reuses it.
+    expect(getStrokeSpy).toHaveBeenCalledTimes(1);
+    expect(engine.getElements()).toHaveLength(1);
+    engine.renderBase();
+    expect(getStrokeSpy).toHaveBeenCalledTimes(1);
+
+    engine.destroy();
+    container.remove();
+  });
+
+  it('coalesces stroke preview redraws to one per animation frame', () => {
+    withRenderingContext();
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const engine = new CanvasEngine(container);
+    engine.setActiveMode(true);
+    engine.setTool('pen');
+    const canvas = container.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
+    frames.length = 0;
+
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { clientX: 10, clientY: 10, button: 0, pointerId: 1 }));
+    for (let i = 1; i <= 40; i++) {
+      window.dispatchEvent(new PointerEvent('pointermove', { clientX: 10 + i * 4, clientY: 10, pointerId: 1 }));
+    }
+    expect(frames).toHaveLength(1);
+    expect(getStrokeSpy).not.toHaveBeenCalled();
+
+    frames.shift()!(0);
+    expect(getStrokeSpy).toHaveBeenCalledTimes(1);
+
+    engine.destroy();
+    container.remove();
   });
 });

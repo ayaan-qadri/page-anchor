@@ -12,6 +12,7 @@ export class TextEditorOverlay {
   private currentWrapper: HTMLElement | null = null;
   private onCommitCallback: ((element: TextElement) => void) | null = null;
   private onCancelCallback: (() => void) | null = null;
+  private commitPending: (() => void) | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -23,6 +24,7 @@ export class TextEditorOverlay {
     onCommit: (element: TextElement) => void,
     onCancel?: () => void
   ): void {
+    this.commitPending?.();
     this.close();
 
     this.onCommitCallback = onCommit;
@@ -82,8 +84,11 @@ export class TextEditorOverlay {
       }
       this.close();
     };
+    this.commitPending = commit;
 
     textarea.addEventListener('keydown', (e: KeyboardEvent) => {
+      // Keys pressed while an IME is composing belong to the composition, not the editor.
+      if (e.isComposing || e.keyCode === 229) return;
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         commit();
@@ -103,6 +108,7 @@ export class TextEditorOverlay {
   }
 
   public close(): void {
+    this.commitPending = null;
     this.onCommitCallback = null;
     this.onCancelCallback = null;
     if (this.currentWrapper) {

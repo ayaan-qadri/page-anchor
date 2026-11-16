@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+  getFreehandOutline,
   isPointNearElement,
   renderArrowHead,
   renderFreehandStroke,
-  renderSmoothSpline,
+  translateFreehandOutline,
 } from '../src/core/geometry';
 import { ShapeElement, TextElement, Point } from '../src/types/engine.types';
 
@@ -77,46 +78,37 @@ describe('Geometry Engine: Render Helpers and Missing Hit-Test Branches', () => 
     });
   });
 
-  describe('renderSmoothSpline', () => {
-    it('handles empty points array gracefully', () => {
-      const ctx = createMockCtx();
-      renderSmoothSpline(ctx, []);
-      expect(ctx.moveTo).not.toHaveBeenCalled();
-      expect(ctx.stroke).not.toHaveBeenCalled();
-    });
+  describe('freehand outline caching helpers', () => {
+    const points: Point[] = [
+      { x: 10, y: 10 },
+      { x: 40, y: 30 },
+      { x: 80, y: 20 },
+    ];
 
-    it('renders single point as a filled dot', () => {
+    it('fills a precomputed outline instead of recomputing it', () => {
       const ctx = createMockCtx();
-      renderSmoothSpline(ctx, [{ x: 50, y: 60 }]);
-      expect(ctx.arc).toHaveBeenCalledWith(50, 60, 2, 0, Math.PI * 2);
-      expect(ctx.fill).toHaveBeenCalled();
-    });
-
-    it('renders two points as a simple line segment', () => {
-      const ctx = createMockCtx();
-      renderSmoothSpline(ctx, [
-        { x: 10, y: 10 },
-        { x: 50, y: 50 },
-      ]);
-      expect(ctx.moveTo).toHaveBeenCalledWith(10, 10);
-      expect(ctx.lineTo).toHaveBeenCalledWith(50, 50);
-      expect(ctx.stroke).toHaveBeenCalled();
-      expect(ctx.quadraticCurveTo).not.toHaveBeenCalled();
-    });
-
-    it('renders three or more points with quadratic bezier smoothing', () => {
-      const ctx = createMockCtx();
-      const points: Point[] = [
-        { x: 0, y: 0 },
-        { x: 20, y: 40 },
-        { x: 60, y: 80 },
-        { x: 100, y: 100 },
+      const outline = [
+        [1, 1],
+        [5, 1],
+        [5, 5],
       ];
-      renderSmoothSpline(ctx, points);
-      expect(ctx.moveTo).toHaveBeenCalledWith(0, 0);
-      expect(ctx.quadraticCurveTo).toHaveBeenCalled();
-      expect(ctx.lineTo).toHaveBeenCalledWith(100, 100);
-      expect(ctx.stroke).toHaveBeenCalled();
+      renderFreehandStroke(ctx, points, { size: 4 }, outline);
+      expect(ctx.moveTo).toHaveBeenCalledWith(1, 1);
+      expect(ctx.quadraticCurveTo).toHaveBeenCalledTimes(3);
+      expect(ctx.fill).toHaveBeenCalledTimes(1);
+    });
+
+    it('produces a deterministic outline and translates it exactly', () => {
+      const a = getFreehandOutline(points, { size: 4 });
+      const b = getFreehandOutline(points, { size: 4 });
+      expect(a.length).toBeGreaterThan(0);
+      expect(a).toEqual(b);
+
+      const moved = translateFreehandOutline(a, 7, -3);
+      expect(moved).toHaveLength(a.length);
+      expect(moved[0][0]).toBeCloseTo(a[0][0] + 7);
+      expect(moved[0][1]).toBeCloseTo(a[0][1] - 3);
+      expect(a[0]).toEqual(b[0]);
     });
   });
 
@@ -133,7 +125,7 @@ describe('Geometry Engine: Render Helpers and Missing Hit-Test Branches', () => 
   });
 
   describe('isPointNearElement - Circle & Ellipse', () => {
-    it('returns false if circle has 0 radius', () => {
+    it('hit-tests a zero-size circle as a point', () => {
       const circle: ShapeElement = {
         id: 'c1',
         type: 'circle',
@@ -147,7 +139,31 @@ describe('Geometry Engine: Render Helpers and Missing Hit-Test Branches', () => 
         createdAt: 0,
         bbox: { minX: 10, minY: 10, maxX: 10, maxY: 10 },
       };
-      expect(isPointNearElement({ x: 10, y: 10 }, circle)).toBe(false);
+      expect(isPointNearElement({ x: 10, y: 10 }, circle)).toBe(true);
+      expect(isPointNearElement({ x: 40, y: 40 }, circle)).toBe(false);
+    });
+
+    it('hit-tests a flat ellipse (zero width or height) along its line', () => {
+      const flat: ShapeElement = {
+        id: 'c-flat',
+        type: 'circle',
+        startX: 100,
+        startY: 50,
+        endX: 100,
+        endY: 250,
+        strokeColor: '#000',
+        strokeWidth: 2,
+        opacity: 1,
+        createdAt: 0,
+        bbox: { minX: 95, minY: 45, maxX: 105, maxY: 255 },
+      };
+      expect(isPointNearElement({ x: 100, y: 150 }, flat)).toBe(true);
+      expect(isPointNearElement({ x: 103, y: 60 }, flat)).toBe(true);
+      expect(isPointNearElement({ x: 130, y: 150 }, flat)).toBe(false);
+
+      const horizontal: ShapeElement = { ...flat, startX: 50, startY: 100, endX: 250, endY: 100, bbox: { minX: 45, minY: 95, maxX: 255, maxY: 105 } };
+      expect(isPointNearElement({ x: 150, y: 100 }, horizontal)).toBe(true);
+      expect(isPointNearElement({ x: 150, y: 130 }, horizontal)).toBe(false);
     });
 
     it('detects point on perimeter of unfilled circle', () => {

@@ -4,6 +4,8 @@ import {
   distToSegmentSquared,
   intersectsBoundingBox,
   isPointNearElement,
+  isShapeElement,
+  isShapeType,
   simplifyPointsRDP,
 } from '../src/core/geometry';
 import { BoundingBox, Point, StrokeElement, ShapeElement, TextElement } from '../src/types/engine.types';
@@ -199,5 +201,44 @@ describe('Geometry Engine: Ramer-Douglas-Peucker (RDP) Point Simplification', ()
     expect(simplified.length).toBeLessThan(path.length);
     expect(simplified.some((p) => p.x === 50 && p.y === 0)).toBe(true);
     expect(simplified.some((p) => p.x === 50 && p.y === 50)).toBe(true);
+  });
+});
+
+describe('Geometry Engine: shape type guard', () => {
+  it('recognises exactly the five shape types', () => {
+    expect(['rect', 'circle', 'line', 'arrow', 'double-arrow'].every((t) => isShapeType(t as ShapeElement['type']))).toBe(true);
+    expect(isShapeType('pen')).toBe(false);
+    expect(isShapeType('highlighter')).toBe(false);
+    expect(isShapeType('text')).toBe(false);
+    expect(isShapeType('select')).toBe(false);
+    expect(isShapeType('eraser')).toBe(false);
+  });
+
+  it('narrows elements by type', () => {
+    const shape: ShapeElement = {
+      id: 's',
+      type: 'arrow',
+      startX: 0,
+      startY: 0,
+      endX: 10,
+      endY: 10,
+      strokeColor: '#000',
+      strokeWidth: 2,
+      opacity: 1,
+      createdAt: 0,
+      bbox: { minX: 0, minY: 0, maxX: 10, maxY: 10 },
+    };
+    const stroke: StrokeElement = {
+      id: 'p',
+      type: 'pen',
+      points: [{ x: 0, y: 0 }],
+      strokeColor: '#000',
+      strokeWidth: 2,
+      opacity: 1,
+      createdAt: 0,
+      bbox: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
+    };
+    expect(isShapeElement(shape)).toBe(true);
+    expect(isShapeElement(stroke)).toBe(false);
   });
 });

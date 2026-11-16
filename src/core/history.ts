@@ -1,16 +1,17 @@
 import { AnchorElement } from '../types/engine.types';
 
+// Snapshots share element objects instead of deep-copying; safe because the engine replaces an element with a new object whenever it changes.
 export class HistoryManager {
   private undoStack: AnchorElement[][] = [];
   private redoStack: AnchorElement[][] = [];
   private maxDepth = 51; // Retains the initial snapshot plus 50 undo steps.
 
   constructor(initialElements: AnchorElement[] = []) {
-    this.undoStack.push(this.clone(initialElements));
+    this.undoStack.push(initialElements.slice());
   }
 
   public pushState(elements: AnchorElement[]): void {
-    this.undoStack.push(this.clone(elements));
+    this.undoStack.push(elements.slice());
     if (this.undoStack.length > this.maxDepth) {
       this.undoStack.shift();
     }
@@ -23,8 +24,7 @@ export class HistoryManager {
     const current = this.undoStack.pop()!;
     this.redoStack.push(current);
 
-    const previous = this.undoStack[this.undoStack.length - 1];
-    return this.clone(previous);
+    return this.undoStack[this.undoStack.length - 1].slice();
   }
 
   public redo(): AnchorElement[] | null {
@@ -32,7 +32,7 @@ export class HistoryManager {
 
     const next = this.redoStack.pop()!;
     this.undoStack.push(next);
-    return this.clone(next);
+    return next.slice();
   }
 
   public canUndo(): boolean {
@@ -44,11 +44,7 @@ export class HistoryManager {
   }
 
   public reset(elements: AnchorElement[] = []): void {
-    this.undoStack = [this.clone(elements)];
+    this.undoStack = [elements.slice()];
     this.redoStack = [];
-  }
-
-  private clone(elements: AnchorElement[]): AnchorElement[] {
-    return JSON.parse(JSON.stringify(elements));
   }
 }

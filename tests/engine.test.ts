@@ -1,25 +1,24 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import { HistoryManager } from '../src/core/history';
+import { createDOMAnchor } from '../src/core/anchor';
 import { CanvasEngine } from '../src/core/engine';
-import { StrokeElement, ShapeElement, TextElement } from '../src/types/engine.types';
+import { AnchorElement, Point, StrokeElement, ShapeElement, TextElement } from '../src/types/engine.types';
 
 describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () => {
   let container: HTMLElement;
   let engine: CanvasEngine;
-  let mockChange: ReturnType<typeof vi.fn>;
-  let mockSelection: ReturnType<typeof vi.fn>;
-  let mockTextRequest: ReturnType<typeof vi.fn>;
+  let mockChange: Mock<(elements: AnchorElement[]) => void>;
+  let mockTextRequest: Mock<(pt: Point) => void>;
 
   beforeEach(() => {
     container = document.createElement('div');
     document.body.appendChild(container);
 
     mockChange = vi.fn();
-    mockSelection = vi.fn();
     mockTextRequest = vi.fn();
 
     engine = new CanvasEngine(container, {
       onElementsChange: mockChange,
-      onSelectionChange: mockSelection,
       onTextCreateRequested: mockTextRequest,
     });
     engine.setActiveMode(true);
@@ -337,7 +336,6 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
       const selected = engine.getSelectedElements();
       expect(selected).toHaveLength(1);
       expect(selected[0].id).toBe('r1');
-      expect(mockSelection).toHaveBeenCalledWith(selected[0], selected);
     });
 
     it('clears selection when clicking empty space', () => {
@@ -453,6 +451,377 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
     it('properly destroys canvases and unbinds on destroy()', () => {
       engine.destroy();
       expect(container.querySelectorAll('canvas')).toHaveLength(0);
+    });
+  });
+
+  describe('Review regressions', () => {
+    const canvasOf = () => container.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
+    const down = (x: number, y: number, pointerId = 1) =>
+      canvasOf().dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: y, button: 0, pointerId }));
+    const move = (x: number, y: number, pointerId = 1) =>
+      window.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, pointerId }));
+    const up = (x: number, y: number, pointerId = 1) =>
+      window.dispatchEvent(new PointerEvent('pointerup', { clientX: x, clientY: y, pointerId }));
+
+    const rectAt = (id: string, x: number, y: number, extra: Partial<ShapeElement> = {}): ShapeElement => ({
+      id,
+      type: 'rect',
+      startX: x,
+      startY: y,
+      endX: x + 60,
+      endY: y + 40,
+      strokeColor: '#000',
+      strokeWidth: 2,
+      opacity: 1,
+      createdAt: 0,
+      bbox: { minX: x - 5, minY: y - 5, maxX: x + 65, maxY: y + 45 },
+      ...extra,
+    });
+
+    const peek = <T,>(key: string): T => (engine as unknown as Record<string, T>)[key];
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    });
+
+    it('keeps an anchored element where it was dropped instead of jumping back by the anchor offset', () => {
+      const target = document.createElement('div');
+      target.id = 'drop-anchor-target';
+      let top = 200;
+      target.getBoundingClientRect = () =>
+        ({ left: 100, top, width: 400, height: 50, right: 500, bottom: top + 50, x: 100, y: top, toJSON: () => ({}) }) as DOMRect;
+      document.body.appendChild(target);
+
+      const rect = rectAt('anchored', 120, 210, { anchor: createDOMAnchor(target) });
+      engine.setElements([rect]);
+      top = 280;
+      engine.setDomAnchoringEnabled(true);
+
+      const effBefore = engine.getElementEffectiveBBox(engine.getElements()[0]).bbox;
+      expect(effBefore.minY).toBe(rect.bbox.minY + 80);
+
+      engine.setTool('select');
+      down(150, 300);
+      move(170, 305);
+      up(170, 305);
+
+      const after = engine.getElements()[0];
+      const effAfter = engine.getElementEffectiveBBox(after).bbox;
+      expect(effAfter.minX).toBe(effBefore.minX + 20);
+      expect(effAfter.minY).toBe(effBefore.minY + 5);
+      expect(mockChange).toHaveBeenCalledTimes(1);
+      target.remove();
+    });
+
+    it('ignores a second pointer while a stroke is in progress', () => {
+      vi.stubGlobal('requestAnimationFrame', () => 1);
+      engine.setTool('pen');
+      down(10, 10, 1);
+      down(400, 400, 2);
+      move(410, 410, 2);
+      up(410, 410, 2);
+      expect(engine.getElements()).toHaveLength(0);
+
+      move(40, 10, 1);
+      up(40, 10, 1);
+
+      const strokes = engine.getElements() as StrokeElement[];
+      expect(strokes).toHaveLength(1);
+      expect(strokes[0].points.every((p) => p.x <= 40 && p.y === 10)).toBe(true);
+    });
+
+    it('recovers when the same pointer is pressed again after a lost pointerup', () => {
+      engine.setTool('rect');
+      down(10, 10);
+      down(100, 100);
+      move(200, 200);
+      up(200, 200);
+      const rects = engine.getElements() as ShapeElement[];
+      expect(rects).toHaveLength(1);
+      expect(rects[0].startX).toBe(100);
+    });
+
+    it('switching tool mid-stroke discards the half-drawn stroke and its gesture state', () => {
+      engine.setTool('pen');
+      down(10, 10);
+      move(50, 50);
+      engine.setTool('rect');
+      move(80, 80);
+      up(80, 80);
+      expect(engine.getElements()).toHaveLength(0);
+      expect(peek<unknown[]>('currentStrokePoints')).toHaveLength(0);
+      expect(peek<boolean>('isPointerDown')).toBe(false);
+    });
+
+    it('switching tool mid-shape does not commit the shape on the next pointerup', () => {
+      engine.setTool('rect');
+      down(10, 10);
+      move(120, 120);
+      engine.setTool('circle');
+      up(120, 120);
+      expect(engine.getElements()).toHaveLength(0);
+      expect(peek<unknown>('currentShape')).toBeNull();
+    });
+
+    it('setElements and setActiveMode(false) mid-gesture reset the gesture', () => {
+      engine.setTool('rect');
+      down(10, 10);
+      move(120, 120);
+      engine.setElements([]);
+      up(120, 120);
+      expect(engine.getElements()).toHaveLength(0);
+
+      engine.setTool('pen');
+      down(10, 10);
+      move(60, 60);
+      engine.setActiveMode(false);
+      engine.setActiveMode(true);
+      up(60, 60);
+      expect(engine.getElements()).toHaveLength(0);
+      expect(mockChange).not.toHaveBeenCalled();
+    });
+
+    it('switching tool mid-drag still records the move', () => {
+      engine.setElements([rectAt('r', 100, 100)]);
+      engine.setDomAnchoringEnabled(false);
+      engine.setTool('select');
+      down(120, 120);
+      move(150, 120);
+      engine.setTool('pen');
+      expect(mockChange).toHaveBeenCalledTimes(1);
+      expect((engine.getElements()[0] as ShapeElement).startX).toBe(130);
+      up(150, 120);
+      expect(mockChange).toHaveBeenCalledTimes(1);
+    });
+
+    it('a click on empty space in select mode leaves no marquee state behind', () => {
+      engine.setTool('select');
+      down(900, 700);
+      up(900, 700);
+      expect(peek<boolean>('isMarqueeSelecting')).toBe(false);
+      expect(peek<unknown>('marqueeStartPoint')).toBeNull();
+    });
+
+    it('elements in history snapshots are never mutated by a drag', () => {
+      const history = new HistoryManager([]);
+      const rect = rectAt('r', 100, 100);
+      history.reset([rect]);
+      engine.setElements([rect]);
+      engine.setDomAnchoringEnabled(false);
+      engine.setTool('select');
+      down(120, 120);
+      move(160, 140);
+      up(160, 140);
+      expect((engine.getElements()[0] as ShapeElement).startX).toBe(140);
+      expect(rect.startX).toBe(100);
+      expect(rect.bbox.minX).toBe(95);
+    });
+
+    it('measures text boxes when elements are loaded, without mutating the input', () => {
+      const text: TextElement = {
+        id: 't-long',
+        type: 'text',
+        x: 50,
+        y: 5000,
+        text: 'A long note far below the fold\nsecond line',
+        fontSize: 20,
+        fontColor: '#fff',
+        strokeColor: '#fff',
+        strokeWidth: 1,
+        opacity: 1,
+        createdAt: 0,
+        bbox: { minX: 46, minY: 4996, maxX: 174, maxY: 5040 },
+      };
+      engine.setElements([text]);
+      const loaded = engine.getElements()[0] as TextElement;
+      expect(loaded.width).toBeGreaterThan(120);
+      expect(loaded.height).toBeGreaterThan(36);
+      expect(loaded.bbox.maxX).toBe(loaded.x + loaded.width! + 4);
+      expect(loaded.bbox.maxY).toBe(loaded.y + loaded.height! + 4);
+      expect(text.width).toBeUndefined();
+      expect(text.bbox.maxX).toBe(174);
+    });
+
+    it('measures text added through addElement', () => {
+      const text: TextElement = {
+        id: 't-new',
+        type: 'text',
+        x: 10,
+        y: 10,
+        text: 'Hello there, this is a fairly long annotation',
+        fontSize: 18,
+        fontColor: '#fff',
+        strokeColor: '#fff',
+        strokeWidth: 1,
+        opacity: 1,
+        createdAt: 0,
+        bbox: { minX: 6, minY: 6, maxX: 134, maxY: 50 },
+      };
+      engine.setDomAnchoringEnabled(false);
+      engine.addElement(text);
+      const added = engine.getElements()[0] as TextElement;
+      expect(added.width).toBeGreaterThan(120);
+      expect(added.bbox.maxX).toBe(10 + added.width! + 4);
+    });
+
+    it('sizes the canvases to the root client box so page scrollbars stay uncovered', () => {
+      engine.destroy();
+      Object.defineProperty(document.documentElement, 'clientWidth', { value: 1009, configurable: true });
+      Object.defineProperty(document.documentElement, 'clientHeight', { value: 700, configurable: true });
+      engine = new CanvasEngine(container, { onElementsChange: mockChange });
+      const base = container.querySelector('.page-anchor-base-canvas') as HTMLCanvasElement;
+      expect(base.style.width).toBe('1009px');
+      expect(base.style.height).toBe('700px');
+      expect(canvasOf().style.width).toBe('1009px');
+      expect(base.width).toBe(Math.round(1009 * Math.min(window.devicePixelRatio || 1, 2.5)));
+      delete (document.documentElement as unknown as Record<string, unknown>).clientWidth;
+      delete (document.documentElement as unknown as Record<string, unknown>).clientHeight;
+    });
+
+    it('destroy() removes every window listener it added', () => {
+      engine.destroy();
+      const added: [string, unknown][] = [];
+      const removed: [string, unknown][] = [];
+      const realAdd = window.addEventListener.bind(window);
+      const realRemove = window.removeEventListener.bind(window);
+      vi.spyOn(window, 'addEventListener').mockImplementation(((type: string, fn: EventListenerOrEventListenerObject, opts?: AddEventListenerOptions) => {
+        added.push([type, fn]);
+        realAdd(type, fn, opts);
+      }) as typeof window.addEventListener);
+      vi.spyOn(window, 'removeEventListener').mockImplementation(((type: string, fn: EventListenerOrEventListenerObject) => {
+        removed.push([type, fn]);
+        realRemove(type, fn);
+      }) as typeof window.removeEventListener);
+
+      engine = new CanvasEngine(container, { onElementsChange: mockChange });
+      // Only the engine's own handlers; the anchor manager tears down its listeners separately.
+      const own: [string, unknown][] = [
+        ['resize', peek('onResize')],
+        ['scroll', peek('onScroll')],
+        ['pointermove', peek('onPointerMove')],
+        ['pointerup', peek('onPointerUp')],
+        ['pointercancel', peek('onPointerUp')],
+      ];
+      engine.destroy();
+
+      for (const [type, fn] of own) {
+        expect(added.some(([t, f]) => t === type && f === fn), `added ${type}`).toBe(true);
+        expect(removed.some(([t, f]) => t === type && f === fn), `removed ${type}`).toBe(true);
+      }
+      expect(container.querySelectorAll('canvas')).toHaveLength(0);
+    });
+
+    it('destroy() stops reacting to pointer events', () => {
+      engine.setTool('rect');
+      const canvas = canvasOf();
+      engine.destroy();
+      canvas.dispatchEvent(new PointerEvent('pointerdown', { clientX: 10, clientY: 10, button: 0, pointerId: 1 }));
+      move(100, 100);
+      up(100, 100);
+      expect(mockChange).not.toHaveBeenCalled();
+    });
+
+    it('an eraser tap removes only the hit element and reports once', () => {
+      engine.setElements([rectAt('a', 10, 10), rectAt('b', 300, 300)]);
+      engine.selectAll();
+      engine.setTool('eraser');
+      down(40, 30);
+      up(40, 30);
+      expect(engine.getElements().map((el: AnchorElement) => el.id)).toEqual(['b']);
+      expect(mockChange).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Orphan dimming renders through to the canvas', () => {
+    interface DrawCall {
+      op: 'fill' | 'stroke';
+      alpha: number;
+    }
+
+    function installRecordingContext(calls: DrawCall[]) {
+      const makeCtx = () => {
+        const stack: number[] = [];
+        const state: Record<string | symbol, unknown> = { globalAlpha: 1 };
+        const noop = () => {};
+        return new Proxy(state, {
+          get(target, prop) {
+            if (prop === 'save') return () => stack.push(target.globalAlpha as number);
+            if (prop === 'restore') return () => { target.globalAlpha = stack.pop() ?? 1; };
+            if (prop === 'fill' || prop === 'stroke') return () => calls.push({ op: prop, alpha: target.globalAlpha as number });
+            if (prop === 'measureText') return (t: string) => ({ width: t.length * 8 });
+            if (prop in target) return target[prop];
+            return noop;
+          },
+          set(target, prop, value) {
+            target[prop] = value;
+            return true;
+          },
+        }) as unknown as CanvasRenderingContext2D;
+      };
+      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation((() => makeCtx()) as unknown as HTMLCanvasElement['getContext']);
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('draws orphaned elements at reduced alpha in dimmed mode and not at all in hide mode', () => {
+      const calls: DrawCall[] = [];
+      installRecordingContext(calls);
+      engine.destroy();
+      engine = new CanvasEngine(container, { onElementsChange: mockChange });
+
+      const orphan: ShapeElement = {
+        id: 'orphan',
+        type: 'rect',
+        startX: 20,
+        startY: 20,
+        endX: 120,
+        endY: 80,
+        strokeColor: '#000',
+        strokeWidth: 2,
+        opacity: 1,
+        createdAt: 0,
+        bbox: { minX: 15, minY: 15, maxX: 125, maxY: 85 },
+        anchor: { selector: '#nowhere-to-be-found', initialRect: { left: 0, top: 0, width: 10, height: 10 } },
+      };
+      engine.setElements([orphan]);
+
+      calls.length = 0;
+      engine.setOrphanedAnchorMode('hide');
+      expect(calls).toHaveLength(0);
+
+      calls.length = 0;
+      engine.setOrphanedAnchorMode('dimmed');
+      const shapeStroke = calls.find((c) => c.op === 'stroke');
+      expect(shapeStroke).toBeDefined();
+      expect(shapeStroke!.alpha).toBeCloseTo(0.35);
+    });
+
+    it('dims an orphaned highlighter relative to its own opacity', () => {
+      const calls: DrawCall[] = [];
+      installRecordingContext(calls);
+      engine.destroy();
+      engine = new CanvasEngine(container, { onElementsChange: mockChange });
+      engine.setOrphanedAnchorMode('dimmed');
+
+      const highlighter: StrokeElement = {
+        id: 'hl',
+        type: 'highlighter',
+        points: [{ x: 20, y: 20 }, { x: 120, y: 20 }],
+        strokeColor: '#ff0',
+        strokeWidth: 20,
+        opacity: 0.35,
+        createdAt: 0,
+        bbox: { minX: 6, minY: 6, maxX: 134, maxY: 34 },
+        anchor: { selector: '#nowhere-to-be-found', initialRect: { left: 0, top: 0, width: 10, height: 10 } },
+      };
+      calls.length = 0;
+      engine.setElements([highlighter]);
+      const fill = calls.find((c) => c.op === 'fill');
+      expect(fill).toBeDefined();
+      expect(fill!.alpha).toBeCloseTo(0.35 * 0.35);
     });
   });
 });

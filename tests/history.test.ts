@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { CanvasEngine } from '../src/core/engine';
 import { HistoryManager } from '../src/core/history';
-import { AnchorElement } from '../src/types/engine.types';
+import { AnchorElement, ShapeElement, StrokeElement } from '../src/types/engine.types';
 
 describe('HistoryManager: Undo & Redo Reliability', () => {
   const dummyElement = (id: string): AnchorElement => ({
@@ -79,17 +80,32 @@ describe('HistoryManager: Undo & Redo Reliability', () => {
     expect(undoCount).toBe(50);
   });
 
-  it('deep clones state objects to prevent accidental mutations by reference', () => {
+  it('isolates snapshots from later changes to the array that was pushed', () => {
     const history = new HistoryManager([]);
-    const element = dummyElement('mutable');
-    history.pushState([element]);
+    const live = [dummyElement('1')];
+    history.pushState(live);
 
-    element.strokeColor = '#ff0000';
+    live.push(dummyElement('2'));
+    history.pushState(live);
 
-    history.pushState([element, dummyElement('another')]);
-    const previous = history.undo();
+    const previous = history.undo()!;
+    expect(previous.map((el) => el.id)).toEqual(['1']);
 
-    expect(previous![0].strokeColor).toBe('#000');
+    previous.push(dummyElement('x'));
+    expect(history.redo()!.map((el) => el.id)).toEqual(['1', '2']);
+    expect(history.undo()!.map((el) => el.id)).toEqual(['1']);
+  });
+
+  it('shares element objects between snapshots instead of deep-copying them', () => {
+    const history = new HistoryManager([]);
+    const el1 = dummyElement('1');
+    const el2 = dummyElement('2');
+    history.pushState([el1]);
+    history.pushState([el1, el2]);
+
+    const previous = history.undo()!;
+    expect(previous[0]).toBe(el1);
+    expect(history.redo()![1]).toBe(el2);
   });
 
   it('restores the drawings with a single undo after a clear', () => {
@@ -105,5 +121,97 @@ describe('HistoryManager: Undo & Redo Reliability', () => {
     expect(restored).toHaveLength(2);
     expect(restored![0].id).toBe('1');
     expect(restored![1].id).toBe('2');
+  });
+});
+
+describe('HistoryManager wired to CanvasEngine (shared element references)', () => {
+  function setup() {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const history = new HistoryManager([]);
+    const engine = new CanvasEngine(container, {
+      onElementsChange: (elements) => history.pushState(elements),
+    });
+    engine.setDomAnchoringEnabled(false);
+    engine.setActiveMode(true);
+    const canvas = container.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
+    const teardown = () => {
+      engine.destroy();
+      container.remove();
+    };
+    return { engine, history, canvas, teardown };
+  }
+
+  const drag = (canvas: HTMLCanvasElement, from: [number, number], to: [number, number]) => {
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { clientX: from[0], clientY: from[1], button: 0, pointerId: 1 }));
+    window.dispatchEvent(new PointerEvent('pointermove', { clientX: to[0], clientY: to[1], pointerId: 1 }));
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: to[0], clientY: to[1], pointerId: 1 }));
+  };
+
+  it('undo after a select-drag restores the original position of strokes and shapes', () => {
+    const { engine, history, canvas, teardown } = setup();
+    vi.stubGlobal('requestAnimationFrame', () => 0);
+
+    engine.setTool('pen');
+    drag(canvas, [20, 20], [80, 20]);
+    engine.setTool('rect');
+    drag(canvas, [200, 200], [260, 260]);
+    expect(engine.getElements()).toHaveLength(2);
+
+    const strokeBefore = JSON.parse(JSON.stringify(engine.getElements()[0])) as StrokeElement;
+    const rectBefore = JSON.parse(JSON.stringify(engine.getElements()[1])) as ShapeElement;
+
+    engine.selectAll();
+    drag(canvas, [230, 230], [330, 280]);
+
+    const moved = engine.getElements();
+    expect((moved[1] as ShapeElement).startX).toBe(rectBefore.startX + 100);
+    expect((moved[0] as StrokeElement).points[0].x).toBe(strokeBefore.points[0].x + 100);
+
+    const restored = history.undo()!;
+    engine.setElements(restored);
+    expect(engine.getElements()[0]).toEqual(strokeBefore);
+    expect(engine.getElements()[1]).toEqual(rectBefore);
+
+    const redone = history.redo()!;
+    engine.setElements(redone);
+    expect((engine.getElements()[1] as ShapeElement).startX).toBe(rectBefore.startX + 100);
+
+    vi.unstubAllGlobals();
+    teardown();
+  });
+
+  it('moveAll and repeated undo/redo never corrupt earlier snapshots', () => {
+    const { engine, history, teardown } = setup();
+    const rect: ShapeElement = {
+      id: 'r',
+      type: 'rect',
+      startX: 10,
+      startY: 10,
+      endX: 50,
+      endY: 50,
+      strokeColor: '#000',
+      strokeWidth: 2,
+      opacity: 1,
+      createdAt: 0,
+      bbox: { minX: 5, minY: 5, maxX: 55, maxY: 55 },
+    };
+    history.reset([rect]);
+    engine.setElements([rect]);
+
+    engine.moveAll(5, 0);
+    engine.moveAll(5, 0);
+    expect((engine.getElements()[0] as ShapeElement).startX).toBe(20);
+    expect(rect.startX).toBe(10);
+
+    engine.setElements(history.undo()!);
+    expect((engine.getElements()[0] as ShapeElement).startX).toBe(15);
+    engine.setElements(history.undo()!);
+    expect((engine.getElements()[0] as ShapeElement).startX).toBe(10);
+    engine.setElements(history.redo()!);
+    engine.setElements(history.redo()!);
+    expect((engine.getElements()[0] as ShapeElement).startX).toBe(20);
+
+    teardown();
   });
 });
