@@ -1,34 +1,65 @@
 export const SHADOW_STYLES = `
+/* Important :host declarations come from the inner cascade context, so they beat page rules on the host even when those are !important. */
 :host {
-  all: initial;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #e8eaf3;
-  box-sizing: border-box;
+  all: initial !important;
+  display: block !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: visible !important;
+  z-index: 2147483647 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  /* Any of these would become the containing block for the fixed-position toolbar and canvases. */
+  transform: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  perspective: none !important;
+  contain: none !important;
+  will-change: auto !important;
+  clip-path: none !important;
+  mask: none !important;
+  zoom: 1 !important;
+  direction: ltr !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+  line-height: 1.5 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  text-align: left !important;
+  color: #e8eaf3 !important;
+  box-sizing: border-box !important;
 
-  /* Design tokens (isolated copy — the host page never loads the app theme). */
-  --pa-bg: #141724;
-  --pa-surface: #1e2233;
-  --pa-surface-2: #262b3e;
-  --pa-elevated: #2f354c;
-  --pa-text: #e8eaf3;
-  --pa-muted: #9da6c0;
-  --pa-faint: #7d86a2;
-  --pa-line: rgba(255, 255, 255, 0.12);
-  --pa-line-strong: rgba(255, 255, 255, 0.18);
-  --pa-accent: #5b8def;
-  --pa-accent-strong: #3f63da;
-  --pa-accent-soft: #a9c1f8;
-  --pa-ring: #7ca5f7;
-  --pa-violet: #8b7ae0;
-  --pa-mint: #7fd1d0;
-  --pa-danger: #e0576b;
-  --pa-danger-soft: #f2a0aa;
-  --pa-warning: #e5a94a;
-  --pa-warning-soft: #f0c680;
-  --pa-ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --pa-panel-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.35), 0 2px 6px -1px rgba(0, 0, 0, 0.2);
+  /* Design tokens (isolated copy, the host page never loads the app theme). */
+  --pa-bg: #141724 !important;
+  --pa-surface: #1e2233 !important;
+  --pa-surface-2: #262b3e !important;
+  --pa-elevated: #2f354c !important;
+  --pa-text: #e8eaf3 !important;
+  --pa-muted: #9da6c0 !important;
+  --pa-faint: #7d86a2 !important;
+  --pa-line: rgba(255, 255, 255, 0.12) !important;
+  --pa-line-strong: rgba(255, 255, 255, 0.18) !important;
+  --pa-accent: #5b8def !important;
+  --pa-accent-strong: #3f63da !important;
+  --pa-accent-soft: #a9c1f8 !important;
+  --pa-ring: #7ca5f7 !important;
+  --pa-violet: #8b7ae0 !important;
+  --pa-mint: #7fd1d0 !important;
+  --pa-danger: #e0576b !important;
+  --pa-danger-soft: #f2a0aa !important;
+  --pa-warning: #e5a94a !important;
+  --pa-warning-soft: #f0c680 !important;
+  --pa-ease: cubic-bezier(0.4, 0, 0.2, 1) !important;
+  --pa-panel-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.35), 0 2px 6px -1px rgba(0, 0, 0, 0.2) !important;
 }
 
 *, *::before, *::after {
@@ -668,6 +699,15 @@ export const SHADOW_STYLES = `
 
 .pa-menu-item svg {
   flex: none;
+}
+
+.pa-menu-item-icon {
+  display: flex;
+  flex: none;
+}
+
+.pa-menu-item[aria-checked="true"] .pa-menu-item-hint {
+  color: var(--pa-accent-soft);
 }
 
 .pa-menu-item-label {

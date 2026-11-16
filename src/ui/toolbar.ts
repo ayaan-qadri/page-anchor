@@ -1,10 +1,11 @@
 import { CanvasEngine } from '../core/engine';
 import { HistoryManager } from '../core/history';
-import { ToolType } from '../types/engine.types';
+import { AnchorElement, ToolType } from '../types/engine.types';
 import { ExtensionSettings } from '../types/storage.types';
+import { ShortcutAction } from '../types/shortcuts.types';
 import { ToolbarCallbacks } from '../types/ui.types';
-import { ICONS } from '../icons/svg-icons';
-import { buildTooltip, setIconWithTooltip, setMarkup } from './dom';
+import { ICONS, IconName } from '../icons/svg-icons';
+import { buildTooltip, setMarkup } from './dom';
 import { TextEditorOverlay } from './text-editor';
 import { formatShortcutForDisplay } from '../core/shortcuts';
 import { DEFAULT_SETTINGS, saveSettings } from '../core/storage';
@@ -24,68 +25,168 @@ const PRESET_COLORS = [
   '#000000',
 ];
 
+const VIEWPORT_PADDING = 10;
+const TOAST_RESUME_MIN_MS = 1500;
+
+type ToolCategory = 'pen' | 'highlighter' | 'text' | 'shape' | 'none';
+type ColorSetting = 'defaultStrokeColor' | 'defaultHighlighterColor';
+type SizeSetting = 'defaultStrokeWidth' | 'defaultHighlighterWidth' | 'defaultFontSize';
+type PanelControl = 'strokeColor' | 'strokeWidth' | 'hlColor' | 'hlWidth' | 'fontSize' | 'none';
+
+interface ToolInfo {
+  category: ToolCategory;
+  label: string;
+  icon: IconName;
+  targetText?: string;
+}
+
+const TOOL_INFO: Record<ToolType, ToolInfo> = {
+  select: { category: 'none', label: 'Select & Move', icon: 'select' },
+  pen: { category: 'pen', label: 'Pen', icon: 'pen' },
+  highlighter: { category: 'highlighter', label: 'Highlighter', icon: 'highlighter' },
+  text: { category: 'text', label: 'Text Note', icon: 'text', targetText: 'Text note colours' },
+  eraser: { category: 'none', label: 'Eraser', icon: 'eraser' },
+  rect: { category: 'shape', label: 'Rectangle', icon: 'rect' },
+  circle: { category: 'shape', label: 'Circle', icon: 'circle' },
+  line: { category: 'shape', label: 'Line', icon: 'line' },
+  arrow: { category: 'shape', label: 'Arrow', icon: 'arrow' },
+  'double-arrow': { category: 'shape', label: 'Double Arrow', icon: 'doubleArrow' },
+};
+
+const SHAPE_TOOLS: ToolType[] = ['rect', 'circle', 'line', 'arrow', 'double-arrow'];
+
+const GRID_LABELS: Record<ToolCategory, string> = {
+  pen: 'Preset pen colors',
+  highlighter: 'Preset highlighter colors',
+  text: 'Preset text colors',
+  shape: 'Preset shape colors',
+  none: 'Preset pen colors',
+};
+
+/** Which popover controls each tool category shows, with the label each one takes. */
+const PANEL_LAYOUT: Record<ToolCategory, Partial<Record<PanelControl, string>>> = {
+  pen: { strokeColor: 'Pen colour', strokeWidth: 'Pen width' },
+  shape: { strokeColor: 'Stroke colour', strokeWidth: 'Stroke width' },
+  highlighter: { hlColor: 'Highlighter colour', hlWidth: 'Highlighter width' },
+  text: { strokeColor: 'Text colour', fontSize: 'Text note size' },
+  none: { none: '' },
+};
+
+interface PanelEntry {
+  root: HTMLElement;
+  label?: HTMLElement;
+  input?: HTMLInputElement;
+  sync?: () => void;
+}
+
+interface Menu {
+  wrapper: HTMLElement;
+  trigger: HTMLButtonElement;
+  menu: HTMLElement;
+}
+
+interface MenuItemOptions {
+  role: 'menuitem' | 'menuitemradio' | 'menuitemcheckbox';
+  icon: IconName;
+  label: string;
+  action?: string;
+  tool?: ToolType;
+  shortcut?: ShortcutAction;
+  withHint?: boolean;
+  onSelect: () => void;
+}
+
+interface ToastState {
+  el: HTMLElement;
+  timer: number | null;
+  remaining: number;
+  startedAt: number;
+  hovered: boolean;
+  focused: boolean;
+}
+
+const toolShortcut = (tool: ToolType): ShortcutAction => `tool-${tool}`;
+
+function childWithClass(parent: Element, className: string): HTMLElement | null {
+  for (const child of Array.from(parent.children)) {
+    if (child.classList.contains(className)) return child as HTMLElement;
+  }
+  return null;
+}
+
+/** Top edge of `el`, falling back to its inline `top` where layout is unavailable. */
+function topOf(el: HTMLElement, fallback: HTMLElement): number {
+  const top = el.getBoundingClientRect().top;
+  return top !== 0 ? top : parseFloat(fallback.style.top) || 0;
+}
+
+/** Shifts a floating element sideways so it stays inside the viewport. */
+function clampHorizontally(el: HTMLElement, centered: boolean, padding = VIEWPORT_PADDING): void {
+  el.style.transform = '';
+  const rect = el.getBoundingClientRect();
+  const viewportWidth = window.innerWidth || 1200;
+  let shift = 0;
+  if (rect.left < padding && rect.left !== 0) shift = padding - rect.left;
+  else if (rect.right > viewportWidth - padding) shift = viewportWidth - padding - rect.right;
+  if (shift !== 0) {
+    el.style.transform = centered ? `translateX(calc(-50% + ${shift}px))` : `translateX(${shift}px)`;
+  }
+}
+
 export class FloatingToolbar {
   private container: HTMLElement;
   private engine: CanvasEngine;
   private history: HistoryManager;
-  private textEditor: TextEditorOverlay;
   private settings: ExtensionSettings;
   private callbacks: ToolbarCallbacks;
 
   private wrapper: HTMLElement;
   private toolbar: HTMLElement;
   private colorPopover: HTMLElement;
-  private colorPreviewBtn: HTMLElement;
+  private colorPreviewBtn: HTMLButtonElement;
+  private liveRegion: HTMLElement;
+  private clearBtn!: HTMLButtonElement;
   private countBadge!: HTMLElement;
-  private toastElement: HTMLElement | null = null;
-  private toastTimer: number | null = null;
-  private menuWrappers: HTMLElement[] = [];
-  private strokeColorRow!: HTMLElement;
-  private strokeWidthGroup!: HTMLElement;
-  private hlColorRow!: HTMLElement;
-  private hlWidthGroup!: HTMLElement;
-  private fontSizeGroup!: HTMLElement;
-  private nonePanel!: HTMLElement;
+  private visibilityItem!: HTMLButtonElement;
+  private anchorItem!: HTMLButtonElement;
+  private panels!: Record<PanelControl, PanelEntry>;
+  private menus: Menu[] = [];
+  private readonly shortcutOf = new Map<HTMLElement, ShortcutAction>();
 
+  private toast: ToastState | null = null;
+  private announceTimer: number | null = null;
+  private positionSaveTimer: number | null = null;
+
+  private isOpen = false;
+  private hasReceivedSettings = false;
+  private returnFocusTo: HTMLElement | null = null;
   private isDragging = false;
   private dragOffset = { x: 0, y: 0 };
-  private positionSaveTimer: number | null = null;
 
   constructor(
     container: HTMLElement,
     engine: CanvasEngine,
     history: HistoryManager,
-    textEditor: TextEditorOverlay,
+    _textEditor: TextEditorOverlay,
     settings: ExtensionSettings,
     callbacks: ToolbarCallbacks = {}
   ) {
     this.container = container;
     this.engine = engine;
     this.history = history;
-    this.textEditor = textEditor;
-    this.settings = settings;
+    this.settings = { ...settings };
     this.callbacks = callbacks;
 
     this.wrapper = document.createElement('div');
     this.wrapper.className = 'pa-toolbar-wrapper';
     this.wrapper.setAttribute('role', 'region');
     this.wrapper.setAttribute('aria-label', 'Page Anchor drawing toolbar');
-
-    if (this.settings.toolbarPosition) {
-      this.wrapper.style.left = `${this.settings.toolbarPosition.x}px`;
-      this.wrapper.style.top = `${this.settings.toolbarPosition.y}px`;
-    } else {
-      this.wrapper.style.top = '24px';
-      this.wrapper.style.left = '50%';
-      this.wrapper.style.transform = 'translateX(-50%)';
-    }
+    this.wrapper.style.display = 'none';
 
     this.toolbar = document.createElement('div');
     this.toolbar.className = 'pa-toolbar';
     this.toolbar.setAttribute('role', 'toolbar');
     this.toolbar.setAttribute('aria-label', 'Drawing tools');
-
-    const shouldBeOpen = !!this.settings.isToolbarOpen;
 
     this.colorPopover = document.createElement('div');
     this.colorPopover.className = 'pa-popover';
@@ -93,76 +194,91 @@ export class FloatingToolbar {
     this.colorPopover.setAttribute('aria-label', 'Drawing defaults');
 
     this.colorPreviewBtn = document.createElement('button');
-    (this.colorPreviewBtn as HTMLButtonElement).type = 'button';
+    this.colorPreviewBtn.type = 'button';
+
+    // Kept outside the wrapper so announcements still work while the toolbar is hidden.
+    this.liveRegion = document.createElement('div');
+    this.liveRegion.className = 'sr-only pa-live-region';
+    this.liveRegion.setAttribute('role', 'status');
+    this.liveRegion.setAttribute('aria-live', 'polite');
+    this.liveRegion.setAttribute('aria-atomic', 'true');
 
     this.buildToolbarContent();
 
     this.wrapper.appendChild(this.toolbar);
     this.wrapper.appendChild(this.buildCornerCloseButton());
-    this.wrapper.appendChild(this.colorPopover);
     this.container.appendChild(this.wrapper);
+    this.container.appendChild(this.liveRegion);
 
     this.initDragEvents();
     this.initTooltipEvents();
     this.applyDrawingDefaults();
+    this.syncDrawingDefaultControls();
     this.updateActiveToolUI();
     this.updateHistoryButtons();
     this.updateBadge();
-    this.updateViewportPlacement();
+    this.engine.setAnnotationsVisible(this.settings.areAnnotationsVisible);
+    this.renderMenuToggles();
 
-    if (shouldBeOpen) {
-      this.setDrawingMode(true, false);
-    } else {
-      this.hideToolbar(false);
-    }
+    window.addEventListener('resize', this.handleResize, { passive: true });
+    window.addEventListener('pointerdown', this.handleOutsidePointerDown, true);
 
-    if (this.settings.areAnnotationsVisible !== undefined) {
-      this.engine.setAnnotationsVisible(this.settings.areAnnotationsVisible);
-    }
-
-    window.addEventListener('resize', () => {
-      if (this.wrapper.style.display !== 'none') {
-        this.ensureVisibleInViewport();
-        this.updateViewportPlacement();
-      }
-    }, { passive: true });
+    if (this.settings.keepToolbarOpen) this.setDrawingMode(true);
   }
 
+  /** Safe to call on every settings change; only the first call may open the toolbar. */
   public setSettings(settings: ExtensionSettings): void {
-    this.settings = settings;
+    const isFirst = !this.hasReceivedSettings;
+    this.hasReceivedSettings = true;
+
+    const pendingPosition = this.positionSaveTimer !== null || this.isDragging;
+    this.settings = {
+      ...settings,
+      toolbarPosition: pendingPosition ? this.settings.toolbarPosition : settings.toolbarPosition,
+    };
+
     this.applyDrawingDefaults();
     this.syncDrawingDefaultControls();
     this.updateTooltips();
-    if (settings.areAnnotationsVisible !== undefined) {
-      this.engine.setAnnotationsVisible(settings.areAnnotationsVisible);
+    this.engine.setAnnotationsVisible(settings.areAnnotationsVisible);
+    this.engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
+    this.engine.setStrokeSimplification(settings.strokeSimplification);
+    this.renderMenuToggles();
+
+    if (isFirst && settings.keepToolbarOpen) {
+      this.setDrawingMode(true);
+    } else if (this.isOpen && !pendingPosition) {
+      this.applyRestingPosition();
     }
-    if (settings.orphanedAnchorMode !== undefined) {
-      this.engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
+  }
+
+  /** Removes the toolbar's DOM and every listener it registered outside its own elements. */
+  public destroy(): void {
+    window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('pointerdown', this.handleOutsidePointerDown, true);
+    if (this.positionSaveTimer !== null) {
+      clearTimeout(this.positionSaveTimer);
+      this.positionSaveTimer = null;
+      saveSettings({ toolbarPosition: this.settings.toolbarPosition }).catch(() => {});
     }
-    if (settings.strokeSimplification !== undefined) {
-      this.engine.setStrokeSimplification(settings.strokeSimplification);
-    }
-    if (settings.isToolbarOpen) {
-      this.setDrawingMode(true, false);
-    } else {
-      this.hideToolbar(false);
-    }
+    this.dismissToast(true);
+    if (this.announceTimer !== null) clearTimeout(this.announceTimer);
+    this.announceTimer = null;
+    this.wrapper.remove();
+    this.liveRegion.remove();
   }
 
   public updateBadge(): void {
-    const count = this.engine.getElements().length;
     if (!this.countBadge) return;
-    if (count > 0) {
-      this.countBadge.textContent = `${count}`;
-      this.countBadge.style.display = 'inline-block';
-    } else {
-      this.countBadge.style.display = 'none';
-    }
+    const count = this.engine.getElements().length;
+    this.countBadge.textContent = `${count}`;
+    this.countBadge.style.display = count > 0 ? 'inline-block' : 'none';
+    this.renderShortcutLabel(this.clearBtn);
   }
 
   public updateHistoryButtons(): void {
-    const undoBtn = this.toolbar.querySelector('[data-action="undo"]') as HTMLButtonElement;
-    const redoBtn = this.toolbar.querySelector('[data-action="redo"]') as HTMLButtonElement;
+    const undoBtn = this.toolbar.querySelector<HTMLButtonElement>('[data-action="undo"]');
+    const redoBtn = this.toolbar.querySelector<HTMLButtonElement>('[data-action="redo"]');
     if (undoBtn) {
       const canUndo = this.history.canUndo();
       undoBtn.disabled = !canUndo;
@@ -175,79 +291,100 @@ export class FloatingToolbar {
     }
   }
 
-  public setDrawingMode(active: boolean, persist = true): void {
-    this.engine.setActiveMode(active);
-    if (active) {
-      this.showToolbar();
-    } else {
+  public setDrawingMode(active: boolean): void {
+    if (active === this.isOpen) return;
+    if (!active) {
       this.hideToolbar();
+      return;
     }
-    this.settings.isToolbarOpen = active;
-    if (persist) {
-      saveSettings({ isToolbarOpen: active }).catch(() => {});
-    }
-    this.callbacks.onToggleActive?.(active);
+    this.rememberFocusOrigin();
+    this.isOpen = true;
+    this.engine.setActiveMode(true);
+    this.wrapper.style.display = 'block';
+    this.applyRestingPosition();
+    this.callbacks.onToggleActive?.(true);
   }
 
-  /**
-   * Removes the toolbar from the page. Use the extension icon or a shortcut
-   * to bring it back.
-   */
-  public hideToolbar(persist = true): void {
+  public toggleDrawingMode(): void {
+    this.setDrawingMode(!this.isOpen);
+  }
+
+  /** Removes the toolbar from the page. Use the extension icon or a shortcut to bring it back. */
+  private hideToolbar(): void {
+    if (!this.isOpen) return;
+    this.moveFocusOutOfToolbar();
+    this.isOpen = false;
+    this.closeColorPopover();
+    this.closeMenus();
     this.engine.setActiveMode(false);
     this.wrapper.style.display = 'none';
-    this.colorPopover.classList.remove('open');
-    this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
-    this.settings.isToolbarOpen = false;
-    if (persist) {
-      saveSettings({ isToolbarOpen: false }).catch(() => {});
-    }
     this.callbacks.onToggleActive?.(false);
   }
 
-  /** Shows the toolbar at its resting position. */
-  private showToolbar(): void {
-    this.wrapper.style.display = 'block';
+  private activeElement(): Element | null {
+    const root = this.wrapper.getRootNode();
+    return root instanceof ShadowRoot ? root.activeElement : this.wrapper.ownerDocument.activeElement;
+  }
 
-    if (this.settings.toolbarPosition) {
+  private hasFocusWithin(el: HTMLElement): boolean {
+    const active = this.activeElement();
+    return !!active && el.contains(active);
+  }
+
+  private rememberFocusOrigin(): void {
+    const prev = document.activeElement;
+    const root = this.wrapper.getRootNode();
+    const isOwnHost = root instanceof ShadowRoot && prev === root.host;
+    this.returnFocusTo = prev instanceof HTMLElement && prev !== document.body && !isOwnHost ? prev : null;
+  }
+
+  /** Hands focus back to where it was before the toolbar opened, so it never sits on a hidden control. */
+  private moveFocusOutOfToolbar(): void {
+    const active = this.activeElement();
+    if (!(active instanceof HTMLElement) || !this.wrapper.contains(active)) return;
+    const target = this.returnFocusTo;
+    this.returnFocusTo = null;
+    if (target?.isConnected) target.focus({ preventScroll: true });
+    if (this.activeElement() === active) active.blur();
+  }
+
+  private readonly handleResize = (): void => {
+    if (this.isOpen && !this.isDragging) this.applyRestingPosition();
+  };
+
+  private readonly handleOutsidePointerDown = (e: Event): void => {
+    // composedPath() sees through the shadow root; pointerdown (not click) keeps the popover open when a slider drag ends outside it.
+    if (e.composedPath().includes(this.wrapper)) return;
+    this.closeColorPopover();
+    this.closeMenus();
+  };
+
+  /** Places the toolbar at the saved position, clamped into the viewport without changing what is saved. */
+  private applyRestingPosition(): void {
+    const pos = this.settings.toolbarPosition;
+    if (pos) {
+      const { x, y } = this.clampToViewport(pos.x, pos.y);
       this.wrapper.style.transform = 'none';
-      this.wrapper.style.left = `${this.settings.toolbarPosition.x}px`;
-      this.wrapper.style.top = `${this.settings.toolbarPosition.y}px`;
+      this.wrapper.style.left = `${x}px`;
+      this.wrapper.style.top = `${y}px`;
     } else {
       this.wrapper.style.transform = 'translateX(-50%)';
       this.wrapper.style.left = '50%';
       this.wrapper.style.top = '24px';
     }
-
-    this.ensureVisibleInViewport();
     this.updateViewportPlacement();
   }
 
-  public ensureVisibleInViewport(): void {
-    if (!this.wrapper || this.wrapper.style.display === 'none') return;
-    if (!this.settings.toolbarPosition) return;
-
+  private clampToViewport(x: number, y: number): { x: number; y: number } {
     const rect = this.wrapper.getBoundingClientRect();
     const w = rect.width || 440;
     const h = rect.height || 50;
-    const padding = 10;
-
-    const maxX = Math.max(padding, window.innerWidth - w - padding);
-    const maxY = Math.max(padding, window.innerHeight - h - padding);
-
-    const curLeft = parseFloat(this.wrapper.style.left) || rect.left;
-    const curTop = parseFloat(this.wrapper.style.top) || rect.top;
-
-    const clampX = Math.max(padding, Math.min(maxX, curLeft));
-    const clampY = Math.max(padding, Math.min(maxY, curTop));
-
-    if (curLeft !== clampX || curTop !== clampY) {
-      this.wrapper.style.transform = 'none';
-      this.wrapper.style.left = `${clampX}px`;
-      this.wrapper.style.top = `${clampY}px`;
-      this.persistToolbarPosition({ x: clampX, y: clampY });
-    }
-    this.updateViewportPlacement();
+    const maxX = Math.max(VIEWPORT_PADDING, window.innerWidth - w - VIEWPORT_PADDING);
+    const maxY = Math.max(VIEWPORT_PADDING, window.innerHeight - h - VIEWPORT_PADDING);
+    return {
+      x: Math.max(VIEWPORT_PADDING, Math.min(maxX, x)),
+      y: Math.max(VIEWPORT_PADDING, Math.min(maxY, y)),
+    };
   }
 
   private persistToolbarPosition(position: { x: number; y: number }): void {
@@ -260,18 +397,6 @@ export class FloatingToolbar {
     }, 200);
   }
 
-  public toggleDrawingMode(persist = true): void {
-    const newState = !this.engine.getActiveMode();
-    this.setDrawingMode(newState, persist);
-  }
-
-  /**
-   * Shows the toolbar if it is hidden, and hides it if it is showing.
-   */
-  public toggleToolbarVisibility(): void {
-    this.toggleDrawingMode();
-  }
-
   private buildToolbarContent(): void {
     const dragHandle = document.createElement('div');
     dragHandle.className = 'pa-drag-handle';
@@ -282,24 +407,18 @@ export class FloatingToolbar {
     dragHandle.appendChild(buildTooltip('Move toolbar', 'Arrow keys'));
     this.toolbar.appendChild(dragHandle);
 
-    this.toolbar.appendChild(this.createToolButton('select', 'Select & Move', 'tool-select', ICONS.select));
-
+    this.toolbar.appendChild(this.createToolButton('select'));
     this.toolbar.appendChild(this.createSeparator());
 
-    // Primary drawing tools stay on the bar. Everything less common lives in
-    // menus so the toolbar reads as a short list instead of a wall of icons.
-    this.toolbar.appendChild(this.createToolButton('pen', 'Pen', 'tool-pen', ICONS.pen));
-    this.toolbar.appendChild(this.createToolButton('highlighter', 'Highlighter', 'tool-highlighter', ICONS.highlighter));
-    this.toolbar.appendChild(this.createToolButton('text', 'Text Note', 'tool-text', ICONS.text));
-    this.toolbar.appendChild(this.createToolButton('eraser', 'Eraser', 'tool-eraser', ICONS.eraser));
-
+    // Primary drawing tools stay on the bar; less common ones live in menus.
+    this.toolbar.appendChild(this.createToolButton('pen'));
+    this.toolbar.appendChild(this.createToolButton('highlighter'));
+    this.toolbar.appendChild(this.createToolButton('text'));
+    this.toolbar.appendChild(this.createToolButton('eraser'));
     this.toolbar.appendChild(this.buildShapesMenu());
-
     this.toolbar.appendChild(this.createSeparator());
 
     this.colorPreviewBtn.className = 'pa-color-preview-btn';
-    this.colorPreviewBtn.style.backgroundColor = this.settings.defaultStrokeColor;
-    this.colorPreviewBtn.setAttribute('aria-label', 'Drawing defaults');
     this.colorPreviewBtn.setAttribute('aria-haspopup', 'dialog');
     this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
     this.colorPreviewBtn.appendChild(buildTooltip('Drawing defaults'));
@@ -308,379 +427,440 @@ export class FloatingToolbar {
       this.toggleColorPopover();
     });
     this.toolbar.appendChild(this.colorPreviewBtn);
-
     this.buildColorPopover();
+    // Directly after its trigger so Tab moves from the button into the popover.
+    this.toolbar.appendChild(this.colorPopover);
 
     this.toolbar.appendChild(this.createSeparator());
+    this.toolbar.appendChild(this.createActionButton('undo', 'Undo', 'undo', 'action-undo', () => this.undo()));
+    this.toolbar.appendChild(this.createActionButton('redo', 'Redo', 'redo', 'action-redo', () => this.redo()));
 
-    const undoBtn = this.createActionButton('undo', 'Undo', 'action-undo', ICONS.undo, () => {
-      this.undo();
-    });
-    this.toolbar.appendChild(undoBtn);
-
-    const redoBtn = this.createActionButton('redo', 'Redo', 'action-redo', ICONS.redo, () => {
-      this.redo();
-    });
-    this.toolbar.appendChild(redoBtn);
-
-    const clearBtn = this.createActionButton('clear', 'Clear Page', 'action-clear', ICONS.trash, () => {
-      this.clearPageWithToast();
-    });
-    this.toolbar.appendChild(clearBtn);
-
-    // The count of drawings on this page, shown on the clear button so the
-    // user can tell what it would remove.
+    this.clearBtn = this.createActionButton('clear', 'Clear Page', 'trash', 'action-clear', () =>
+      this.clearPageWithToast()
+    );
     const countBadge = document.createElement('span');
     countBadge.className = 'pa-count-badge';
+    countBadge.setAttribute('aria-hidden', 'true');
     countBadge.style.display = 'none';
-    countBadge.setAttribute('aria-label', 'Active annotations');
-    countBadge.textContent = '0';
-    clearBtn.appendChild(countBadge);
+    this.clearBtn.appendChild(countBadge);
     this.countBadge = countBadge;
+    this.toolbar.appendChild(this.clearBtn);
 
     this.toolbar.appendChild(this.buildMoreMenu());
   }
 
-  /**
-   * A menu of the five shape tools. They keep their own keyboard shortcuts,
-   * so the menu is a convenience rather than the only route to them.
-   */
+  /** The five shape tools. They keep their own shortcuts, so the menu is a convenience rather than the only route. */
   private buildShapesMenu(): HTMLElement {
+    const items = SHAPE_TOOLS.map((tool) =>
+      this.createMenuItem({
+        role: 'menuitemradio',
+        icon: TOOL_INFO[tool].icon,
+        label: TOOL_INFO[tool].label,
+        tool,
+        shortcut: toolShortcut(tool),
+        onSelect: () => {
+          this.engine.setTool(tool);
+          this.updateActiveToolUI();
+        },
+      })
+    );
+    return this.buildMenu('shapes', 'Shape tools', 'shapes', false, items);
+  }
+
+  private buildMoreMenu(): HTMLElement {
+    this.visibilityItem = this.createMenuItem({
+      role: 'menuitemcheckbox',
+      icon: 'eye',
+      label: 'Show Drawings',
+      action: 'visibility',
+      withHint: true,
+      onSelect: () => {
+        const next = !this.engine.getAnnotationsVisible();
+        this.engine.setAnnotationsVisible(next);
+        this.settings.areAnnotationsVisible = next;
+        saveSettings({ areAnnotationsVisible: next }).catch(() => {});
+        this.renderMenuToggles();
+      },
+    });
+
+    this.anchorItem = this.createMenuItem({
+      role: 'menuitemcheckbox',
+      icon: 'anchor',
+      label: 'Smart Anchoring',
+      action: 'dom-anchor',
+      withHint: true,
+      onSelect: () => {
+        const next = !this.engine.getDomAnchoringEnabled();
+        this.engine.setDomAnchoringEnabled(next);
+        this.callbacks.onToggleDomAnchoring?.(next);
+        this.renderMenuToggles();
+      },
+    });
+
+    const items = [
+      this.createMenuItem({
+        role: 'menuitem',
+        icon: 'selectAll',
+        label: 'Select All to Move',
+        action: 'select-all',
+        onSelect: () => {
+          this.engine.selectAll();
+          this.updateActiveToolUI();
+        },
+      }),
+      this.visibilityItem,
+      this.anchorItem,
+      this.createMenuItem({
+        role: 'menuitem',
+        icon: 'settings',
+        label: 'Settings & Backup',
+        action: 'open-options',
+        onSelect: () => this.callbacks.onOpenOptions?.(),
+      }),
+    ];
+    return this.buildMenu('more', 'More options', 'more', true, items);
+  }
+
+  private createMenuItem(opts: MenuItemOptions): HTMLButtonElement {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'pa-menu-item';
+    item.tabIndex = -1;
+    item.setAttribute('role', opts.role);
+    if (opts.action) item.dataset.action = opts.action;
+    if (opts.tool) item.dataset.tool = opts.tool;
+    if (opts.role !== 'menuitem') item.setAttribute('aria-checked', 'false');
+
+    const icon = document.createElement('span');
+    icon.className = 'pa-menu-item-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    setMarkup(icon, ICONS[opts.icon]);
+    item.appendChild(icon);
+
+    const label = document.createElement('span');
+    label.className = 'pa-menu-item-label';
+    label.textContent = opts.label;
+    item.appendChild(label);
+
+    if (opts.withHint) {
+      const hint = document.createElement('span');
+      hint.className = 'pa-menu-item-hint';
+      hint.setAttribute('aria-hidden', 'true');
+      item.appendChild(hint);
+    }
+
+    if (opts.shortcut) {
+      const kbd = document.createElement('kbd');
+      kbd.className = 'pa-menu-item-key';
+      item.appendChild(kbd);
+      this.registerShortcut(item, opts.shortcut);
+    }
+
+    item.addEventListener('click', opts.onSelect);
+    return item;
+  }
+
+  private buildMenu(
+    action: string,
+    label: string,
+    icon: IconName,
+    alignRight: boolean,
+    items: HTMLButtonElement[]
+  ): HTMLElement {
     const wrapper = document.createElement('div');
     wrapper.className = 'pa-menu-anchor';
 
     const trigger = document.createElement('button');
-    trigger.type = 'button';
     trigger.className = 'pa-btn pa-menu-trigger';
-    trigger.dataset.action = 'shapes';
+    trigger.dataset.action = action;
     trigger.setAttribute('aria-haspopup', 'menu');
     trigger.setAttribute('aria-expanded', 'false');
-    trigger.setAttribute('aria-label', 'Shape tools');
-    setIconWithTooltip(trigger, ICONS.shapes, 'Shape tools');
-    wrapper.appendChild(trigger);
+    this.decorateButton(trigger, label, icon);
 
     const menu = document.createElement('div');
-    menu.className = 'pa-menu';
+    menu.className = alignRight ? 'pa-menu pa-menu-right' : 'pa-menu';
     menu.setAttribute('role', 'menu');
-    menu.setAttribute('aria-label', 'Shape tools');
+    menu.setAttribute('aria-label', label);
 
-    const shapes: Array<[ToolType, string, string, string]> = [
-      ['rect', 'Rectangle', 'tool-rect', ICONS.rect],
-      ['circle', 'Circle', 'tool-circle', ICONS.circle],
-      ['line', 'Line', 'tool-line', ICONS.line],
-      ['arrow', 'Arrow', 'tool-arrow', ICONS.arrow],
-      ['double-arrow', 'Double Arrow', 'tool-double-arrow', ICONS.doubleArrow],
-    ];
-
-    for (const [tool, name, shortcutId, icon] of shapes) {
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.className = 'pa-menu-item';
-      item.dataset.tool = tool;
-      item.setAttribute('role', 'menuitemradio');
-      item.setAttribute('aria-checked', 'false');
-      setMarkup(item, icon);
-      const label = document.createElement('span');
-      label.className = 'pa-menu-item-label';
-      label.textContent = name;
-      item.appendChild(label);
-      const kbd = document.createElement('kbd');
-      kbd.className = 'pa-menu-item-key';
-      kbd.textContent = this.getShortcutDisplay(shortcutId);
-      item.appendChild(kbd);
-      item.addEventListener('click', () => {
-        this.engine.setTool(tool);
-        this.updateActiveToolUI();
-        this.closeMenus();
-      });
+    const entry: Menu = { wrapper, trigger, menu };
+    for (const item of items) {
+      item.addEventListener('click', () => this.closeMenu(entry, this.hasFocusWithin(menu)));
       menu.appendChild(item);
     }
 
-    wrapper.appendChild(menu);
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.toggleMenu(wrapper, menu, trigger);
+      if (wrapper.classList.contains('open')) this.closeMenu(entry);
+      else this.openMenu(entry, 'first');
+    });
+    trigger.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.openMenu(entry, e.key === 'ArrowDown' ? 'first' : 'last');
+    });
+    menu.addEventListener('keydown', (e) => this.handleMenuKeydown(entry, e));
+    wrapper.addEventListener('focusout', (e) => {
+      if (e.relatedTarget instanceof Node && !wrapper.contains(e.relatedTarget)) this.closeMenu(entry);
     });
 
-    this.menuWrappers.push(wrapper);
-    return wrapper;
-  }
-
-  /**
-   * A menu of the secondary controls: select-all, drawing visibility, smart
-   * anchoring, and toolbar placement.
-   */
-  private buildMoreMenu(): HTMLElement {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'pa-menu-anchor';
-
-    const trigger = document.createElement('button');
-    trigger.type = 'button';
-    trigger.className = 'pa-btn pa-menu-trigger';
-    trigger.dataset.action = 'more';
-    trigger.setAttribute('aria-haspopup', 'menu');
-    trigger.setAttribute('aria-expanded', 'false');
-    trigger.setAttribute('aria-label', 'More options');
-    setIconWithTooltip(trigger, ICONS.more, 'More options');
     wrapper.appendChild(trigger);
-
-    const menu = document.createElement('div');
-    menu.className = 'pa-menu pa-menu-right';
-    menu.setAttribute('role', 'menu');
-    menu.setAttribute('aria-label', 'More options');
-
-    const selectAllItem = document.createElement('button');
-    selectAllItem.type = 'button';
-    selectAllItem.className = 'pa-menu-item';
-    selectAllItem.dataset.action = 'select-all';
-    selectAllItem.setAttribute('role', 'menuitem');
-    selectAllItem.setAttribute('aria-label', 'Select All to Move');
-    setMarkup(selectAllItem, ICONS.selectAll);
-    const selectAllLabel = document.createElement('span');
-    selectAllLabel.className = 'pa-menu-item-label';
-    selectAllLabel.textContent = 'Select All to Move';
-    selectAllItem.appendChild(selectAllLabel);
-    selectAllItem.addEventListener('click', () => {
-      this.engine.selectAll();
-      this.updateActiveToolUI();
-      this.closeMenus();
-    });
-    menu.appendChild(selectAllItem);
-
-    const isVisible = this.engine.getAnnotationsVisible();
-    const eyeBtn = document.createElement('button');
-    eyeBtn.type = 'button';
-    eyeBtn.className = 'pa-menu-item';
-    eyeBtn.dataset.action = 'visibility';
-    eyeBtn.setAttribute('role', 'menuitemcheckbox');
-    eyeBtn.setAttribute('aria-checked', isVisible ? 'true' : 'false');
-    eyeBtn.setAttribute('aria-label', isVisible ? 'Hide Drawings' : 'Show Drawings');
-    setMarkup(eyeBtn, isVisible ? ICONS.eye : ICONS.eyeOff);
-    const eyeLabel = document.createElement('span');
-    eyeLabel.className = 'pa-menu-item-label';
-    eyeLabel.textContent = isVisible ? 'Hide Drawings' : 'Show Drawings';
-    eyeBtn.appendChild(eyeLabel);
-    eyeBtn.addEventListener('click', () => {
-      const next = !this.engine.getAnnotationsVisible();
-      this.engine.setAnnotationsVisible(next);
-      this.settings.areAnnotationsVisible = next;
-      saveSettings({ areAnnotationsVisible: next }).catch(() => {});
-      eyeBtn.setAttribute('aria-checked', next ? 'true' : 'false');
-      eyeLabel.textContent = next ? 'Hide Drawings' : 'Show Drawings';
-      setMarkup(eyeBtn, next ? ICONS.eye : ICONS.eyeOff);
-      this.closeMenus();
-    });
-    menu.appendChild(eyeBtn);
-
-    const isAnchoring = this.engine.getDomAnchoringEnabled();
-    const anchorBtn = document.createElement('button');
-    anchorBtn.type = 'button';
-    anchorBtn.className = 'pa-menu-item';
-    anchorBtn.dataset.action = 'dom-anchor';
-    anchorBtn.setAttribute('role', 'menuitemcheckbox');
-    anchorBtn.setAttribute('aria-checked', isAnchoring ? 'true' : 'false');
-    anchorBtn.setAttribute('aria-label', isAnchoring ? 'Smart Anchoring: On' : 'Smart Anchoring: Off');
-    setMarkup(anchorBtn, ICONS.anchor);
-    const anchorLabel = document.createElement('span');
-    anchorLabel.className = 'pa-menu-item-label';
-    anchorLabel.textContent = isAnchoring ? 'Smart Anchoring: On' : 'Smart Anchoring: Off';
-    anchorBtn.appendChild(anchorLabel);
-    anchorBtn.addEventListener('click', () => {
-      const next = !this.engine.getDomAnchoringEnabled();
-      this.engine.setDomAnchoringEnabled(next);
-      this.callbacks.onToggleDomAnchoring?.(next);
-      anchorBtn.setAttribute('aria-checked', next ? 'true' : 'false');
-      anchorLabel.textContent = next ? 'Smart Anchoring: On' : 'Smart Anchoring: Off';
-      this.closeMenus();
-    });
-    menu.appendChild(anchorBtn);
-
-    const settingsItem = document.createElement('button');
-    settingsItem.type = 'button';
-    settingsItem.className = 'pa-menu-item';
-    settingsItem.dataset.action = 'open-options';
-    settingsItem.setAttribute('role', 'menuitem');
-    settingsItem.setAttribute('aria-label', 'Settings & Backup');
-    setMarkup(settingsItem, ICONS.settings);
-    const settingsLabel = document.createElement('span');
-    settingsLabel.className = 'pa-menu-item-label';
-    settingsLabel.textContent = 'Settings & Backup';
-    settingsItem.appendChild(settingsLabel);
-    settingsItem.addEventListener('click', () => {
-      this.closeMenus();
-      this.callbacks.onOpenOptions?.();
-    });
-    menu.appendChild(settingsItem);
-
     wrapper.appendChild(menu);
-    trigger.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.toggleMenu(wrapper, menu, trigger);
-    });
-
-    this.menuWrappers.push(wrapper);
+    this.menus.push(entry);
     return wrapper;
   }
 
-  private toggleMenu(wrapper: HTMLElement, menu: HTMLElement, trigger: HTMLElement): void {
-    const isOpen = wrapper.classList.contains('open');
+  private menuItems(entry: Menu): HTMLElement[] {
+    return Array.from(entry.menu.querySelectorAll<HTMLElement>('[role^="menuitem"]'));
+  }
+
+  private handleMenuKeydown(entry: Menu, e: KeyboardEvent): void {
+    if (e.key === 'Tab') {
+      // Focus the trigger first so the browser's own Tab step continues from there.
+      this.closeMenu(entry, true);
+      return;
+    }
+    const items = this.menuItems(entry);
+    const current = e.target instanceof HTMLElement ? items.indexOf(e.target) : -1;
+    let next: number;
+    switch (e.key) {
+      case 'ArrowDown':
+        next = (current + 1) % items.length;
+        break;
+      case 'ArrowUp':
+        next = (current - 1 + items.length) % items.length;
+        break;
+      case 'Home':
+        next = 0;
+        break;
+      case 'End':
+        next = items.length - 1;
+        break;
+      case 'Escape':
+        e.preventDefault();
+        e.stopPropagation();
+        this.closeMenu(entry, true);
+        return;
+      default:
+        return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    items[next]?.focus();
+  }
+
+  private openMenu(entry: Menu, focus: 'first' | 'last'): void {
+    this.closeColorPopover();
     this.closeMenus();
-    if (isOpen) return;
-    wrapper.classList.add('open');
-    menu.classList.add('open');
-    trigger.setAttribute('aria-expanded', 'true');
-    this.positionMenu(wrapper, menu);
+    entry.wrapper.classList.add('open');
+    entry.menu.classList.add('open');
+    entry.trigger.setAttribute('aria-expanded', 'true');
+    this.positionMenu(entry);
+    const items = this.menuItems(entry);
+    items[focus === 'first' ? 0 : items.length - 1]?.focus();
   }
 
-  private positionMenu(wrapper: HTMLElement, menu: HTMLElement): void {
-    const triggerRect = wrapper.getBoundingClientRect();
-    const curTop = triggerRect.top !== 0 ? triggerRect.top : (parseFloat(this.wrapper.style.top) || 0);
-    const triggerHeight = wrapper.offsetHeight || 32;
-    const menuHeight = menu.offsetHeight || 220;
-    const padding = 10;
-    const viewportHeight = window.innerHeight || 800;
-    const roomBelow = viewportHeight - (curTop + triggerHeight) - padding;
-    const roomAbove = curTop - padding;
-
-    const isAbove = roomBelow < menuHeight && roomAbove > roomBelow;
-    menu.classList.toggle('above', isAbove);
-
-    const availableHeight = isAbove ? roomAbove : roomBelow;
-    if (availableHeight < menuHeight && availableHeight > 0) {
-      menu.style.maxHeight = `${Math.max(120, availableHeight)}px`;
-      menu.style.overflowY = 'auto';
-    } else {
-      menu.style.maxHeight = '';
-      menu.style.overflowY = '';
-    }
-
-    // Horizontal clamping to prevent viewport overflow
-    menu.style.transform = '';
-    const menuRect = menu.getBoundingClientRect();
-    const viewportWidth = window.innerWidth || 1200;
-
-    if (menuRect.left < padding && menuRect.left !== 0) {
-      const shift = padding - menuRect.left;
-      if (menu.classList.contains('pa-menu-right')) {
-        menu.style.transform = `translateX(${shift}px)`;
-      } else {
-        menu.style.transform = `translateX(calc(-50% + ${shift}px))`;
-      }
-    } else if (menuRect.right > viewportWidth - padding) {
-      const shift = menuRect.right - (viewportWidth - padding);
-      if (menu.classList.contains('pa-menu-right')) {
-        menu.style.transform = `translateX(-${shift}px)`;
-      } else {
-        menu.style.transform = `translateX(calc(-50% - ${shift}px))`;
-      }
-    }
+  private closeMenu(entry: Menu, restoreFocus = false): void {
+    entry.wrapper.classList.remove('open');
+    entry.menu.classList.remove('open', 'above');
+    entry.menu.style.maxHeight = '';
+    entry.menu.style.transform = '';
+    entry.trigger.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) entry.trigger.focus();
   }
 
-  /** Closes every open toolbar menu. */
   public closeMenus(): void {
-    for (const wrapper of this.menuWrappers) {
-      wrapper.classList.remove('open');
-      const menu = wrapper.querySelector('.pa-menu') as HTMLElement | null;
-      if (menu) {
-        menu.classList.remove('open', 'above');
-        menu.style.maxHeight = '';
-        menu.style.overflowY = '';
-        menu.style.transform = '';
-      }
-      wrapper.querySelector('.pa-menu-trigger')?.setAttribute('aria-expanded', 'false');
-    }
+    for (const entry of this.menus) this.closeMenu(entry);
+  }
+
+  /** Opens `el` on its preferred side of the anchor, flips it when the other side has more room, caps its height and keeps it on screen. */
+  private placeFloating(
+    el: HTMLElement,
+    anchor: HTMLElement,
+    opts: { preferred: 'above' | 'below'; flipClass: string; fallbackSize: number; minHeight: number; centered: boolean }
+  ): void {
+    const top = topOf(anchor, this.wrapper);
+    const anchorHeight = anchor.offsetHeight || 32;
+    const size = el.offsetHeight || opts.fallbackSize;
+    const viewportHeight = window.innerHeight || 800;
+    const room = {
+      above: top - VIEWPORT_PADDING,
+      below: viewportHeight - (top + anchorHeight) - VIEWPORT_PADDING,
+    };
+    const other = opts.preferred === 'above' ? 'below' : 'above';
+    const flip = room[opts.preferred] < size && room[other] > room[opts.preferred];
+    el.classList.toggle(opts.flipClass, flip);
+
+    const available = room[flip ? other : opts.preferred];
+    el.style.maxHeight = available > 0 && available < size ? `${Math.max(opts.minHeight, available)}px` : '';
+    clampHorizontally(el, opts.centered);
+  }
+
+  private positionMenu(entry: Menu): void {
+    this.placeFloating(entry.menu, entry.wrapper, {
+      preferred: 'below',
+      flipClass: 'above',
+      fallbackSize: 220,
+      minHeight: 120,
+      centered: !entry.menu.classList.contains('pa-menu-right'),
+    });
+  }
+
+  private positionColorPopover(): void {
+    this.placeFloating(this.colorPopover, this.wrapper, {
+      preferred: 'above',
+      flipClass: 'below',
+      fallbackSize: 320,
+      minHeight: 160,
+      centered: true,
+    });
+  }
+
+  /** Renders the checked state of the More menu toggles from the engine, or from an explicit override. */
+  private renderMenuToggles(override: { visible?: boolean; anchoring?: boolean } = {}): void {
+    const visible = override.visible ?? this.engine.getAnnotationsVisible();
+    const anchoring = override.anchoring ?? this.engine.getDomAnchoringEnabled();
+    this.renderToggleItem(this.visibilityItem, visible, visible ? 'eye' : 'eyeOff');
+    this.renderToggleItem(this.anchorItem, anchoring, 'anchor');
+  }
+
+  private renderToggleItem(item: HTMLButtonElement, on: boolean, icon: IconName): void {
+    item.setAttribute('aria-checked', on ? 'true' : 'false');
+    const iconSlot = childWithClass(item, 'pa-menu-item-icon');
+    if (iconSlot) setMarkup(iconSlot, ICONS[icon]);
+    const hint = childWithClass(item, 'pa-menu-item-hint');
+    if (hint) hint.textContent = on ? 'On' : 'Off';
   }
 
   public updateDomAnchoringUI(enabled: boolean): void {
-    const btn = this.toolbar.querySelector('[data-action="dom-anchor"]') as HTMLButtonElement | null;
-    if (btn) {
-      btn.setAttribute('aria-checked', enabled ? 'true' : 'false');
-      const label = btn.querySelector('.pa-menu-item-label');
-      if (label) label.textContent = enabled ? 'Smart Anchoring: On' : 'Smart Anchoring: Off';
-    }
+    this.renderMenuToggles({ anchoring: enabled });
   }
 
   public isHighlighterActive(): boolean {
     return this.engine.getTool() === 'highlighter';
   }
 
-  public showToast(
-    message: string,
-    actionLabel?: string,
-    onAction?: () => void,
-    durationMs = 4500
-  ): void {
-    if (this.toastElement) {
-      this.toastElement.remove();
-      this.toastElement = null;
-    }
-    if (this.toastTimer) {
-      clearTimeout(this.toastTimer);
-      this.toastTimer = null;
-    }
+  /** Announces through the persistent live region; clearing first makes a repeated message announce again. */
+  private announce(message: string): void {
+    this.liveRegion.textContent = '';
+    if (this.announceTimer !== null) clearTimeout(this.announceTimer);
+    this.announceTimer = window.setTimeout(() => {
+      this.announceTimer = null;
+      this.liveRegion.textContent = message;
+    }, 50);
+  }
 
-    const toast = document.createElement('div');
-    toast.className = 'pa-toast';
-    toast.setAttribute('role', 'status');
-    toast.setAttribute('aria-live', 'polite');
+  public showToast(message: string, actionLabel?: string, onAction?: () => void, durationMs = 4500): void {
+    this.dismissToast(true);
+
+    const el = document.createElement('div');
+    el.className = 'pa-toast';
 
     const text = document.createElement('span');
     text.className = 'pa-toast-text';
     text.textContent = message;
-    toast.appendChild(text);
+    el.appendChild(text);
 
-    const dismiss = () => {
-      toast.classList.add('pa-toast-hiding');
-      setTimeout(() => {
-        if (toast.parentNode) toast.remove();
-        if (this.toastElement === toast) this.toastElement = null;
-      }, 180);
+    const state: ToastState = { el, timer: null, remaining: durationMs, startedAt: 0, hovered: false, focused: false };
+    const pause = () => {
+      if (state.timer === null) return;
+      clearTimeout(state.timer);
+      state.timer = null;
+      state.remaining = Math.max(TOAST_RESUME_MIN_MS, state.remaining - (Date.now() - state.startedAt));
     };
+    const resume = () => {
+      if (state.timer !== null || state.hovered || state.focused || this.toast !== state) return;
+      state.startedAt = Date.now();
+      state.timer = window.setTimeout(() => this.dismissToast(), state.remaining);
+    };
+
+    el.addEventListener('pointerenter', () => {
+      state.hovered = true;
+      pause();
+    });
+    el.addEventListener('pointerleave', () => {
+      state.hovered = false;
+      resume();
+    });
+    el.addEventListener('focusin', () => {
+      state.focused = true;
+      pause();
+    });
+    el.addEventListener('focusout', (e) => {
+      if (e.relatedTarget instanceof Node && el.contains(e.relatedTarget)) return;
+      state.focused = false;
+      resume();
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.dismissToast();
+    });
 
     if (actionLabel && onAction) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'pa-toast-btn';
       btn.textContent = actionLabel;
-      btn.setAttribute('aria-label', actionLabel);
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         onAction();
-        dismiss();
+        this.dismissToast();
       });
-      toast.appendChild(btn);
+      el.appendChild(btn);
     }
 
-    const curTop = parseFloat(this.wrapper.style.top) || this.wrapper.getBoundingClientRect().top || 0;
-    const roomBelow = (window.innerHeight || 800) - (curTop + (this.wrapper.offsetHeight || 44));
-    if (roomBelow < 48) {
-      toast.classList.add('above');
+    const top = parseFloat(this.wrapper.style.top) || this.wrapper.getBoundingClientRect().top || 0;
+    const roomBelow = (window.innerHeight || 800) - (top + (this.wrapper.offsetHeight || 44));
+    el.classList.toggle('above', roomBelow < 48);
+
+    this.wrapper.appendChild(el);
+    this.toast = state;
+    resume();
+    this.announce(message);
+  }
+
+  private dismissToast(immediate = false): void {
+    const state = this.toast;
+    if (!state) return;
+    this.toast = null;
+    if (state.timer !== null) clearTimeout(state.timer);
+    if (this.hasFocusWithin(state.el) && this.isOpen) this.clearBtn.focus();
+    if (immediate) {
+      state.el.remove();
+      return;
     }
-
-    this.wrapper.appendChild(toast);
-    this.toastElement = toast;
-
-    this.toastTimer = window.setTimeout(() => {
-      dismiss();
-    }, durationMs);
+    state.el.classList.add('pa-toast-hiding');
+    window.setTimeout(() => state.el.remove(), 180);
   }
 
   public clearPageWithToast(): void {
-    const hadElements = this.engine.getElements().length > 0;
+    const cleared = this.engine.getElements();
 
-    // `engine.clear()` reports the change, which the host records in the undo
-    // history. One undo therefore steps straight back to the cleared page.
+    // engine.clear() reports the change, which the host records in history, so one undo restores the page.
     this.engine.clear();
     this.updateHistoryButtons();
     this.updateBadge();
     this.callbacks.onClear?.();
 
-    if (hadElements) {
-      this.showToast('Page drawings cleared', 'Undo', () => this.undo());
+    if (cleared.length > 0) {
+      this.showToast('Page drawings cleared', 'Undo', () => this.restoreCleared(cleared));
     }
   }
 
-  /** Reverts the most recent change, restoring the previous page state. */
+  /** Brings back exactly the drawings a clear removed, keeping anything drawn since. */
+  private restoreCleared(cleared: AnchorElement[]): void {
+    const current = this.engine.getElements();
+    const present = new Set(current.map((el) => el.id));
+    const restored = [...current, ...cleared.filter((el) => !present.has(el.id))];
+    this.engine.setElements(restored);
+    this.history.pushState([...restored]);
+    this.updateHistoryButtons();
+    this.updateBadge();
+    this.callbacks.onClear?.();
+  }
+
   public undo(): void {
     const prev = this.history.undo();
     if (prev === null) return;
@@ -690,7 +870,6 @@ export class FloatingToolbar {
     this.callbacks.onClear?.();
   }
 
-  /** Re-applies the most recently undone change. */
   public redo(): void {
     const next = this.history.redo();
     if (next === null) return;
@@ -701,44 +880,33 @@ export class FloatingToolbar {
   }
 
   private toggleColorPopover(): void {
-    const isOpen = this.colorPopover.classList.toggle('open');
-    this.colorPreviewBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-    if (isOpen) {
-      this.refreshColorControls();
-      this.positionColorPopover();
-    }
+    if (this.colorPopover.classList.contains('open')) this.closeColorPopover();
+    else this.openColorPopover();
   }
 
-  /** Flips the popover below the toolbar when there is not enough room above and keeps it in viewport bounds. */
-  private positionColorPopover(): void {
-    const wrapperRect = this.wrapper.getBoundingClientRect();
-    const curTop = wrapperRect.top !== 0 ? wrapperRect.top : (parseFloat(this.wrapper.style.top) || 0);
-    const padding = 10;
-    const roomAbove = curTop - padding;
-    const viewportHeight = window.innerHeight || 800;
-    const wrapperHeight = this.wrapper.offsetHeight || 44;
-    const roomBelow = viewportHeight - (curTop + wrapperHeight) - padding;
-    const height = this.colorPopover.offsetHeight || 320;
+  private openColorPopover(): void {
+    this.closeMenus();
+    this.colorPopover.classList.add('open');
+    this.colorPreviewBtn.setAttribute('aria-expanded', 'true');
+    this.refreshColorControls();
+    this.firstVisibleControl(this.colorPopover)?.focus();
+  }
 
-    const isBelow = roomAbove < height && (roomBelow >= roomAbove || roomAbove < 100);
-    this.colorPopover.classList.toggle('below', isBelow);
-
-    const availableHeight = isBelow ? roomBelow - 10 : roomAbove - 10;
-    if (availableHeight > 0) {
-      this.colorPopover.style.maxHeight = `${Math.max(160, Math.min(520, availableHeight))}px`;
-    }
-
-    // Horizontal clamping to prevent viewport overflow
+  private closeColorPopover(restoreFocus = false): void {
+    this.colorPopover.classList.remove('open');
     this.colorPopover.style.transform = '';
-    const popoverRect = this.colorPopover.getBoundingClientRect();
-    const viewportWidth = window.innerWidth || 1200;
-    if (popoverRect.left < padding && popoverRect.left !== 0) {
-      const shift = padding - popoverRect.left;
-      this.colorPopover.style.transform = `translateX(calc(-50% + ${shift}px))`;
-    } else if (popoverRect.right > viewportWidth - padding) {
-      const shift = popoverRect.right - (viewportWidth - padding);
-      this.colorPopover.style.transform = `translateX(calc(-50% - ${shift}px))`;
-    }
+    this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) this.colorPreviewBtn.focus();
+  }
+
+  private firstVisibleControl(root: HTMLElement): HTMLElement | null {
+    const isShown = (el: HTMLElement): boolean => {
+      for (let node: HTMLElement | null = el; node && node !== root; node = node.parentElement) {
+        if (node.style.display === 'none') return false;
+      }
+      return true;
+    };
+    return Array.from(root.querySelectorAll<HTMLElement>('button, input')).find(isShown) ?? null;
   }
 
   private buildColorPopover(): void {
@@ -769,8 +937,7 @@ export class FloatingToolbar {
     headerRow.appendChild(badge);
     header.appendChild(headerRow);
 
-    // Names the tool the swatches below will change, so the grid is never
-    // ambiguous about what it is about to recolour.
+    // Names the tool the swatches will change, so the grid is never ambiguous about what it recolours.
     const target = document.createElement('div');
     target.className = 'pa-color-target';
     target.setAttribute('aria-live', 'polite');
@@ -784,114 +951,31 @@ export class FloatingToolbar {
     const grid = document.createElement('div');
     grid.className = 'pa-color-grid';
     grid.setAttribute('role', 'group');
-    const isHl = this.isHighlighterActive();
-    const activeColor = isHl ? this.settings.defaultHighlighterColor : this.settings.defaultStrokeColor;
-    grid.setAttribute('aria-label', isHl ? 'Preset highlighter colors' : 'Preset pen colors');
-
-    PRESET_COLORS.forEach((color) => {
+    for (const color of PRESET_COLORS) {
       const swatch = document.createElement('button');
       swatch.type = 'button';
-      const isActive = color === activeColor;
-      swatch.className = `pa-color-swatch ${isActive ? 'active' : ''}`;
+      swatch.className = 'pa-color-swatch';
       swatch.style.backgroundColor = color;
       swatch.dataset.color = color;
       swatch.setAttribute('aria-label', `Color ${color}`);
-      swatch.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       swatch.addEventListener('click', () => {
-        if (this.isHighlighterActive()) {
-          this.updateDrawingDefaults({ defaultHighlighterColor: color });
-        } else {
-          this.updateDrawingDefaults({ defaultStrokeColor: color });
-        }
+        this.updateDrawingDefaults(
+          this.isHighlighterActive() ? { defaultHighlighterColor: color } : { defaultStrokeColor: color }
+        );
       });
       grid.appendChild(swatch);
-    });
+    }
     body.appendChild(grid);
 
-    // 1. Stroke colour (used for Pen, Shapes, and Text note)
-    this.strokeColorRow = this.buildColorRow(
-      'Pen colour',
-      'defaultStrokeColor',
-      this.settings.defaultStrokeColor
-    );
-    body.appendChild(this.strokeColorRow);
-
-    // 2. Stroke width (used for Pen and Shapes)
-    this.strokeWidthGroup = this.buildSliderField(
-      'Pen width',
-      'defaultStrokeWidth',
-      1,
-      30,
-      this.settings.defaultStrokeWidth
-    );
-    body.appendChild(this.strokeWidthGroup);
-
-    // 3. Highlighter colour
-    this.hlColorRow = this.buildColorRow(
-      'Highlighter colour',
-      'defaultHighlighterColor',
-      this.settings.defaultHighlighterColor
-    );
-    body.appendChild(this.hlColorRow);
-
-    // 4. Highlighter width
-    this.hlWidthGroup = this.buildSliderField(
-      'Highlighter width',
-      'defaultHighlighterWidth',
-      8,
-      50,
-      this.settings.defaultHighlighterWidth
-    );
-    body.appendChild(this.hlWidthGroup);
-
-    // 5. Text note size (used for Text note)
-    this.fontSizeGroup = this.buildSliderField(
-      'Text note size',
-      'defaultFontSize',
-      12,
-      36,
-      this.settings.defaultFontSize
-    );
-    body.appendChild(this.fontSizeGroup);
-
-    // 6. None panel (for tools without stroke settings: eraser and select)
-    this.nonePanel = document.createElement('div');
-    this.nonePanel.className = 'pa-tool-panel-empty';
-
-    const emptyMsg = document.createElement('p');
-    emptyMsg.className = 'pa-tool-empty-msg';
-    emptyMsg.textContent = 'This tool has no drawing color or width settings.';
-    this.nonePanel.appendChild(emptyMsg);
-
-    const switchPrompt = document.createElement('p');
-    switchPrompt.className = 'pa-tool-switch-prompt';
-    switchPrompt.textContent = 'Configure defaults for:';
-    this.nonePanel.appendChild(switchPrompt);
-
-    const quickTools = document.createElement('div');
-    quickTools.className = 'pa-quick-tools';
-    const switchableTools: Array<{ tool: ToolType; label: string; icon: string }> = [
-      { tool: 'pen', label: 'Pen', icon: ICONS.pen },
-      { tool: 'highlighter', label: 'Highlighter', icon: ICONS.highlighter },
-      { tool: 'text', label: 'Text', icon: ICONS.text },
-    ];
-    switchableTools.forEach(({ tool, label, icon }) => {
-      const qBtn = document.createElement('button');
-      qBtn.type = 'button';
-      qBtn.className = 'pa-quick-tool-btn';
-      qBtn.setAttribute('aria-label', `Configure ${label} defaults`);
-      setMarkup(qBtn, icon);
-      const span = document.createElement('span');
-      span.textContent = label;
-      qBtn.appendChild(span);
-      qBtn.addEventListener('click', () => {
-        this.engine.setTool(tool);
-        this.updateActiveToolUI();
-      });
-      quickTools.appendChild(qBtn);
-    });
-    this.nonePanel.appendChild(quickTools);
-    body.appendChild(this.nonePanel);
+    this.panels = {
+      strokeColor: this.buildColorRow('defaultStrokeColor'),
+      strokeWidth: this.buildSliderField('defaultStrokeWidth', 1, 30),
+      hlColor: this.buildColorRow('defaultHighlighterColor'),
+      hlWidth: this.buildSliderField('defaultHighlighterWidth', 8, 50),
+      fontSize: this.buildSliderField('defaultFontSize', 12, 36),
+      none: { root: this.buildNonePanel() },
+    };
+    for (const entry of Object.values(this.panels)) body.appendChild(entry.root);
 
     const footer = document.createElement('div');
     footer.className = 'pa-popover-footer';
@@ -900,88 +984,109 @@ export class FloatingToolbar {
     this.colorPopover.appendChild(body);
     this.colorPopover.appendChild(footer);
 
-    // Close only on a press that starts outside the toolbar. `composedPath()`
-    // is required because events from inside the shadow root are retargeted to
-    // the host at the window, which would make a `contains(target)` check fail
-    // for every in-popover interaction. Listening on `pointerdown` (not `click`)
-    // keeps the popover open when a slider drag ends outside of it.
-    window.addEventListener(
-      'pointerdown',
-      (e) => {
-        if (!e.composedPath().includes(this.wrapper)) {
-          this.closeColorPopover();
-          this.closeMenus();
-        }
-      },
-      true
-    );
+    this.colorPopover.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.closeColorPopover(true);
+    });
+    this.colorPopover.addEventListener('focusout', (e) => {
+      const next = e.relatedTarget;
+      // Switching tools from the toolbar keeps the popover open so it can follow the active tool.
+      if (next instanceof Node && !this.wrapper.contains(next)) {
+        this.closeColorPopover();
+      }
+    });
   }
 
-  private closeColorPopover(): void {
-    this.colorPopover.classList.remove('open');
-    this.colorPopover.style.transform = '';
-    this.colorPreviewBtn.setAttribute('aria-expanded', 'false');
+  /** Shown for tools without stroke settings (eraser, select), with shortcuts to tools that have them. */
+  private buildNonePanel(): HTMLElement {
+    const panel = document.createElement('div');
+    panel.className = 'pa-tool-panel-empty';
+
+    const emptyMsg = document.createElement('p');
+    emptyMsg.className = 'pa-tool-empty-msg';
+    panel.appendChild(emptyMsg);
+
+    const switchPrompt = document.createElement('p');
+    switchPrompt.className = 'pa-tool-switch-prompt';
+    switchPrompt.textContent = 'Configure defaults for:';
+    panel.appendChild(switchPrompt);
+
+    const quickTools = document.createElement('div');
+    quickTools.className = 'pa-quick-tools';
+    const switchable: Array<{ tool: ToolType; label: string }> = [
+      { tool: 'pen', label: 'Pen' },
+      { tool: 'highlighter', label: 'Highlighter' },
+      { tool: 'text', label: 'Text' },
+    ];
+    for (const { tool, label } of switchable) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pa-quick-tool-btn';
+      btn.setAttribute('aria-label', `Configure ${label} defaults`);
+      setMarkup(btn, ICONS[TOOL_INFO[tool].icon]);
+      const span = document.createElement('span');
+      span.textContent = label;
+      btn.appendChild(span);
+      btn.addEventListener('click', () => {
+        this.engine.setTool(tool);
+        this.updateActiveToolUI();
+      });
+      quickTools.appendChild(btn);
+    }
+    panel.appendChild(quickTools);
+    return panel;
   }
 
   /** A label + native color input pair inside the popover. */
-  private buildColorRow(
-    label: string,
-    setting: 'defaultStrokeColor' | 'defaultHighlighterColor',
-    value: string
-  ): HTMLElement {
+  private buildColorRow(setting: ColorSetting): PanelEntry {
     const row = document.createElement('div');
     row.className = 'pa-popover-row';
 
     const name = document.createElement('span');
     name.className = 'pa-popover-label';
-    name.textContent = label;
 
     const input = document.createElement('input');
     input.type = 'color';
     input.className = 'pa-popover-color';
     input.dataset.setting = setting;
-    input.value = value;
-    input.setAttribute('aria-label', label);
     input.addEventListener('input', () => {
-      if (setting === 'defaultStrokeColor') {
-        this.engine.setStrokeColor(input.value);
-        if (!this.isHighlighterActive()) {
-          this.colorPreviewBtn.style.backgroundColor = input.value;
-        }
-      } else {
-        this.engine.setHighlighterColor(input.value);
-        if (this.isHighlighterActive()) {
-          this.colorPreviewBtn.style.backgroundColor = input.value;
-        }
+      const isHlSetting = setting === 'defaultHighlighterColor';
+      if (isHlSetting) this.engine.setHighlighterColor(input.value);
+      else this.engine.setStrokeColor(input.value);
+      if (isHlSetting === this.isHighlighterActive()) {
+        this.colorPreviewBtn.style.backgroundColor = input.value;
       }
     });
     input.addEventListener('change', () => {
-      this.updateDrawingDefaults({ [setting]: input.value } as Partial<ExtensionSettings>);
+      const patch: Partial<ExtensionSettings> = {};
+      patch[setting] = input.value;
+      this.updateDrawingDefaults(patch);
     });
 
     row.appendChild(name);
     row.appendChild(input);
-    return row;
+    return {
+      root: row,
+      label: name,
+      input,
+      sync: () => {
+        input.value = this.settings[setting];
+      },
+    };
   }
 
   /** A labelled slider with a live pixel readout inside the popover. */
-  private buildSliderField(
-    label: string,
-    setting: 'defaultStrokeWidth' | 'defaultHighlighterWidth' | 'defaultFontSize',
-    min: number,
-    max: number,
-    value: number
-  ): HTMLElement {
+  private buildSliderField(setting: SizeSetting, min: number, max: number): PanelEntry {
     const group = document.createElement('div');
     group.className = 'pa-slider-group';
 
     const header = document.createElement('div');
     header.className = 'pa-slider-label';
     const name = document.createElement('span');
-    name.textContent = label;
     const readout = document.createElement('span');
     readout.className = 'pa-slider-readout';
-    readout.textContent = `${value}px`;
     header.appendChild(name);
     header.appendChild(readout);
 
@@ -991,22 +1096,24 @@ export class FloatingToolbar {
     input.dataset.setting = setting;
     input.min = `${min}`;
     input.max = `${max}`;
-    input.value = `${value}`;
-    input.setAttribute('aria-label', label);
-    input.setAttribute('aria-valuemin', `${min}`);
-    input.setAttribute('aria-valuemax', `${max}`);
-    input.setAttribute('aria-valuenow', `${value}`);
-    input.setAttribute('aria-valuetext', `${value} pixels`);
+
+    const show = (val: number) => {
+      input.value = `${val}`;
+      readout.textContent = `${val}px`;
+      input.setAttribute('aria-valuetext', `${val} pixels`);
+    };
 
     const apply = (commit: boolean) => {
       const val = parseInt(input.value, 10);
-      readout.textContent = `${val}px`;
-      input.setAttribute('aria-valuenow', `${val}`);
-      input.setAttribute('aria-valuetext', `${val} pixels`);
+      show(val);
       if (setting === 'defaultStrokeWidth') this.engine.setStrokeWidth(val);
       else if (setting === 'defaultHighlighterWidth') this.engine.setHighlighterWidth(val);
       else this.engine.setFontSize(val);
-      if (commit) this.updateDrawingDefaults({ [setting]: val } as Partial<ExtensionSettings>);
+      if (commit) {
+        const patch: Partial<ExtensionSettings> = {};
+        patch[setting] = val;
+        this.updateDrawingDefaults(patch);
+      }
     };
 
     input.addEventListener('input', () => apply(false));
@@ -1014,14 +1121,7 @@ export class FloatingToolbar {
 
     group.appendChild(header);
     group.appendChild(input);
-    return group;
-  }
-
-  private buildPopoverDivider(): HTMLElement {
-    const divider = document.createElement('div');
-    divider.className = 'pa-popover-divider';
-    divider.setAttribute('aria-hidden', 'true');
-    return divider;
+    return { root: group, label: name, input, sync: () => show(this.settings[setting]) };
   }
 
   /** A button that restores every drawing default to its factory value. */
@@ -1030,24 +1130,18 @@ export class FloatingToolbar {
     button.type = 'button';
     button.className = 'pa-popover-reset';
     button.textContent = 'Reset to defaults';
-    button.setAttribute('aria-label', 'Reset drawing defaults to factory values');
-    button.addEventListener('click', () => this.resetDrawingDefaults());
+    button.addEventListener('click', () =>
+      this.updateDrawingDefaults({
+        defaultStrokeColor: DEFAULT_SETTINGS.defaultStrokeColor,
+        defaultStrokeWidth: DEFAULT_SETTINGS.defaultStrokeWidth,
+        defaultHighlighterColor: DEFAULT_SETTINGS.defaultHighlighterColor,
+        defaultHighlighterWidth: DEFAULT_SETTINGS.defaultHighlighterWidth,
+        defaultFontSize: DEFAULT_SETTINGS.defaultFontSize,
+      })
+    );
     return button;
   }
 
-  /** Restores the five drawing defaults and repaints the popover controls. */
-  private resetDrawingDefaults(): void {
-    this.updateDrawingDefaults({
-      defaultStrokeColor: DEFAULT_SETTINGS.defaultStrokeColor,
-      defaultStrokeWidth: DEFAULT_SETTINGS.defaultStrokeWidth,
-      defaultHighlighterColor: DEFAULT_SETTINGS.defaultHighlighterColor,
-      defaultHighlighterWidth: DEFAULT_SETTINGS.defaultHighlighterWidth,
-      defaultFontSize: DEFAULT_SETTINGS.defaultFontSize,
-    });
-    this.syncDrawingDefaultControls();
-  }
-
-  /** Pushes the stored drawing defaults into the engine. */
   private applyDrawingDefaults(): void {
     this.engine.setStrokeColor(this.settings.defaultStrokeColor);
     this.engine.setStrokeWidth(this.settings.defaultStrokeWidth);
@@ -1056,323 +1150,132 @@ export class FloatingToolbar {
     this.engine.setFontSize(this.settings.defaultFontSize);
   }
 
-  /**
-   * Applies a change made from the toolbar: updates the engine immediately,
-   * notifies the host, and persists it so it carries across pages and sessions.
-   */
+  /** Applies a change made from the toolbar to the engine, the host, and storage. */
   private updateDrawingDefaults(patch: Partial<ExtensionSettings>): void {
     Object.assign(this.settings, patch);
     this.applyDrawingDefaults();
-    this.refreshPenColorControls();
+    this.syncDrawingDefaultControls();
     this.callbacks.onSettingsUpdate?.(this.settings);
     saveSettings(patch).catch(() => {});
   }
 
-  /** Repaints the popover controls from `this.settings` (no rebinding). */
   private syncDrawingDefaultControls(): void {
-    this.colorPopover.querySelectorAll<HTMLInputElement>('input[data-setting]').forEach((input) => {
-      const key = input.dataset.setting as keyof ExtensionSettings;
-      const value = this.settings[key];
-      if (typeof value === 'number') {
-        input.value = `${value}`;
-        input.setAttribute('aria-valuenow', `${value}`);
-        input.setAttribute('aria-valuetext', `${value} pixels`);
-        const readout = input.closest('.pa-slider-group')?.querySelector<HTMLElement>('.pa-slider-readout');
-        if (readout) readout.textContent = `${value}px`;
-      } else if (typeof value === 'string') {
-        input.value = value;
-      }
-    });
-    this.refreshPenColorControls();
-  }
-
-  private getActiveToolInfo(): {
-    category: 'pen' | 'highlighter' | 'text' | 'shape' | 'none';
-    label: string;
-    targetText: string;
-    icon: string;
-    color: string;
-  } {
-    const current = this.engine.getTool();
-    switch (current) {
-      case 'highlighter':
-        return {
-          category: 'highlighter',
-          label: 'Highlighter',
-          targetText: 'Highlighter colours',
-          icon: ICONS.highlighter,
-          color: this.settings.defaultHighlighterColor,
-        };
-      case 'text':
-        return {
-          category: 'text',
-          label: 'Text Note',
-          targetText: 'Text note colours',
-          icon: ICONS.text,
-          color: this.settings.defaultStrokeColor,
-        };
-      case 'rect':
-        return {
-          category: 'shape',
-          label: 'Rectangle',
-          targetText: 'Rectangle colours',
-          icon: ICONS.rect,
-          color: this.settings.defaultStrokeColor,
-        };
-      case 'circle':
-        return {
-          category: 'shape',
-          label: 'Circle',
-          targetText: 'Circle colours',
-          icon: ICONS.circle,
-          color: this.settings.defaultStrokeColor,
-        };
-      case 'line':
-        return {
-          category: 'shape',
-          label: 'Line',
-          targetText: 'Line colours',
-          icon: ICONS.line,
-          color: this.settings.defaultStrokeColor,
-        };
-      case 'arrow':
-        return {
-          category: 'shape',
-          label: 'Arrow',
-          targetText: 'Arrow colours',
-          icon: ICONS.arrow,
-          color: this.settings.defaultStrokeColor,
-        };
-      case 'double-arrow':
-        return {
-          category: 'shape',
-          label: 'Double Arrow',
-          targetText: 'Double Arrow colours',
-          icon: ICONS.doubleArrow,
-          color: this.settings.defaultStrokeColor,
-        };
-      case 'select':
-        return {
-          category: 'none',
-          label: 'Select & Move',
-          targetText: 'Select & Move tool',
-          icon: ICONS.select,
-          color: this.settings.defaultStrokeColor,
-        };
-      case 'eraser':
-        return {
-          category: 'none',
-          label: 'Eraser',
-          targetText: 'Eraser tool',
-          icon: ICONS.eraser,
-          color: this.settings.defaultStrokeColor,
-        };
-      case 'pen':
-      default:
-        return {
-          category: 'pen',
-          label: 'Pen',
-          targetText: 'Pen colours',
-          icon: ICONS.pen,
-          color: this.settings.defaultStrokeColor,
-        };
-    }
+    for (const entry of Object.values(this.panels)) entry.sync?.();
+    this.refreshColorControls();
   }
 
   /** Keeps the color preview button, popover header, and panel in step with the active tool. */
   public refreshColorControls(): void {
-    const info = this.getActiveToolInfo();
-    const isHl = info.category === 'highlighter';
+    const tool = this.engine.getTool();
+    const info = TOOL_INFO[tool];
     const isNone = info.category === 'none';
+    const color =
+      info.category === 'highlighter' ? this.settings.defaultHighlighterColor : this.settings.defaultStrokeColor;
 
-    this.colorPreviewBtn.style.backgroundColor = info.color;
-    const titleText = isHl
-      ? 'Highlighter defaults'
-      : info.category === 'pen'
-      ? 'Drawing defaults'
-      : `${info.label} defaults`;
-    this.colorPreviewBtn.setAttribute('aria-label', titleText);
-    const colorTip = this.colorPreviewBtn.querySelector('.pa-tooltip');
-    if (colorTip) {
-      colorTip.textContent = titleText;
-    }
+    this.colorPreviewBtn.style.backgroundColor = color;
+    const title =
+      info.category === 'highlighter'
+        ? 'Highlighter defaults'
+        : info.category === 'pen'
+          ? 'Drawing defaults'
+          : `${info.label} defaults`;
+    this.colorPreviewBtn.setAttribute('aria-label', title);
+    const tip = childWithClass(this.colorPreviewBtn, 'pa-tooltip');
+    if (tip) tip.textContent = title;
     this.colorPopover.setAttribute('aria-label', `${info.label} defaults`);
 
-    // Update Header
-    const toolIcon = this.colorPopover.querySelector('.pa-popover-tool-icon');
-    if (toolIcon) {
-      setMarkup(toolIcon as HTMLElement, info.icon);
-    }
+    const toolIcon = this.colorPopover.querySelector<HTMLElement>('.pa-popover-tool-icon');
+    if (toolIcon) setMarkup(toolIcon, ICONS[info.icon]);
     const toolName = this.colorPopover.querySelector('.pa-popover-tool-name');
-    if (toolName) {
-      toolName.textContent = info.label;
-    }
+    if (toolName) toolName.textContent = info.label;
 
-    const target = this.colorPopover.querySelector('.pa-color-target') as HTMLElement | null;
+    const target = this.colorPopover.querySelector<HTMLElement>('.pa-color-target');
     if (target) {
-      target.textContent = info.targetText;
+      target.textContent = info.targetText ?? `${info.label} ${isNone ? 'tool' : 'colours'}`;
       target.style.display = isNone ? 'none' : 'block';
     }
 
-    const grid = this.colorPopover.querySelector('.pa-color-grid') as HTMLElement | null;
+    const grid = this.colorPopover.querySelector<HTMLElement>('.pa-color-grid');
     if (grid) {
       grid.style.display = isNone ? 'none' : 'grid';
-      grid.setAttribute(
-        'aria-label',
-        isHl
-          ? 'Preset highlighter colors'
-          : info.category === 'text'
-          ? 'Preset text colors'
-          : info.category === 'shape'
-          ? 'Preset shape colors'
-          : 'Preset pen colors'
-      );
+      grid.setAttribute('aria-label', GRID_LABELS[info.category]);
     }
 
-    // Toggle controls visibility & dynamic labels based on active tool category
-    if (this.strokeColorRow) {
-      const strokeColorLabel = this.strokeColorRow.querySelector<HTMLElement>('.pa-popover-label');
-      const strokeWidthLabel = this.strokeWidthGroup.querySelector<HTMLElement>('.pa-slider-label span:first-child');
-
-      if (info.category === 'pen') {
-        this.strokeColorRow.style.display = 'flex';
-        if (strokeColorLabel) strokeColorLabel.textContent = 'Pen colour';
-        this.strokeWidthGroup.style.display = 'flex';
-        if (strokeWidthLabel) strokeWidthLabel.textContent = 'Pen width';
-        this.hlColorRow.style.display = 'none';
-        this.hlWidthGroup.style.display = 'none';
-        this.fontSizeGroup.style.display = 'none';
-        this.nonePanel.style.display = 'none';
-      } else if (info.category === 'shape') {
-        this.strokeColorRow.style.display = 'flex';
-        if (strokeColorLabel) strokeColorLabel.textContent = 'Stroke colour';
-        this.strokeWidthGroup.style.display = 'flex';
-        if (strokeWidthLabel) strokeWidthLabel.textContent = 'Stroke width';
-        this.hlColorRow.style.display = 'none';
-        this.hlWidthGroup.style.display = 'none';
-        this.fontSizeGroup.style.display = 'none';
-        this.nonePanel.style.display = 'none';
-      } else if (info.category === 'highlighter') {
-        this.strokeColorRow.style.display = 'none';
-        this.strokeWidthGroup.style.display = 'none';
-        this.hlColorRow.style.display = 'flex';
-        this.hlWidthGroup.style.display = 'flex';
-        this.fontSizeGroup.style.display = 'none';
-        this.nonePanel.style.display = 'none';
-      } else if (info.category === 'text') {
-        this.strokeColorRow.style.display = 'flex';
-        if (strokeColorLabel) strokeColorLabel.textContent = 'Text colour';
-        this.strokeWidthGroup.style.display = 'none';
-        this.hlColorRow.style.display = 'none';
-        this.hlWidthGroup.style.display = 'none';
-        this.fontSizeGroup.style.display = 'flex';
-        this.nonePanel.style.display = 'none';
-      } else {
-        // none (eraser, select)
-        this.strokeColorRow.style.display = 'none';
-        this.strokeWidthGroup.style.display = 'none';
-        this.hlColorRow.style.display = 'none';
-        this.hlWidthGroup.style.display = 'none';
-        this.fontSizeGroup.style.display = 'none';
-        this.nonePanel.style.display = 'flex';
-      }
+    const layout = PANEL_LAYOUT[info.category];
+    for (const [key, entry] of Object.entries(this.panels) as Array<[PanelControl, PanelEntry]>) {
+      const label = layout[key];
+      entry.root.style.display = label === undefined ? 'none' : 'flex';
+      if (!label) continue;
+      if (entry.label) entry.label.textContent = label;
+      entry.input?.setAttribute('aria-label', label);
     }
 
-    if (isNone) {
-      const emptyMsg = this.colorPopover.querySelector('.pa-tool-empty-msg');
-      if (emptyMsg) {
-        emptyMsg.textContent = `${info.label} has no drawing color or width settings.`;
-      }
-    }
+    const emptyMsg = this.colorPopover.querySelector('.pa-tool-empty-msg');
+    if (emptyMsg) emptyMsg.textContent = `${info.label} has no drawing color or width settings.`;
 
     this.colorPopover.querySelectorAll<HTMLButtonElement>('.pa-color-swatch').forEach((swatch) => {
-      const isActive = swatch.dataset.color === info.color;
+      const isActive = swatch.dataset.color === color;
       swatch.classList.toggle('active', isActive);
       swatch.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
 
-    if (this.colorPopover.classList.contains('open')) {
-      this.positionColorPopover();
+    if (this.colorPopover.classList.contains('open')) this.positionColorPopover();
+  }
+
+  /** Shared setup for toolbar buttons: icon, tooltip, and an accessible name that includes the shortcut. */
+  private decorateButton(btn: HTMLButtonElement, label: string, icon: IconName, shortcut?: ShortcutAction): void {
+    btn.type = 'button';
+    btn.dataset.label = label;
+    setMarkup(btn, ICONS[icon]);
+    if (shortcut) {
+      this.registerShortcut(btn, shortcut);
+    } else {
+      btn.appendChild(buildTooltip(label));
+      btn.setAttribute('aria-label', label);
     }
   }
 
-  private refreshPenColorControls(): void {
-    this.refreshColorControls();
-  }
-
-  private createToolButton(
-    tool: ToolType,
-    name: string,
-    shortcutId: string,
-    iconSvg: string
-  ): HTMLButtonElement {
+  private createToolButton(tool: ToolType): HTMLButtonElement {
     const btn = document.createElement('button');
-    const isActive = this.engine.getTool() === tool;
-    btn.type = 'button';
-    btn.className = `pa-btn ${isActive ? 'active' : ''}`;
+    btn.className = 'pa-btn';
     btn.dataset.tool = tool;
-    btn.dataset.shortcut = shortcutId;
-    const shortcutText = this.getShortcutDisplay(shortcutId);
-    btn.dataset.label = name;
-    btn.setAttribute('aria-label', `${name}${shortcutText ? ` (${shortcutText})` : ''}`);
-    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    setIconWithTooltip(btn, iconSvg, name, shortcutText);
-
+    btn.setAttribute('aria-pressed', 'false');
+    this.decorateButton(btn, TOOL_INFO[tool].label, TOOL_INFO[tool].icon, toolShortcut(tool));
     btn.addEventListener('click', () => {
       this.engine.setTool(tool);
       this.updateActiveToolUI();
     });
-
     return btn;
   }
 
   private createActionButton(
-    actionName: string,
-    title: string,
-    shortcutId: string,
-    iconSvg: string,
+    action: string,
+    label: string,
+    icon: IconName,
+    shortcut: ShortcutAction,
     onClick: () => void
   ): HTMLButtonElement {
     const btn = document.createElement('button');
-    btn.type = 'button';
     btn.className = 'pa-btn';
-    btn.dataset.action = actionName;
-    btn.dataset.shortcut = shortcutId;
-    const shortcutText = this.getShortcutDisplay(shortcutId);
-    btn.dataset.label = title;
-    btn.setAttribute('aria-label', `${title}${shortcutText ? ` (${shortcutText})` : ''}`);
-    setIconWithTooltip(btn, iconSvg, title, shortcutText);
-
+    btn.dataset.action = action;
+    this.decorateButton(btn, label, icon, shortcut);
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       onClick();
     });
-
     return btn;
   }
 
   private buildCornerCloseButton(): HTMLButtonElement {
     const btn = document.createElement('button');
-    btn.type = 'button';
     btn.className = 'pa-toolbar-close-btn';
     btn.dataset.action = 'hide';
-    btn.dataset.shortcut = 'action-toggle-toolbar';
-    const shortcutText = this.getShortcutDisplay('action-toggle-toolbar');
-    const title = 'Hide Toolbar';
-    btn.dataset.label = title;
-    btn.setAttribute('aria-label', `${title}${shortcutText ? ` (${shortcutText})` : ''}`);
-    setIconWithTooltip(btn, ICONS.close, title, shortcutText);
-
-    btn.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
-    });
-
+    this.decorateButton(btn, 'Hide Toolbar', 'close', 'action-toggle-toolbar');
+    btn.addEventListener('pointerdown', (e) => e.stopPropagation());
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.closeMenus();
       this.hideToolbar();
     });
-
     return btn;
   }
 
@@ -1383,34 +1286,61 @@ export class FloatingToolbar {
     return sep;
   }
 
-  private getShortcutDisplay(actionId: string): string {
-    const key = (this.settings.shortcuts as any)[actionId];
-    return key ? formatShortcutForDisplay(key) : '';
+  private getShortcutDisplay(action: ShortcutAction): string {
+    const combo = this.settings.shortcuts[action];
+    return combo ? formatShortcutForDisplay(combo) : '';
+  }
+
+  private registerShortcut(el: HTMLElement, shortcut: ShortcutAction): void {
+    el.dataset.shortcut = shortcut;
+    this.shortcutOf.set(el, shortcut);
+    this.renderShortcutLabel(el);
+  }
+
+  /** Writes the current shortcut into a menu item's key label, or into a button's tooltip and accessible name. */
+  private renderShortcutLabel(el: HTMLElement): void {
+    const shortcut = this.shortcutOf.get(el);
+    const keys = shortcut ? this.getShortcutDisplay(shortcut) : '';
+
+    const menuKey = childWithClass(el, 'pa-menu-item-key');
+    if (menuKey) {
+      menuKey.textContent = keys;
+      menuKey.style.display = keys ? '' : 'none';
+      return;
+    }
+
+    const label = el.dataset.label ?? '';
+    const fresh = buildTooltip(label, keys);
+    const tip = childWithClass(el, 'pa-tooltip');
+    // Refill in place so placement classes from adjustTooltipPosition survive.
+    if (tip) tip.replaceChildren(...Array.from(fresh.childNodes));
+    else el.appendChild(fresh);
+
+    const count = el === this.clearBtn ? this.engine.getElements().length : 0;
+    const countText = count > 0 ? `, ${count} drawing${count === 1 ? '' : 's'}` : '';
+    el.setAttribute('aria-label', `${label}${countText}${keys ? ` (${keys})` : ''}`);
+  }
+
+  public updateTooltips(): void {
+    for (const el of this.shortcutOf.keys()) this.renderShortcutLabel(el);
   }
 
   public updateActiveToolUI(): void {
     const current = this.engine.getTool();
-    this.toolbar.querySelectorAll('[data-tool]').forEach((el) => {
-      const btn = el as HTMLButtonElement;
+    this.toolbar.querySelectorAll<HTMLElement>('[data-tool]').forEach((btn) => {
       const isActive = btn.dataset.tool === current;
-      if (isActive) {
-        btn.classList.add('active');
-        btn.setAttribute('aria-pressed', 'true');
-      } else {
-        btn.classList.remove('active');
-        btn.setAttribute('aria-pressed', 'false');
-      }
+      btn.classList.toggle('active', isActive);
       if (btn.getAttribute('role') === 'menuitemradio') {
         btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+      } else {
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       }
     });
 
-    // The shape tools live in a menu, so their trigger carries the active
-    // state instead of the individual buttons being visible on the bar.
-    const shapeTools: ToolType[] = ['rect', 'circle', 'line', 'arrow', 'double-arrow'];
-    const shapeTrigger = this.toolbar.querySelector('[data-action="shapes"]') as HTMLElement | null;
+    // Shape tools live in a menu, so their trigger carries the active state on the bar.
+    const shapeTrigger = this.toolbar.querySelector<HTMLElement>('[data-action="shapes"]');
     if (shapeTrigger) {
-      const isShapeActive = shapeTools.includes(current);
+      const isShapeActive = SHAPE_TOOLS.includes(current);
       shapeTrigger.classList.toggle('active', isShapeActive);
       shapeTrigger.setAttribute('aria-pressed', isShapeActive ? 'true' : 'false');
     }
@@ -1418,31 +1348,14 @@ export class FloatingToolbar {
     this.refreshColorControls();
   }
 
-  public updateTooltips(): void {
-    this.wrapper.querySelectorAll('[data-shortcut]').forEach((el) => {
-      const btn = el as HTMLButtonElement;
-      const shortcutId = btn.dataset.shortcut;
-      if (shortcutId === undefined) return;
-      const text = this.getShortcutDisplay(shortcutId);
-      const kbd = btn.querySelector('kbd');
-      if (kbd) {
-        kbd.textContent = text;
-        kbd.style.display = text ? '' : 'none';
-      }
-      const label = btn.dataset.label || btn.dataset.tool || btn.dataset.action || '';
-      btn.setAttribute('aria-label', `${label}${text ? ` (${text})` : ''}`);
-    });
-  }
-
   private initDragEvents(): void {
-    const dragHandle = this.toolbar.querySelector('.pa-drag-handle') as HTMLElement;
+    const dragHandle = this.toolbar.querySelector<HTMLElement>('.pa-drag-handle');
     if (!dragHandle) return;
 
     let startX = 0;
     let startY = 0;
     let moved = false;
-    let lastX = 0;
-    let lastY = 0;
+    let last = { x: 0, y: 0 };
 
     dragHandle.addEventListener('pointerdown', (e: PointerEvent) => {
       if (e.button !== 0) return;
@@ -1451,8 +1364,7 @@ export class FloatingToolbar {
       startX = e.clientX;
       startY = e.clientY;
       const rect = this.wrapper.getBoundingClientRect();
-      lastX = rect.left;
-      lastY = rect.top;
+      last = { x: rect.left, y: rect.top };
       this.dragOffset.x = e.clientX - rect.left;
       this.dragOffset.y = e.clientY - rect.top;
       dragHandle.setPointerCapture(e.pointerId);
@@ -1465,134 +1377,70 @@ export class FloatingToolbar {
         moved = true;
         this.wrapper.style.transform = 'none';
       }
-      const newX = Math.max(10, Math.min(window.innerWidth - this.wrapper.offsetWidth - 10, e.clientX - this.dragOffset.x));
-      const newY = Math.max(10, Math.min(window.innerHeight - this.wrapper.offsetHeight - 10, e.clientY - this.dragOffset.y));
-      lastX = newX;
-      lastY = newY;
-      this.wrapper.style.left = `${newX}px`;
-      this.wrapper.style.top = `${newY}px`;
+      last = this.clampToViewport(e.clientX - this.dragOffset.x, e.clientY - this.dragOffset.y);
+      this.wrapper.style.left = `${last.x}px`;
+      this.wrapper.style.top = `${last.y}px`;
       this.updateViewportPlacement();
     });
 
     const finishDrag = (commit: boolean) => {
       if (!this.isDragging) return;
       this.isDragging = false;
-      if (!commit || !moved) return;
-      this.persistToolbarPosition({ x: lastX, y: lastY });
+      if (commit && moved) this.persistToolbarPosition(last);
     };
 
     dragHandle.addEventListener('pointerup', () => finishDrag(true));
     dragHandle.addEventListener('pointercancel', () => finishDrag(false));
 
     // Keyboard alternative for repositioning (WCAG 2.5.7).
+    const step = 20;
+    const nudges: Record<string, { dx: number; dy: number }> = {
+      ArrowUp: { dx: 0, dy: -step },
+      ArrowDown: { dx: 0, dy: step },
+      ArrowLeft: { dx: -step, dy: 0 },
+      ArrowRight: { dx: step, dy: 0 },
+    };
     dragHandle.addEventListener('keydown', (e: KeyboardEvent) => {
-      let nextMoved = false;
+      const nudge = nudges[e.key];
+      if (!nudge) return;
+      e.preventDefault();
       const rect = this.wrapper.getBoundingClientRect();
-      let newX = rect.left;
-      let newY = rect.top;
-      const step = 20;
-
-      if (e.key === 'ArrowUp') {
-        newY = Math.max(10, newY - step);
-        nextMoved = true;
-      } else if (e.key === 'ArrowDown') {
-        newY = Math.min(window.innerHeight - this.wrapper.offsetHeight - 10, newY + step);
-        nextMoved = true;
-      } else if (e.key === 'ArrowLeft') {
-        newX = Math.max(10, newX - step);
-        nextMoved = true;
-      } else if (e.key === 'ArrowRight') {
-        newX = Math.min(window.innerWidth - this.wrapper.offsetWidth - 10, newX + step);
-        nextMoved = true;
-      }
-
-      if (nextMoved) {
-        e.preventDefault();
-        this.wrapper.style.transform = 'none';
-        this.wrapper.style.left = `${newX}px`;
-        this.wrapper.style.top = `${newY}px`;
-        this.persistToolbarPosition({ x: newX, y: newY });
-        this.updateViewportPlacement();
-      }
+      const next = this.clampToViewport(rect.left + nudge.dx, rect.top + nudge.dy);
+      this.wrapper.style.transform = 'none';
+      this.wrapper.style.left = `${next.x}px`;
+      this.wrapper.style.top = `${next.y}px`;
+      this.persistToolbarPosition(next);
+      this.updateViewportPlacement();
     });
   }
 
   public updateViewportPlacement(): void {
-    if (!this.wrapper || this.wrapper.style.display === 'none') return;
-    const wrapperRect = this.wrapper.getBoundingClientRect();
-    const curTop = wrapperRect.top !== 0 ? wrapperRect.top : (parseFloat(this.wrapper.style.top) || 0);
-    const isNearTop = curTop < 48;
-    this.wrapper.classList.toggle('pa-placement-top', isNearTop);
+    if (this.wrapper.style.display === 'none') return;
+    this.wrapper.classList.toggle('pa-placement-top', topOf(this.wrapper, this.wrapper) < 48);
 
-    if (this.colorPopover.classList.contains('open')) {
-      this.positionColorPopover();
-    }
-
-    for (const wrap of this.menuWrappers) {
-      if (wrap.classList.contains('open')) {
-        const menu = wrap.querySelector('.pa-menu') as HTMLElement | null;
-        if (menu) this.positionMenu(wrap, menu);
-      }
+    if (this.colorPopover.classList.contains('open')) this.positionColorPopover();
+    for (const entry of this.menus) {
+      if (entry.wrapper.classList.contains('open')) this.positionMenu(entry);
     }
   }
 
   private initTooltipEvents(): void {
-    const handleTooltipTarget = (el: HTMLElement | null) => {
-      if (!el) return;
-      const target = el.closest?.('.pa-btn, .pa-toolbar-close-btn, .pa-drag-handle, .pa-color-preview-btn') as HTMLElement | null;
+    const handleTooltipTarget = (el: EventTarget | null) => {
+      if (!(el instanceof HTMLElement)) return;
+      const target = el.closest<HTMLElement>('.pa-btn, .pa-toolbar-close-btn, .pa-drag-handle, .pa-color-preview-btn');
       if (!target) return;
-      const tip = target.querySelector('.pa-tooltip') as HTMLElement | null;
-      if (!tip) return;
-      this.adjustTooltipPosition(target, tip);
+      const tip = childWithClass(target, 'pa-tooltip');
+      if (tip) this.adjustTooltipPosition(target, tip);
     };
-
-    this.wrapper.addEventListener(
-      'pointerenter',
-      (e) => {
-        handleTooltipTarget(e.target as HTMLElement);
-      },
-      true
-    );
-
-    this.wrapper.addEventListener(
-      'focusin',
-      (e) => {
-        handleTooltipTarget(e.target as HTMLElement);
-      },
-      true
-    );
+    this.wrapper.addEventListener('pointerenter', (e) => handleTooltipTarget(e.target), true);
+    this.wrapper.addEventListener('focusin', (e) => handleTooltipTarget(e.target), true);
   }
 
   public adjustTooltipPosition(btn: HTMLElement, tip: HTMLElement): void {
-    const btnRect = btn.getBoundingClientRect();
-    const curTop = btnRect.top !== 0 ? btnRect.top : (parseFloat(this.wrapper.style.top) || 0);
-    const padding = 8;
-    const isNearTop = curTop < 48 || this.wrapper.classList.contains('pa-placement-top');
-
+    const isNearTop = topOf(btn, this.wrapper) < 48 || this.wrapper.classList.contains('pa-placement-top');
     tip.classList.toggle('pa-tooltip-below', isNearTop);
-
     tip.style.left = '';
     tip.style.right = '';
-    tip.style.transform = '';
-
-    const isCloseBtn = btn.classList.contains('pa-toolbar-close-btn');
-    const tipRect = tip.getBoundingClientRect();
-    const viewportWidth = window.innerWidth || 1200;
-
-    if (tipRect.left < padding && tipRect.left !== 0) {
-      const shift = padding - tipRect.left;
-      if (isCloseBtn) {
-        tip.style.transform = `translateX(${shift}px)`;
-      } else {
-        tip.style.transform = `translateX(calc(-50% + ${shift}px))`;
-      }
-    } else if (tipRect.right > viewportWidth - padding) {
-      const shift = tipRect.right - (viewportWidth - padding);
-      if (isCloseBtn) {
-        tip.style.transform = `translateX(-${shift}px)`;
-      } else {
-        tip.style.transform = `translateX(calc(-50% - ${shift}px))`;
-      }
-    }
+    clampHorizontally(tip, !btn.classList.contains('pa-toolbar-close-btn'), 8);
   }
 }

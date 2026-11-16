@@ -14,7 +14,7 @@ describe('DOM markup helpers', () => {
     const target = document.createElement('div');
     setMarkup(target, `<span>first</span><script>window.__executed = true</script>`);
     expect(target.querySelector('span')?.textContent).toBe('first');
-    expect((globalThis as any).window?.__executed).toBeUndefined();
+    expect(Reflect.get(window, '__executed')).toBeUndefined();
 
     appendMarkup(target, '<b>second</b>');
     expect(target.querySelector('b')?.textContent).toBe('second');

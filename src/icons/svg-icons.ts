@@ -69,7 +69,7 @@ function dragHandleSvg(): string {
   return toSvg(GripVertical, 12, { viewBox: '0 0 24 24', width: '12', height: '18' });
 }
 
-export const ICONS: Record<string, string> = {
+export const ICONS = {
   anchor: toSvg(Anchor),
 
   pen: toSvg(Pencil),
@@ -95,4 +95,6 @@ export const ICONS: Record<string, string> = {
   shapes: toSvg(Shapes),
   settings: toSvg(Settings),
   more: toSvg(Ellipsis),
-};
+} as const satisfies Record<string, string>;
+
+export type IconName = keyof typeof ICONS;

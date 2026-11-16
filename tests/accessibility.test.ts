@@ -70,6 +70,14 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       expect(shadowStyles).toContain(':focus-visible');
     });
 
+    it('should pin the shadow host styles so page rules cannot hide or reposition the UI', async () => {
+      const { SHADOW_STYLES } = await import('../src/ui/styles');
+      const host = SHADOW_STYLES.match(/:host\s*\{([^}]*)\}/)?.[1] ?? '';
+      for (const decl of ['display: block', 'position: absolute', 'visibility: visible', 'opacity: 1', 'transform: none', 'filter: none', 'contain: none']) {
+        expect(host).toContain(`${decl} !important`);
+      }
+    });
+
     it('should respect prefers-reduced-motion media query across all styles (WCAG 2.3.3)', () => {
       const optionsCss = fs.readFileSync(path.resolve(__dirname, '../entrypoints/options/options.css'), 'utf-8');
       const shadowStyles = fs.readFileSync(path.resolve(__dirname, '../src/ui/styles.ts'), 'utf-8');
@@ -152,6 +160,26 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
         expect(s.getAttribute('aria-label')).toMatch(/^Color /);
         expect(['true', 'false']).toContain(s.getAttribute('aria-pressed'));
       });
+    });
+
+    it('should name menu items from their visible text and expose toggle state with aria-checked', () => {
+      container.querySelectorAll('.pa-menu-item').forEach((item) => {
+        expect(item.hasAttribute('aria-label')).toBe(false);
+        expect(item.querySelector('.pa-menu-item-label')?.textContent).toBeTruthy();
+      });
+      for (const action of ['visibility', 'dom-anchor']) {
+        const item = container.querySelector(`[data-action="${action}"]`) as HTMLElement;
+        expect(item.getAttribute('role')).toBe('menuitemcheckbox');
+        expect(['true', 'false']).toContain(item.getAttribute('aria-checked'));
+        expect(item.querySelector('.pa-menu-item-hint')?.getAttribute('aria-hidden')).toBe('true');
+      }
+    });
+
+    it('should keep a persistent polite live region for toolbar announcements', () => {
+      const region = container.querySelector('.pa-live-region') as HTMLElement;
+      expect(region.getAttribute('role')).toBe('status');
+      expect(region.getAttribute('aria-live')).toBe('polite');
+      expect(region.closest('.pa-toolbar-wrapper')).toBeNull();
     });
 
     it('should support keyboard arrow navigation on the drag handle (WCAG 2.5.7)', () => {
