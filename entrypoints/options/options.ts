@@ -23,7 +23,6 @@ type EditableKey =
   | 'shortcuts'
   | 'urlMatchMode'
   | 'strokeSimplification'
-  | 'keepToolbarOpen'
   | 'domAnchoringEnabled'
   | 'orphanedAnchorMode';
 
@@ -326,7 +325,6 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
 function setupPersistenceForm() {
   const matchMode = document.getElementById('pref-url-match-mode') as HTMLSelectElement;
   const strokeSimplification = document.getElementById('pref-stroke-simplification') as HTMLInputElement;
-  const toolbarOpenMode = document.getElementById('pref-toolbar-open') as HTMLInputElement;
   const domAnchorMode = document.getElementById('pref-dom-anchoring') as HTMLInputElement;
   const orphanMode = document.getElementById('pref-orphan-mode') as HTMLSelectElement;
 
@@ -340,11 +338,6 @@ function setupPersistenceForm() {
   strokeSimplification.addEventListener('change', () => {
     currentSettings.strokeSimplification = strokeSimplification.checked;
     markDirty('strokeSimplification');
-  });
-
-  toolbarOpenMode.addEventListener('change', () => {
-    currentSettings.keepToolbarOpen = toolbarOpenMode.checked;
-    markDirty('keepToolbarOpen');
   });
 
   domAnchorMode?.addEventListener('change', () => {
@@ -362,13 +355,11 @@ function setupPersistenceForm() {
 function syncPersistenceFormValues(): void {
   const matchMode = document.getElementById('pref-url-match-mode') as HTMLSelectElement;
   const strokeSimplification = document.getElementById('pref-stroke-simplification') as HTMLInputElement;
-  const toolbarOpenMode = document.getElementById('pref-toolbar-open') as HTMLInputElement;
   const domAnchorMode = document.getElementById('pref-dom-anchoring') as HTMLInputElement;
   const orphanMode = document.getElementById('pref-orphan-mode') as HTMLSelectElement;
 
   matchMode.value = currentSettings.urlMatchMode;
   strokeSimplification.checked = currentSettings.strokeSimplification;
-  toolbarOpenMode.checked = currentSettings.keepToolbarOpen;
   if (domAnchorMode) domAnchorMode.checked = currentSettings.domAnchoringEnabled ?? true;
   if (orphanMode) orphanMode.value = currentSettings.orphanedAnchorMode || 'hide';
 }

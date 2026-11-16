@@ -23,7 +23,6 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   urlMatchMode: 'clean',
   strokeSimplification: true,
   toolbarPosition: null,
-  keepToolbarOpen: false,
   areAnnotationsVisible: true,
   domAnchoringEnabled: true,
   orphanedAnchorMode: 'hide',
@@ -188,8 +187,9 @@ function migrateSettings(stored: StoredItems): StoredItems {
     migrated.strokeSimplification = migrated.performanceMode;
   }
   delete migrated.performanceMode;
-  // Held live open/closed state rather than a preference, so it is dropped instead of mapped.
+  // The toolbar never opens by itself on page load, so neither the old live state nor the old preference applies.
   delete migrated.isToolbarOpen;
+  delete migrated.keepToolbarOpen;
   return migrated;
 }
 

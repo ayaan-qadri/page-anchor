@@ -201,13 +201,13 @@ describe('Storage Engine: Persistence with Mocked Chrome Storage', () => {
     await Promise.all([
       saveSettings({ defaultStrokeWidth: 9 }),
       saveSettings({ defaultStrokeColor: '#10b981' }),
-      saveSettings({ keepToolbarOpen: true }),
+      saveSettings({ defaultFontSize: 30 }),
     ]);
 
     const settings = await loadSettings();
     expect(settings.defaultStrokeWidth).toBe(9);
     expect(settings.defaultStrokeColor).toBe('#10b981');
-    expect(settings.keepToolbarOpen).toBe(true);
+    expect(settings.defaultFontSize).toBe(30);
   });
 
   it('keeps saving after one settings write fails', async () => {
@@ -369,11 +369,11 @@ describe('Storage Engine: Persistence with Mocked Chrome Storage', () => {
     const el = (id: string) =>
       ({ id, type: 'pen', points: [], strokeColor: '#000', strokeWidth: 1, opacity: 1, createdAt: 1, bbox: { minX: 0, minY: 0, maxX: 0, maxY: 0 } }) as AnchorElement;
 
-    it('drops the stale isToolbarOpen key instead of mapping it', async () => {
-      mockStore['page_anchor_settings'] = { isToolbarOpen: true };
+    it('drops the old toolbar open-state keys, since the toolbar never opens by itself', async () => {
+      mockStore['page_anchor_settings'] = { isToolbarOpen: true, keepToolbarOpen: true };
       const settings = await loadSettings();
       expect((settings as any).isToolbarOpen).toBeUndefined();
-      expect(settings.keepToolbarOpen).toBe(false);
+      expect((settings as any).keepToolbarOpen).toBeUndefined();
     });
 
     it('fails the save instead of writing under a default-mode key when the settings read fails', async () => {

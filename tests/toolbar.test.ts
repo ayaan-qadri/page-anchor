@@ -86,9 +86,10 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
       engine,
       history,
       textEditor,
-      settingsWith({ keepToolbarOpen: true }),
+      settingsWith({}),
       mockCallbacks
     );
+    toolbar.setDrawingMode(true);
   });
 
   afterEach(() => {
@@ -196,17 +197,14 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     expect(engine.getActiveMode()).toBe(true);
   });
 
-  it('does not touch the keep-open preference when the toolbar is hidden or shown', () => {
+  it('does not save anything when the toolbar is hidden or shown', () => {
     q('[data-action="hide"]').click();
-    expect(settingsOf(toolbar).keepToolbarOpen).toBe(true);
-    expect('isToolbarOpen' in settingsOf(toolbar)).toBe(false);
-
     toolbar.setDrawingMode(true);
-    expect(settingsOf(toolbar).keepToolbarOpen).toBe(true);
+    expect('isToolbarOpen' in settingsOf(toolbar)).toBe(false);
     expect(mockCallbacks.onSettingsUpdate).not.toHaveBeenCalled();
   });
 
-  it('starts hidden when the keep-open preference is off', () => {
+  it('starts hidden', () => {
     const other = document.createElement('div');
     document.body.appendChild(other);
     const otherEngine = new CanvasEngine(other);
@@ -215,7 +213,7 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
       otherEngine,
       new HistoryManager([]),
       new TextEditorOverlay(other),
-      settingsWith({ keepToolbarOpen: false })
+      settingsWith({})
     );
 
     const wrapper = other.querySelector('.pa-toolbar-wrapper') as HTMLElement;
@@ -229,7 +227,7 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     other.remove();
   });
 
-  it('opens from the keep-open preference only on the first settings load', () => {
+  it('never opens itself when settings load or change', () => {
     const other = document.createElement('div');
     document.body.appendChild(other);
     const otherEngine = new CanvasEngine(other);
@@ -238,15 +236,14 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
       otherEngine,
       new HistoryManager([]),
       new TextEditorOverlay(other),
-      settingsWith({ keepToolbarOpen: false })
+      settingsWith({})
     );
     const wrapper = other.querySelector('.pa-toolbar-wrapper') as HTMLElement;
 
-    otherToolbar.setSettings(settingsWith({ keepToolbarOpen: true }));
-    expect(wrapper.style.display).toBe('block');
+    otherToolbar.setSettings(settingsWith({ keepToolbarOpen: true } as Partial<ExtensionSettings>));
+    expect(wrapper.style.display).toBe('none');
 
-    otherToolbar.setDrawingMode(false);
-    otherToolbar.setSettings(settingsWith({ keepToolbarOpen: true, defaultStrokeColor: '#123456' }));
+    otherToolbar.setSettings(settingsWith({ defaultStrokeColor: '#123456' }));
     expect(wrapper.style.display).toBe('none');
     expect(engineState(otherEngine).strokeColor).toBe('#123456');
 

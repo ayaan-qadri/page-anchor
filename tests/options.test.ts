@@ -224,10 +224,6 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
     orphanMode.value = 'dimmed';
     orphanMode.dispatchEvent(new Event('change'));
 
-    const toolbarOpen = document.getElementById('pref-toolbar-open') as HTMLInputElement;
-    toolbarOpen.checked = true;
-    toolbarOpen.dispatchEvent(new Event('change'));
-
     const strokeSimplification = document.getElementById('pref-stroke-simplification') as HTMLInputElement;
     strokeSimplification.checked = false;
     strokeSimplification.dispatchEvent(new Event('change'));
@@ -239,15 +235,13 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
     const saved = savedSettings(mockLocalStore);
     expect(saved.urlMatchMode).toBe('domain');
     expect(saved.orphanedAnchorMode).toBe('dimmed');
-    expect(saved.keepToolbarOpen).toBe(true);
     expect(saved.strokeSimplification).toBe(false);
     expect('isToolbarOpen' in saved).toBe(false);
   });
 
-  it('shows the keep-open preference from storage', async () => {
-    mockLocalStore['page_anchor_settings'] = { keepToolbarOpen: true };
+  it('no longer offers a setting to open the toolbar on page load', async () => {
     await initOptions();
-    expect((document.getElementById('pref-toolbar-open') as HTMLInputElement).checked).toBe(true);
+    expect(document.getElementById('pref-toolbar-open')).toBeNull();
   });
 
   it('saves only the edited keys, keeping changes made in other tabs meanwhile', async () => {

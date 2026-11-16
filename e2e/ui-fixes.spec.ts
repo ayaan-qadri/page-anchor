@@ -64,43 +64,35 @@ test.describe('UI review fixes', () => {
       });
   });
 
-  test('the toolbar open state is not remembered, while keep-open preference opens it on load', async ({ context, extensionId }) => {
+  test('the toolbar never opens by itself on page load, even if it was open before', async ({ context, extensionId }) => {
     const server = await startServer();
     try {
       const page = await firstPage(context);
       const toolbar = pa(page, '.pa-toolbar');
-      await page.goto(`${server.origin}/keep-open`);
+      await page.goto(`${server.origin}/never-auto-open`);
       await waitForMount(page);
       await expect(toolbar).toBeHidden();
 
       await openToolbar(page, context);
-      await page.waitForTimeout(400);
-      const afterOpen = await storedSettings(context);
-      expect(afterOpen).not.toHaveProperty('isToolbarOpen');
-      expect(afterOpen.keepToolbarOpen ?? false).toBe(false);
+      await drawStroke(page, [200, 300], [320, 340]);
+      await expect.poll(() => storedElementCount(context, '/never-auto-open')).toBe(1);
+      expect(await storedSettings(context)).not.toHaveProperty('isToolbarOpen');
 
       await page.reload();
       await waitForMount(page);
+      // The saved drawing is shown, but the toolbar waits for the user.
+      await expect(page.locator('#page-anchor-host')).toHaveCount(1);
+      await page.waitForTimeout(500);
       await expect(toolbar).toBeHidden();
 
       const options = await context.newPage();
       await options.goto(`chrome-extension://${extensionId}/options.html`);
       await options.locator('#tab-btn-persistence').click();
-      await options.locator('#pref-toolbar-open').check();
-      await options.locator('#btn-save').click();
-      await expect.poll(async () => (await storedSettings(context)).keepToolbarOpen).toBe(true);
+      await expect(options.locator('#pref-toolbar-open')).toHaveCount(0);
       await options.close();
 
-      await page.reload();
-      await expect(toolbar).toBeVisible({ timeout: 10000 });
-
-      await pa(page, '[data-action="hide"]').click();
-      await expect(toolbar).toBeHidden();
-      await page.waitForTimeout(400);
-      expect((await storedSettings(context)).keepToolbarOpen).toBe(true);
-
-      await page.reload();
-      await expect(toolbar).toBeVisible({ timeout: 10000 });
+      await openToolbar(page, context);
+      await expect(toolbar).toBeVisible();
     } finally {
       await server.close();
     }

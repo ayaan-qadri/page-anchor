@@ -36,8 +36,6 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       const optionsHtml = fs.readFileSync(path.resolve(__dirname, '../entrypoints/options/index.html'), 'utf-8');
       expect(optionsHtml).toContain('for="pref-url-match-mode"');
       expect(optionsHtml).toContain('id="pref-url-match-mode"');
-      expect(optionsHtml).toContain('for="pref-toolbar-open"');
-      expect(optionsHtml).toContain('id="pref-toolbar-open"');
       expect(optionsHtml).toContain('for="pref-stroke-simplification"');
       expect(optionsHtml).toContain('id="pref-stroke-simplification"');
     });

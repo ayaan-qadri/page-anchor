@@ -158,7 +158,6 @@ export class FloatingToolbar {
   private positionSaveTimer: number | null = null;
 
   private isOpen = false;
-  private hasReceivedSettings = false;
   private returnFocusTo: HTMLElement | null = null;
   private isDragging = false;
   private dragOffset = { x: 0, y: 0 };
@@ -222,15 +221,10 @@ export class FloatingToolbar {
 
     window.addEventListener('resize', this.handleResize, { passive: true });
     window.addEventListener('pointerdown', this.handleOutsidePointerDown, true);
-
-    if (this.settings.keepToolbarOpen) this.setDrawingMode(true);
   }
 
-  /** Safe to call on every settings change; only the first call may open the toolbar. */
+  /** Safe to call on every settings change; never opens the toolbar, which only the user does. */
   public setSettings(settings: ExtensionSettings): void {
-    const isFirst = !this.hasReceivedSettings;
-    this.hasReceivedSettings = true;
-
     const pendingPosition = this.positionSaveTimer !== null || this.isDragging;
     this.settings = {
       ...settings,
@@ -245,11 +239,7 @@ export class FloatingToolbar {
     this.engine.setStrokeSimplification(settings.strokeSimplification);
     this.renderMenuToggles();
 
-    if (isFirst && settings.keepToolbarOpen) {
-      this.setDrawingMode(true);
-    } else if (this.isOpen && !pendingPosition) {
-      this.applyRestingPosition();
-    }
+    if (this.isOpen && !pendingPosition) this.applyRestingPosition();
   }
 
   /** Removes the toolbar's DOM and every listener it registered outside its own elements. */

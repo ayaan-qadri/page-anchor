@@ -7,6 +7,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The toolbar never opens by itself when a page loads, even if it was open
+  last time. Click the extension icon or use the shortcut to bring it up. The
+  "Keep toolbar open by default" setting was removed.
 - The extension icon now toggles the in-page drawing toolbar directly, instead
   of opening a dashboard popup. Clicking it again hides the toolbar, so it
   stops covering the page. Settings, saved pages, and backup live on the
