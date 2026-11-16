@@ -75,6 +75,11 @@ async function openToolbar(page) {
   return toolbar;
 }
 
+async function pickRect(page) {
+  await page.locator('#page-anchor-host [data-action="shapes"]').click();
+  await page.locator('#page-anchor-host [data-tool="rect"]').click();
+}
+
 const page = await context.newPage();
 const errors = [];
 page.on('console', (m) => {
@@ -113,7 +118,7 @@ record(
 // ---- 2. Quota exhaustion on the real save path ----
 await page.evaluate(() => window.scrollTo(0, 0));
 await openToolbar(page);
-await page.locator('#page-anchor-host [data-tool="rect"]').click();
+await pickRect(page);
 await page.mouse.move(120, 200);
 await page.mouse.down();
 await page.mouse.move(300, 300, { steps: 5 });
@@ -132,18 +137,13 @@ const beforeQuota = await store(() =>
 );
 
 const fill = await store(async () => {
-  // Fill to the exact remaining quota so even a tiny page payload cannot fit.
-  const quota = chrome.storage.local.QUOTA_BYTES;
-  const used = await chrome.storage.local.getBytesInUse(null);
-  const key = 'filler_exact';
-  const overhead = key.length;
-  const size = Math.max(0, quota - used - overhead - 40);
+  // Push usage past Chrome's default 10MB local quota; unlimitedStorage must lift it.
+  const size = 11 * 1024 * 1024;
   try {
-    await chrome.storage.local.set({ [key]: 'x'.repeat(size) });
-    const usedAfter = await chrome.storage.local.getBytesInUse(null);
-    return { quota, used, usedAfter, freeAfter: quota - usedAfter };
+    await chrome.storage.local.set({ filler_big: 'x'.repeat(size) });
+    return { usedAfter: await chrome.storage.local.getBytesInUse(null) };
   } catch (e) {
-    return { quota, used, error: String(e?.message || e) };
+    return { error: String(e?.message || e) };
   }
 });
 
@@ -154,28 +154,22 @@ await page.mouse.move(560, 320, { steps: 5 });
 await page.mouse.up();
 await page.waitForTimeout(1000);
 
-const afterQuota = await store(() =>
+const afterBig = await store(() =>
   new Promise((r) => {
     chrome.storage.local.get(null, (v) => {
       const keys = Object.keys(v).filter((k) => k.startsWith('page_anchor_data:'));
-      r({
-        dataKeys: keys.length,
-        indexEntries: Object.keys(v.page_anchor_index || {}).length,
-        counts: keys.map((k) => v[k].elements.length),
-      });
+      r({ counts: keys.map((k) => v[k].elements.length) });
     });
   })
 );
-const pageBadge = await page.locator('#page-anchor-host .pa-count-badge').textContent();
-const quotaErrorSurfaced = await page.evaluate(() => {
+const saveErrorShown = await page.evaluate(() => {
   const host = document.getElementById('page-anchor-host');
-  const toast = host?.shadowRoot?.querySelector('.pa-save-error');
-  return !!toast;
+  return !!host?.shadowRoot?.querySelector('.pa-save-error');
 });
 record(
-  'quota exhaustion is surfaced to the user',
-  quotaErrorSurfaced,
-  `fill=${JSON.stringify(fill)} before=${JSON.stringify(beforeQuota)} after=${JSON.stringify(afterQuota)} badge=${pageBadge}`
+  'saves keep working past the default 10MB storage quota',
+  !fill.error && fill.usedAfter > 10 * 1024 * 1024 && !saveErrorShown && afterBig.counts.some((c) => c >= 2),
+  `fill=${JSON.stringify(fill)} before=${JSON.stringify(beforeQuota)} after=${JSON.stringify(afterBig)} errorToast=${saveErrorShown}`
 );
 
 await store(async () => {
@@ -314,7 +308,7 @@ record(
 // ---- 5. Orphaned anchors respect the hide/dim setting ----
 await page.goto(base);
 await openToolbar(page);
-await page.locator('#page-anchor-host [data-tool="rect"]').click();
+await pickRect(page);
 await page.mouse.move(140, 260);
 await page.mouse.down();
 await page.mouse.move(320, 340, { steps: 5 });
@@ -329,7 +323,7 @@ const orphan = await page.evaluate(async () => {
   const canvas = root?.querySelector('.page-anchor-base-canvas');
   if (!canvas) return { alpha: null, badge: anchorEl?.textContent, reason: 'canvas missing' };
   const ctx = canvas.getContext('2d');
-  const dpr = canvas.width / window.innerWidth;
+  const dpr = canvas.width / canvas.getBoundingClientRect().width;
   const px = ctx.getImageData(180 * dpr, 280 * dpr, 1, 1).data;
   return { alpha: px[3], badge: anchorEl?.textContent };
 });
@@ -348,7 +342,7 @@ await store(async () => {
 });
 await page.reload();
 await openToolbar(page);
-await page.locator('#page-anchor-host [data-tool="rect"]').click();
+await pickRect(page);
 await page.mouse.move(150, 320);
 await page.mouse.down();
 await page.mouse.move(280, 400, { steps: 5 });

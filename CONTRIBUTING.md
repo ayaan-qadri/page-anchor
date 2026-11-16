@@ -127,7 +127,8 @@ pnpm icons
 We use [Vitest](https://vitest.dev/) for unit and integration tests, [Playwright](https://playwright.dev/) for real-browser end-to-end flows, and two Node harnesses that load the built extension into Chromium:
 
 - `pnpm test` runs the unit suite; `pnpm test:e2e` drives real user flows in a browser.
-- `pnpm test:edge` checks persistence, storage-quota, backup, SPA-navigation, and orphan cases.
+- `pnpm test:edge` checks persistence, large-storage, backup, SPA-navigation, and orphan cases.
 - `pnpm perf` measures main-thread cost under CPU throttling and a slow network.
+- `pnpm stress` drives heavy and adversarial scenarios (thousands of drawings, concurrent tabs, navigation and DOM storms) with pass/fail budgets.
 - Add test coverage for any new tools, geometry helpers, or storage behaviours.
 - Run `pnpm check` before committing.

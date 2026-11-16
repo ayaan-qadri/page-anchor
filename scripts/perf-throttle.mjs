@@ -17,7 +17,8 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const EXT = path.join(ROOT, '.output', 'chrome-mv3');
+const EXT = process.env.PA_EXT_DIR ? path.resolve(process.env.PA_EXT_DIR) : path.join(ROOT, '.output', 'chrome-mv3');
+const RESULTS_FILE = process.env.PA_RESULTS_FILE || 'perf-results.json';
 const QUICK = process.argv.includes('--quick');
 const CARDS = QUICK ? 300 : 1000;
 const RESULTS = [];
@@ -154,10 +155,15 @@ async function setCpu(cdp, rate) {
 
 /** Toggles the in-page toolbar in a tab, the way clicking the icon does. */
 async function toggleToolbar(background, page) {
-  const tabs = await background.evaluate(
+  let tabs = await background.evaluate(
     (url) => chrome.tabs.query({ url }),
     `${page.url().split('?')[0]}*`
   );
+  // Builds without host permissions can't see tab URLs, so fall back to the focused tab.
+  if (!tabs.length) {
+    await page.bringToFront();
+    tabs = await background.evaluate(() => chrome.tabs.query({ active: true, lastFocusedWindow: true }));
+  }
   if (!tabs.length) return;
   await background.evaluate(
     (tabId) => chrome.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_TOGGLE' }),
@@ -513,7 +519,7 @@ async function main() {
   await optionsCdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
 
   const report = { generatedAt: new Date().toISOString(), cards: CARDS, seeded, errors, results: RESULTS };
-  fs.writeFileSync(path.join(ROOT, 'perf-results.json'), JSON.stringify(report, null, 2));
+  fs.writeFileSync(path.join(ROOT, RESULTS_FILE), JSON.stringify(report, null, 2));
 
   const pad = (v, n) => String(v ?? '-').padEnd(n);
   console.log(

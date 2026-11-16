@@ -249,12 +249,13 @@ pnpm test:e2e   # Playwright, in a real browser (needs: pnpm exec playwright ins
 ### Load, throttle, and edge-case harnesses
 
 ```bash
-pnpm build && pnpm test:edge   # persistence, quota, backups, SPAs, orphaned anchors
+pnpm build && pnpm test:edge   # persistence, large storage, backups, SPAs, orphaned anchors
 pnpm build && pnpm perf        # 1,000 anchored elements at 1x / 4x / 6x CPU, slow 3G
 pnpm build && pnpm perf:quick  # 300 elements, for a faster loop
+pnpm build && pnpm stress      # 5,000 drawings, multi-tab edits, SPA/DOM/resize storms, re-injection, imports
 ```
 
-Both harnesses launch Chromium with the built extension installed, drive the real UI, and write `edge-results.json` and `perf-results.json`. `pnpm perf` reports main-thread task time, frame-time percentiles, long tasks, and storage timings per phase, so performance changes can be compared rather than guessed at.
+Both harnesses launch Chromium with the built extension installed, drive the real UI, and write `edge-results.json`, `perf-results.json` and `stress-results.json`. `pnpm perf` reports main-thread task time, frame-time percentiles, long tasks, and storage timings per phase, so performance changes can be compared rather than guessed at.
 
 ### Regenerating the icons
 
@@ -325,6 +326,7 @@ page-anchor/
 ├── scripts/
 │   ├── generate-icons.js        # pnpm icons
 │   ├── perf-throttle.mjs        # pnpm perf
+│   ├── stress.mjs               # pnpm stress
 │   └── edge-cases.mjs           # pnpm test:edge
 ├── tests/                       # Vitest suites
 ├── e2e/                         # Playwright specs

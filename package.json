@@ -23,7 +23,8 @@
     "test:e2e": "playwright test",
     "perf": "node scripts/perf-throttle.mjs",
     "perf:quick": "node scripts/perf-throttle.mjs --quick",
-    "test:edge": "node scripts/edge-cases.mjs"
+    "test:edge": "node scripts/edge-cases.mjs",
+    "stress": "node scripts/stress.mjs"
   },
   "keywords": [
     "browser-extension",
