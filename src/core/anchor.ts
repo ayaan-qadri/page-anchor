@@ -81,7 +81,7 @@ export function findBestAnchorElement(
     }
 
     const id = current.id;
-    if (id && !id.startsWith('page-anchor') && !id.match(/^[0-9]+$/)) {
+    if (id && isStableId(id)) {
       if (!isFullPageWrapper(current, winW, winH)) return current;
     }
 
@@ -133,46 +133,25 @@ export function findBestAnchorElement(
   return deepest;
 }
 
-/**
- * Generates primary and fallback CSS selectors for deterministic element identification.
- */
-export function generateSelector(el: Element): { selector: string; fallbackSelectors: string[] } {
-  const fallbacks: string[] = [];
+/** True for ids a framework or build step generated (ember123, :r1:, uuids, hashes); those change between page loads and would orphan the anchor. */
+export function isStableId(id: string): boolean {
+  if (!id || id.startsWith('page-anchor')) return false;
+  if (/^\d/.test(id) || id.includes(':')) return false;
+  if (/[a-z]\d{3,}/i.test(id)) return false;
+  if (/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/i.test(id)) return false;
+  const hexRun = id.match(/[0-9a-f]{8,}/gi) || [];
+  return !hexRun.some((run) => /\d/.test(run) && /[a-f]/i.test(run));
+}
 
-  if (el.id && !el.id.startsWith('page-anchor') && !el.id.match(/^[0-9]+$/)) {
-    const directId = `#${safeCssEscape(el.id)}`;
-    return { selector: directId, fallbackSelectors: [] };
-  }
+const STABLE_DATA_ATTRS = ['data-id', 'data-testid', 'data-item-id'];
 
-  const dataId = el.getAttribute('data-id') || el.getAttribute('data-testid') || el.getAttribute('data-item-id');
-  if (dataId) {
-    const attrName = el.hasAttribute('data-id')
-      ? 'data-id'
-      : el.hasAttribute('data-testid')
-        ? 'data-testid'
-        : 'data-item-id';
-    return {
-      selector: `[${attrName}="${safeCssEscape(dataId)}"]`,
-      fallbackSelectors: [],
-    };
-  }
-
-  const linkEl = (el.tagName.toLowerCase() === 'a' ? el : el.querySelector?.('a')) as HTMLAnchorElement | null;
-  if (linkEl && linkEl.href) {
-    try {
-      const parsed = new URL(linkEl.href, window?.location?.href || 'http://localhost');
-      if (parsed.pathname && parsed.pathname.length > 1 && !parsed.pathname.endsWith('/')) {
-        fallbacks.push(`a[href*="${safeCssEscape(parsed.pathname)}"]`);
-      }
-    } catch {}
-  }
-
+function structuralPath(el: Element, skipOwnId: boolean): string {
   const pathParts: string[] = [];
   let curr: Element | null = el;
 
   while (curr && curr !== document.body && curr !== document.documentElement) {
     const tag = curr.tagName.toLowerCase();
-    if (curr.id && !curr.id.startsWith('page-anchor') && !curr.id.match(/^[0-9]+$/)) {
+    if (curr.id && isStableId(curr.id) && !(skipOwnId && curr === el)) {
       pathParts.unshift(`#${safeCssEscape(curr.id)}`);
       break;
     }
@@ -195,19 +174,61 @@ export function generateSelector(el: Element): { selector: string; fallbackSelec
   }
 
   const rootedAtBody = curr === document.body || curr === document.documentElement;
-  const hierarchicalSelector = pathParts.length
+  return pathParts.length
     ? `${rootedAtBody && document.body && document.body.contains(el) ? 'body > ' : ''}${pathParts.join(' > ')}`
     : el.tagName.toLowerCase();
+}
 
-  if (typeof el.className === 'string' && el.className.trim()) {
-    const classList = el.className
-      .trim()
-      .split(/\s+/)
-      .filter((c) => !c.startsWith('page-anchor') && !c.includes(':') && c.length > 2);
-    if (classList.length > 0) {
-      fallbacks.push(`${el.tagName.toLowerCase()}.${safeCssEscape(classList[0])}`);
-    }
+function linkFallback(el: Element): string | null {
+  const isLink = el.tagName.toLowerCase() === 'a';
+  const linkEl = (isLink ? el : el.querySelector?.('a[href]')) as HTMLAnchorElement | null;
+  if (!linkEl || !linkEl.href) return null;
+  try {
+    const parsed = new URL(linkEl.href, window?.location?.href || 'http://localhost');
+    if (!parsed.pathname || parsed.pathname.length <= 1 || parsed.pathname.endsWith('/')) return null;
+    const link = `a[href*="${safeCssEscape(parsed.pathname)}"]`;
+    // `:has` makes the selector resolve to the container itself, so its rect matches `initialRect`.
+    return isLink ? link : `${el.tagName.toLowerCase()}:has(${link})`;
+  } catch {
+    return null;
   }
+}
+
+function classFallback(el: Element): string | null {
+  if (typeof el.className !== 'string' || !el.className.trim()) return null;
+  const classList = el.className
+    .trim()
+    .split(/\s+/)
+    .filter((c) => !c.startsWith('page-anchor') && !c.includes(':') && c.length > 2);
+  return classList.length > 0 ? `${el.tagName.toLowerCase()}.${safeCssEscape(classList[0])}` : null;
+}
+
+/**
+ * Generates primary and fallback CSS selectors for deterministic element identification.
+ */
+export function generateSelector(el: Element): { selector: string; fallbackSelectors: string[] } {
+  const fallbacks: string[] = [];
+  const add = (selector: string | null, primary: string) => {
+    if (selector && selector !== primary && !fallbacks.includes(selector)) fallbacks.push(selector);
+  };
+
+  let primary: string | null = null;
+  if (el.id && isStableId(el.id)) {
+    primary = `#${safeCssEscape(el.id)}`;
+  } else {
+    const attrName = STABLE_DATA_ATTRS.find((name) => el.getAttribute(name));
+    if (attrName) primary = `[${attrName}="${safeCssEscape(el.getAttribute(attrName) || '')}"]`;
+  }
+
+  if (primary) {
+    add(structuralPath(el, true), primary);
+    add(linkFallback(el), primary);
+    return { selector: primary, fallbackSelectors: fallbacks };
+  }
+
+  const hierarchicalSelector = structuralPath(el, false);
+  add(linkFallback(el), hierarchicalSelector);
+  add(classFallback(el), hierarchicalSelector);
 
   return {
     selector: hierarchicalSelector,
@@ -249,6 +270,30 @@ export function createDOMAnchor(targetEl: Element): DOMAnchor {
   };
 }
 
+function collapseWhitespace(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+/** Descends into whichever child still contains `snippet` in its collapsed text, so quotes split across inline elements or indented markup still match. */
+function findDeepestContainingText(root: Element, snippet: string): Element | null {
+  if (!collapseWhitespace(root.textContent || '').includes(snippet)) return null;
+  let current: Element = root;
+  for (;;) {
+    let next: Element | null = null;
+    for (const child of Array.from(current.children)) {
+      if (child.id === 'page-anchor-host') continue;
+      const tag = child.tagName;
+      if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT' || tag === 'TEMPLATE') continue;
+      if (collapseWhitespace(child.textContent || '').includes(snippet)) {
+        next = child;
+        break;
+      }
+    }
+    if (!next) return current === root ? null : current;
+    current = next;
+  }
+}
+
 export interface ResolvedAnchor {
   element: Element | null;
   deltaX: number;
@@ -284,18 +329,15 @@ export function resolveAnchor(anchor: DOMAnchor, allowTextWalk = true): Resolved
     });
   }
 
+  const snippet = anchor.textQuote?.exact ? collapseWhitespace(anchor.textQuote.exact).slice(0, 30) : '';
+  const hasSnippet = (el: Element) => collapseWhitespace(el.textContent || '').includes(snippet);
+
   for (const { selector, verifyText } of primarySelectors) {
     try {
       const el = document.querySelector(selector);
-      if (el && el.isConnected) {
-        if (
-          !verifyText ||
-          !anchor.textQuote?.exact ||
-          el.textContent?.includes(anchor.textQuote.exact.slice(0, 30))
-        ) {
-          matchedElement = el;
-          break;
-        }
+      if (el && el.isConnected && (!verifyText || !snippet || hasSnippet(el))) {
+        matchedElement = el;
+        break;
       }
     } catch {}
   }
@@ -303,10 +345,17 @@ export function resolveAnchor(anchor: DOMAnchor, allowTextWalk = true): Resolved
   if (!matchedElement && anchor.fallbackSelectors) {
     for (const fb of anchor.fallbackSelectors) {
       try {
-        const el = document.querySelector(fb);
-        if (el && el.isConnected) {
-          if (!anchor.textQuote?.exact || el.textContent?.includes(anchor.textQuote.exact.slice(0, 30))) {
+        if (snippet) {
+          const el = Array.from(document.querySelectorAll(fb)).find((c) => c.isConnected && hasSnippet(c));
+          if (el) {
             matchedElement = el;
+            break;
+          }
+        } else {
+          // Without a text quote only an unambiguous match is trustworthy.
+          const all = document.querySelectorAll(fb);
+          if (all.length === 1 && all[0].isConnected) {
+            matchedElement = all[0];
             break;
           }
         }
@@ -315,18 +364,10 @@ export function resolveAnchor(anchor: DOMAnchor, allowTextWalk = true): Resolved
   }
 
   // Last resort: text-quote search, which survives DOM structure changes.
-  if (allowTextWalk && !matchedElement && anchor.textQuote?.exact && document.body) {
-    const snippet = anchor.textQuote.exact.slice(0, 30);
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    let node: Node | null;
-    while ((node = walker.nextNode())) {
-      if (node.nodeValue && node.nodeValue.includes(snippet)) {
-        const parent = node.parentElement;
-        if (parent && parent.isConnected && !parent.closest('#page-anchor-host')) {
-          matchedElement = parent.closest('li, tr, article, section, details, .Box-row, [data-id]') || parent;
-          break;
-        }
-      }
+  if (allowTextWalk && !matchedElement && snippet && document.body) {
+    const deepest = findDeepestContainingText(document.body, snippet);
+    if (deepest) {
+      matchedElement = deepest.closest('li, tr, article, section, details, .Box-row, [data-id]') || deepest;
     }
   }
 
@@ -360,16 +401,24 @@ interface CachedResolution {
   scrollY: number;
   /** A fixed/sticky element's offset is only valid at the sampled scroll position. */
   scrollSensitive: boolean;
+  /** A miss computed without the text walk may still be recoverable once the walk is allowed again. */
+  textWalked: boolean;
 }
+
+const TEXT_WALK_INTERVAL_MS = 1000;
+const INVALIDATE_THROTTLE_MS = 100;
+const LAYOUT_ATTRIBUTES = ['class', 'style', 'open', 'hidden'];
 
 export class DOMAnchorManager {
   private cache = new Map<string, CachedResolution>();
   private textWalkAt = new Map<string, number>();
   private mutationObserver: MutationObserver | null = null;
-  private resizeListener: (() => void) | null = null;
+  private resizeObserver: ResizeObserver | null = null;
+  private listeners = typeof AbortController !== 'undefined' ? new AbortController() : null;
   private onPositionsChanged?: () => void;
-  private debounceTimer: number | null = null;
+  private invalidateTimer: number | null = null;
   private resizeTimer: number | null = null;
+  private destroyed = false;
 
   constructor(onPositionsChanged?: () => void) {
     this.onPositionsChanged = onPositionsChanged;
@@ -377,36 +426,69 @@ export class DOMAnchorManager {
   }
 
   private initListeners(): void {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const signal = this.listeners?.signal;
 
-    this.resizeListener = () => {
-      if (this.resizeTimer !== null) clearTimeout(this.resizeTimer);
-      this.resizeTimer = window.setTimeout(() => {
-        this.resizeTimer = null;
-        this.invalidateCache();
-        this.onPositionsChanged?.();
-      }, 120);
-    };
-    window.addEventListener('resize', this.resizeListener, { passive: true });
-
-    if (typeof MutationObserver !== 'undefined' && document.body) {
-      this.mutationObserver = new MutationObserver(() => {
-        if (this.debounceTimer !== null) {
-          clearTimeout(this.debounceTimer);
-        }
-        this.debounceTimer = window.setTimeout(() => {
-          this.debounceTimer = null;
+    window.addEventListener(
+      'resize',
+      () => {
+        if (this.resizeTimer !== null) clearTimeout(this.resizeTimer);
+        this.resizeTimer = window.setTimeout(() => {
+          this.resizeTimer = null;
           this.invalidateCache();
           this.onPositionsChanged?.();
-        }, 50);
-      });
+        }, 120);
+      },
+      { passive: true, signal }
+    );
 
-      this.mutationObserver.observe(document.body, {
+    const scheduleInvalidate = () => this.scheduleInvalidate();
+    window.addEventListener('load', scheduleInvalidate, { signal });
+    // Images and iframes finishing their load shift layout; `load` does not bubble, so capture it.
+    document.addEventListener('load', scheduleInvalidate, { capture: true, passive: true, signal });
+    document.fonts?.ready?.then(scheduleInvalidate).catch(() => {});
+
+    const root = document.documentElement;
+    if (!root) return;
+
+    if (typeof MutationObserver !== 'undefined') {
+      this.mutationObserver = new MutationObserver(scheduleInvalidate);
+      // Observing the root (not body) keeps working when a page swaps out <body>.
+      this.mutationObserver.observe(root, {
         childList: true,
         subtree: true,
-        attributes: false,
+        attributes: true,
+        attributeFilter: LAYOUT_ATTRIBUTES,
       });
     }
+
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(scheduleInvalidate);
+      this.resizeObserver.observe(root);
+      this.observeBodyResize();
+    }
+  }
+
+  /** Throttled rather than debounced so a continuously animating page still gets periodic updates. */
+  private scheduleInvalidate(): void {
+    if (this.destroyed || this.invalidateTimer !== null) return;
+    this.invalidateTimer = window.setTimeout(() => {
+      this.invalidateTimer = null;
+      if (this.destroyed) return;
+      this.observeBodyResize();
+      this.invalidateCache();
+      this.onPositionsChanged?.();
+    }, INVALIDATE_THROTTLE_MS);
+  }
+
+  private observedBody: HTMLElement | null = null;
+
+  private observeBodyResize(): void {
+    const body = document.body;
+    if (!this.resizeObserver || !body || body === this.observedBody) return;
+    if (this.observedBody) this.resizeObserver.unobserve(this.observedBody);
+    this.resizeObserver.observe(body);
+    this.observedBody = body;
   }
 
   public captureAnchor(bbox: BoundingBox, startPt?: Point): DOMAnchor | undefined {
@@ -436,23 +518,22 @@ export class DOMAnchorManager {
     const key = `${anchor.selector}::${anchor.initialRect.left}::${anchor.initialRect.top}`;
     const scrollX = typeof window !== 'undefined' ? window.scrollX : 0;
     const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
+    const now = Date.now();
+    const textWalkDue = now - (this.textWalkAt.get(key) ?? 0) >= TEXT_WALK_INTERVAL_MS;
 
     const cached = this.cache.get(key);
-    if (
-      cached &&
-      (!cached.scrollSensitive ||
-        (cached.scrollX === scrollX && cached.scrollY === scrollY))
-    ) {
-      return cached.resolved;
+    if (cached) {
+      const element = cached.resolved.element;
+      const scrollValid =
+        !cached.scrollSensitive || (cached.scrollX === scrollX && cached.scrollY === scrollY);
+      const stillValid = element
+        ? element.isConnected && scrollValid
+        : cached.textWalked || !textWalkDue || !anchor.textQuote?.exact;
+      if (stillValid) return cached.resolved;
     }
 
-    const now = Date.now();
-    const allowTextWalk = now - (this.textWalkAt.get(anchor.selector) ?? 0) >= 1000;
-    if (allowTextWalk) {
-      this.textWalkAt.set(anchor.selector, now);
-    }
-
-    const resolved = resolveAnchor(anchor, allowTextWalk);
+    if (textWalkDue) this.textWalkAt.set(key, now);
+    const resolved = resolveAnchor(anchor, textWalkDue);
 
     let scrollSensitive = false;
     if (resolved.element && typeof getComputedStyle === 'function') {
@@ -462,17 +543,14 @@ export class DOMAnchorManager {
       } catch {}
     }
 
-    // Don't cache misses; nodes are often detached transiently.
-    if (resolved.element) {
-      this.cache.set(key, {
-        resolved,
-        scrollX,
-        scrollY,
-        scrollSensitive,
-      });
-    } else {
-      this.cache.delete(key);
-    }
+    // Misses are cached too; the next DOM change invalidates them, so reattached nodes still recover.
+    this.cache.set(key, {
+      resolved,
+      scrollX,
+      scrollY,
+      scrollSensitive,
+      textWalked: textWalkDue,
+    });
     return resolved;
   }
 
@@ -481,22 +559,20 @@ export class DOMAnchorManager {
   }
 
   public destroy(): void {
-    if (this.debounceTimer !== null) {
-      clearTimeout(this.debounceTimer);
-      this.debounceTimer = null;
+    this.destroyed = true;
+    if (this.invalidateTimer !== null) {
+      clearTimeout(this.invalidateTimer);
+      this.invalidateTimer = null;
     }
     if (this.resizeTimer !== null) {
       clearTimeout(this.resizeTimer);
       this.resizeTimer = null;
     }
-    if (this.mutationObserver) {
-      this.mutationObserver.disconnect();
-      this.mutationObserver = null;
-    }
-    if (this.resizeListener && typeof window !== 'undefined') {
-      window.removeEventListener('resize', this.resizeListener);
-      this.resizeListener = null;
-    }
+    this.mutationObserver?.disconnect();
+    this.mutationObserver = null;
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    this.listeners?.abort();
     this.cache.clear();
     this.textWalkAt.clear();
   }

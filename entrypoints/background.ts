@@ -1,10 +1,11 @@
 import { defineBackground } from 'wxt/utils/define-background';
-import { browser } from 'wxt/browser';
-import { injectContentScript } from '../src/core/inject';
+import { getExtensionApi, injectContentScript } from '../src/core/inject';
+import { rekeySavedPages } from '../src/core/storage';
 
 export default defineBackground(() => {
-  const ext: any = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null);
-  if (!ext) return;
+  const maybeExt = getExtensionApi();
+  if (!maybeExt) return;
+  const ext = maybeExt;
 
   async function safeToggleTab(tabId: number): Promise<void> {
     try {
@@ -21,13 +22,14 @@ export default defineBackground(() => {
     }
   }
 
-  const actionApi = ext.action || ext.browserAction;
-  actionApi?.onClicked?.addListener(async (tab?: any) => {
-    let tabId = tab?.id;
-    if (!tabId) {
-      const [activeTab] = await ext.tabs.query({ active: true, currentWindow: true });
-      tabId = activeTab?.id;
-    }
+  async function activeTabId(): Promise<number | undefined> {
+    const [activeTab] = await ext.tabs.query({ active: true, currentWindow: true });
+    return activeTab?.id;
+  }
+
+  const actionApi = ext.action ?? (ext as unknown as { browserAction?: typeof ext.action }).browserAction;
+  actionApi?.onClicked?.addListener(async (tab?: { id?: number }) => {
+    const tabId = tab?.id ?? (await activeTabId());
     if (tabId) {
       await safeToggleTab(tabId);
     }
@@ -35,23 +37,39 @@ export default defineBackground(() => {
 
   ext.commands?.onCommand?.addListener(async (command: string) => {
     if (command === 'toggle-drawing-mode') {
-      const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) {
-        await safeToggleTab(tab.id);
+      const tabId = await activeTabId();
+      if (tabId) {
+        await safeToggleTab(tabId);
       }
     }
   });
 
   // The in-page toolbar's "Settings & Backup" item routes through the
   // background, because only an extension context can open the options page.
-  ext.runtime?.onMessage?.addListener((msg: any) => {
-    if (msg?.type === 'PAGE_ANCHOR_OPEN_OPTIONS') {
+  ext.runtime?.onMessage?.addListener((msg: unknown) => {
+    if ((msg as { type?: unknown } | null)?.type === 'PAGE_ANCHOR_OPEN_OPTIONS') {
       ext.runtime.openOptionsPage?.();
     }
     return false;
   });
 
-  ext.runtime?.onInstalled?.addListener(async () => {
+  // Page scripts call history.pushState in the main world, which the content script cannot observe on every browser.
+  ext.tabs?.onUpdated?.addListener((tabId: number, changeInfo: { url?: string }) => {
+    if (!changeInfo.url) return;
+    try {
+      const sent = ext.tabs.sendMessage(tabId, { type: 'PAGE_ANCHOR_URL_CHANGED' });
+      if (sent && typeof sent.catch === 'function') sent.catch(() => {});
+    } catch {}
+  });
+
+  ext.runtime?.onInstalled?.addListener(async (details?: { reason?: string }) => {
+    const reason = details?.reason;
+    if (reason !== 'install' && reason !== 'update') return;
+
+    if (reason === 'update') {
+      await rekeySavedPages().catch(() => {});
+    }
+
     try {
       const tabs = await ext.tabs.query({ url: ['http://*/*', 'https://*/*'] });
       for (const tab of tabs) {

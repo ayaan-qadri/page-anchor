@@ -458,7 +458,7 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       }
     });
 
-    it('does not cache orphaned resolutions so reattached nodes recover', () => {
+    it('caches misses until the DOM changes, so reattached nodes still recover', async () => {
       const el = document.createElement('div');
       el.id = 'reattached-node';
       el.getBoundingClientRect = () => mockRect(20, 80, 200, 40);
@@ -468,11 +468,49 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       const anchor = createDOMAnchor(el);
 
       el.remove();
-      expect(manager.resolve(anchor).status).toBe('orphaned');
+      const miss = manager.resolve(anchor);
+      expect(miss.status).toBe('orphaned');
+      expect(manager.resolve(anchor)).toBe(miss);
 
       testDomContainer.appendChild(el);
+      await new Promise((r) => setTimeout(r, 150));
       expect(manager.resolve(anchor).status).toBe('found');
 
+      manager.destroy();
+    });
+
+    it('re-resolves a cached hit whose element was detached', () => {
+      const el = document.createElement('div');
+      el.id = 'detached-hit';
+      el.getBoundingClientRect = () => mockRect(20, 80, 200, 40);
+      testDomContainer.appendChild(el);
+
+      const manager = new DOMAnchorManager();
+      const anchor = createDOMAnchor(el);
+      expect(manager.resolve(anchor).element).toBe(el);
+
+      el.remove();
+      expect(manager.resolve(anchor).status).toBe('orphaned');
+      manager.destroy();
+    });
+
+    it('invalidates the cache when a layout attribute such as class changes', async () => {
+      const el = document.createElement('div');
+      el.id = 'class-toggle';
+      let top = 100;
+      el.getBoundingClientRect = () => mockRect(0, top, 200, 40);
+      testDomContainer.appendChild(el);
+
+      let notified = 0;
+      const manager = new DOMAnchorManager(() => notified++);
+      const anchor = createDOMAnchor(el);
+      expect(manager.resolve(anchor).deltaY).toBe(0);
+
+      top = 160;
+      testDomContainer.className = 'expanded';
+      await new Promise((r) => setTimeout(r, 150));
+      expect(notified).toBeGreaterThanOrEqual(1);
+      expect(manager.resolve(anchor).deltaY).toBe(60);
       manager.destroy();
     });
 
@@ -497,6 +535,115 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       }
 
       manager.destroy();
+    });
+  });
+
+  describe('Regression: selector and text robustness', () => {
+    it('resolves a text quote against whitespace-indented markup', () => {
+      const card = document.createElement('div');
+      card.className = 'card-x';
+      card.innerHTML = `
+        <span>Quarterly</span>
+            <span>revenue    report</span>
+        <span>for the northern region</span>`;
+      card.getBoundingClientRect = () => mockRect(10, 200, 300, 60);
+      testDomContainer.appendChild(card);
+
+      const anchor = createDOMAnchor(card);
+      expect(anchor.textQuote?.exact.startsWith('Quarterly revenue report')).toBe(true);
+
+      const moved = { ...anchor, selector: 'body > main > div.gone', fallbackSelectors: undefined };
+      const res = resolveAnchor(moved);
+      expect(res.status).toBe('found');
+      expect(res.element).toBe(card);
+    });
+
+    it('verifies legacy paths with whitespace-collapsed text on both sides', () => {
+      const row = document.createElement('div');
+      row.innerHTML = `
+        Line   one
+        of text`;
+      testDomContainer.appendChild(row);
+      const anchor = {
+        selector: 'div#test-webpage-content > div',
+        textQuote: { exact: 'Line one of text' },
+        initialRect: { left: 0, top: 0, width: 10, height: 10 },
+      };
+      expect(resolveAnchor(anchor, false).element).toBe(row);
+    });
+
+    it('skips generated-looking ids and keeps readable ones', () => {
+      for (const id of ['ember123', ':r1:', '3f2a9c1e-4b5d-4e6f-8a9b-0c1d2e3f4a5b', 'node-a1b2c3d4e5', '42abc']) {
+        const el = document.createElement('div');
+        el.id = id;
+        testDomContainer.appendChild(el);
+        expect(generateSelector(el).selector.startsWith('#' + id.slice(0, 2))).toBe(false);
+        el.remove();
+      }
+      const stable = document.createElement('div');
+      stable.id = 'issue_14723';
+      testDomContainer.appendChild(stable);
+      expect(generateSelector(stable).selector).toBe('#issue_14723');
+    });
+
+    it('gives id and data-id anchors a structural fallback', () => {
+      const el = document.createElement('div');
+      el.id = 'sidebar-card';
+      testDomContainer.appendChild(el);
+      const { fallbackSelectors } = generateSelector(el);
+      expect(fallbackSelectors.length).toBeGreaterThan(0);
+      expect(document.querySelector(fallbackSelectors[0])).toBe(el);
+
+      const row = document.createElement('div');
+      row.setAttribute('data-id', 'row-7');
+      testDomContainer.appendChild(row);
+      const rowSelectors = generateSelector(row);
+      expect(rowSelectors.fallbackSelectors.length).toBeGreaterThan(0);
+      expect(document.querySelector(rowSelectors.fallbackSelectors[0])).toBe(row);
+    });
+
+    it('makes the link fallback resolve to the container rather than the link', () => {
+      const item = document.createElement('li');
+      item.innerHTML = '<span>Title</span> <a href="/issues/991">Issue 991 details</a>';
+      const list = document.createElement('ul');
+      list.appendChild(item);
+      testDomContainer.appendChild(list);
+
+      const { fallbackSelectors } = generateSelector(item);
+      const linkSelector = fallbackSelectors.find((s) => s.includes('href'));
+      expect(linkSelector).toBeDefined();
+      expect(linkSelector!.startsWith('li:has(')).toBe(true);
+    });
+
+    it('ignores an ambiguous class fallback when there is no text quote', () => {
+      const a = document.createElement('div');
+      a.className = 'tile';
+      const b = document.createElement('div');
+      b.className = 'tile';
+      testDomContainer.append(a, b);
+      const anchor = {
+        selector: '#missing-node',
+        fallbackSelectors: ['div.tile'],
+        initialRect: { left: 0, top: 0, width: 10, height: 10 },
+      };
+      expect(resolveAnchor(anchor, false).status).toBe('orphaned');
+    });
+
+    it('verifies class fallbacks against the text quote', () => {
+      const a = document.createElement('div');
+      a.className = 'tile';
+      a.textContent = 'Other tile content';
+      const b = document.createElement('div');
+      b.className = 'tile';
+      b.textContent = 'Wanted tile content';
+      testDomContainer.append(a, b);
+      const anchor = {
+        selector: '#missing-node',
+        fallbackSelectors: ['div.tile'],
+        textQuote: { exact: 'Wanted tile content' },
+        initialRect: { left: 0, top: 0, width: 10, height: 10 },
+      };
+      expect(resolveAnchor(anchor, false).element).toBe(b);
     });
   });
 
@@ -657,16 +804,18 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       };
       engine.addElement(element);
 
-      (engine as any).moveElement(element, 5, 5);
-      const first = engine.getElementEffectiveBBox(element).bbox;
-      (engine as any).moveElement(element, 30, 40);
-      const second = engine.getElementEffectiveBBox(element).bbox;
+      engine.moveAll(5, 5);
+      const firstMoved = engine.getElements()[0];
+      const first = engine.getElementEffectiveBBox(firstMoved).bbox;
+      engine.moveAll(30, 40);
+      const moved = engine.getElements()[0];
+      const second = engine.getElementEffectiveBBox(moved).bbox;
 
-      expect(element.anchor!.initialRect.left).toBe(100);
-      expect(element.anchor!.initialRect.top).toBe(200);
+      expect(moved.anchor!.initialRect.left).toBe(100);
+      expect(moved.anchor!.initialRect.top).toBe(200);
       expect(second.minX - first.minX).toBe(30);
       expect(second.minY - first.minY).toBe(40);
-      expect(engine.getElementEffectiveBBox(element).deltaX).toBe(0);
+      expect(engine.getElementEffectiveBBox(moved).deltaX).toBe(0);
 
       engine.destroy();
     });

@@ -1,14 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import contentDefinition from '../entrypoints/content';
 
+const ctx = {} as import('wxt/utils/content-script-context').ContentScriptContext;
+import { getPageStorageKey } from '../src/core/storage';
+
 describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Messaging', () => {
   let mockChrome: any;
   let messageListener: ((msg: any, sender: any, sendResponse: (r?: any) => void) => boolean) | null = null;
   let mockLocalStorage: Record<string, any>;
+  let storageListener: ((changes: Record<string, any>, area: string) => void) | null = null;
 
   beforeEach(() => {
     mockLocalStorage = {};
     messageListener = null;
+    storageListener = null;
 
     mockChrome = {
       runtime: {
@@ -19,6 +24,12 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
         },
       },
       storage: {
+        onChanged: {
+          addListener: vi.fn((fn) => {
+            storageListener = fn;
+          }),
+          removeListener: vi.fn(),
+        },
         local: {
           get: vi.fn((key) => {
             if (typeof key === 'string') return Promise.resolve({ [key]: mockLocalStorage[key] });
@@ -51,7 +62,7 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
   });
 
   it('mounts isolated Shadow DOM root with high z-index and styles', async () => {
-    contentDefinition.main();
+    contentDefinition.main(ctx);
 
     const host = document.getElementById('page-anchor-host') as HTMLElement;
     expect(host).not.toBeNull();
@@ -69,17 +80,17 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
   });
 
   it('prevents redundant duplicate host mount if already connected', () => {
-    contentDefinition.main();
+    contentDefinition.main(ctx);
     const countFirst = document.querySelectorAll('#page-anchor-host').length;
     expect(countFirst).toBe(1);
 
-    contentDefinition.main();
+    contentDefinition.main(ctx);
     const countSecond = document.querySelectorAll('#page-anchor-host').length;
     expect(countSecond).toBe(1);
   });
 
   it('handles PAGE_ANCHOR_GET_STATUS and responds with active state and count', async () => {
-    contentDefinition.main();
+    contentDefinition.main(ctx);
     await new Promise((r) => setTimeout(r, 20));
 
     expect(messageListener).not.toBeNull();
@@ -97,7 +108,7 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
   });
 
   it('handles PAGE_ANCHOR_TOGGLE message to toggle drawing mode', async () => {
-    contentDefinition.main();
+    contentDefinition.main(ctx);
     await new Promise((r) => setTimeout(r, 20));
 
     const sendResponse = vi.fn();
@@ -111,7 +122,7 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
   });
 
   it('handles PAGE_ANCHOR_CLEAR message and resets annotations', async () => {
-    contentDefinition.main();
+    contentDefinition.main(ctx);
     await new Promise((r) => setTimeout(r, 20));
 
     const sendResponse = vi.fn();
@@ -121,7 +132,7 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
   });
 
   it('handles PAGE_ANCHOR_URL_CHANGED messages', async () => {
-    contentDefinition.main();
+    contentDefinition.main(ctx);
     await new Promise((r) => setTimeout(r, 20));
 
     const sendResponse = vi.fn();
@@ -130,7 +141,7 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
   });
 
   it('dispatches keyboard shortcuts for tools, shapes, undo, redo, and clear', async () => {
-    contentDefinition.main();
+    contentDefinition.main(ctx);
     await new Promise((r) => setTimeout(r, 20));
 
     const host = document.getElementById('page-anchor-host') as HTMLElement;
@@ -165,7 +176,7 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
   });
 
   it('deletes selected drawing element on Delete or Backspace keydown', async () => {
-    contentDefinition.main();
+    contentDefinition.main(ctx);
     await new Promise((r) => setTimeout(r, 20));
 
     messageListener?.({ type: 'PAGE_ANCHOR_TOGGLE' }, {}, vi.fn());
@@ -185,8 +196,8 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
     input.remove();
   });
 
-  it('reacts to window navigation lifecycle events (beforeunload, pagehide, hashchange, popstate, pushState, replaceState)', async () => {
-    contentDefinition.main();
+  it('reacts to window navigation lifecycle events (beforeunload, pagehide, hashchange, popstate)', async () => {
+    contentDefinition.main(ctx);
     await new Promise((r) => setTimeout(r, 20));
 
     window.dispatchEvent(new Event('beforeunload'));
@@ -194,14 +205,11 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
     window.dispatchEvent(new Event('hashchange'));
     window.dispatchEvent(new Event('popstate'));
 
-    window.history.pushState({}, 'New Route', '/docs/new-section');
-    window.history.replaceState({}, 'Replaced Route', '/docs/replaced-section');
-
     await new Promise((r) => setTimeout(r, 20));
   });
 
   it('ignores unrecognised runtime messages and does not hold the channel open', async () => {
-    contentDefinition.main();
+    contentDefinition.main(ctx);
     await new Promise((r) => setTimeout(r, 20));
 
     const sendResponse = vi.fn();
@@ -212,18 +220,203 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
     const malformedKeepAlive = messageListener?.({}, {}, vi.fn());
     expect(malformedKeepAlive).toBe(false);
 
-    expect(messageListener?.({ type: 'PAGE_ANCHOR_GET_STATUS' }, {}, vi.fn())).toBe(true);
+    // Responses are sent synchronously, so the channel is never held open.
+    expect(messageListener?.({ type: 'PAGE_ANCHOR_GET_STATUS' }, {}, vi.fn())).toBe(false);
   });
 
   it('re-checks the URL on tab visibility change instead of polling on a timer', async () => {
     const addEventListenerSpy = vi.spyOn(document, 'addEventListener');
 
-    contentDefinition.main();
+    contentDefinition.main(ctx);
     await new Promise((r) => setTimeout(r, 20));
 
     const registered = addEventListenerSpy.mock.calls.some(([type]) => type === 'visibilitychange');
     expect(registered).toBe(true);
 
     addEventListenerSpy.mockRestore();
+  });
+  describe('Regression fixes', () => {
+    const pageKey = () => getPageStorageKey(window.location.href, 'clean');
+    const stroke = (id: string) => ({
+      id,
+      type: 'pen',
+      points: [{ x: 10, y: 10 }, { x: 40, y: 40 }],
+      strokeColor: '#ef4444',
+      strokeWidth: 4,
+      opacity: 1,
+      createdAt: 1,
+      bbox: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
+    });
+    const status = () => {
+      const sendResponse = vi.fn();
+      messageListener?.({ type: 'PAGE_ANCHOR_GET_STATUS' }, {}, sendResponse);
+      return sendResponse.mock.calls[0][0];
+    };
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const dataWrites = () =>
+      mockChrome.storage.local.set.mock.calls.filter(([items]: [Record<string, unknown>]) =>
+        Object.keys(items).some((k) => k.startsWith('page_anchor_data:'))
+      ).length;
+    const shadow = () => document.getElementById('page-anchor-host')!.shadowRoot!;
+    const undoButton = () => shadow().querySelector('[data-action="undo"]') as HTMLButtonElement;
+
+    it('pins host styles with !important so page CSS cannot hide or transform the overlay', () => {
+      contentDefinition.main(ctx);
+      const host = document.getElementById('page-anchor-host') as HTMLElement;
+      for (const prop of ['transform', 'filter', 'display', 'visibility', 'opacity', 'contain', 'z-index']) {
+        expect(host.style.getPropertyPriority(prop)).toBe('important');
+      }
+      expect(host.style.getPropertyValue('transform')).toBe('none');
+    });
+
+    it('takes over from an older copy on the page instead of leaving it dead', async () => {
+      contentDefinition.main(ctx);
+      const first = document.getElementById('page-anchor-host') as HTMLElement;
+      const firstListener = messageListener;
+
+      contentDefinition.main(ctx);
+      await wait(20);
+
+      const hosts = document.querySelectorAll('#page-anchor-host');
+      expect(hosts).toHaveLength(1);
+      expect(hosts[0]).not.toBe(first);
+      expect(first.dataset.destroyed).toBe('true');
+      expect(first.isConnected).toBe(false);
+      expect(firstListener?.({ type: 'PAGE_ANCHOR_GET_STATUS' }, {}, vi.fn())).toBe(false);
+
+      const sendResponse = vi.fn();
+      messageListener?.({ type: 'PAGE_ANCHOR_TOGGLE' }, {}, sendResponse);
+      expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({ active: true }));
+    });
+
+    it('never writes page data on pagehide when there are no local edits', async () => {
+      mockLocalStorage[pageKey()] = { url: window.location.href, elements: [stroke('a')], updatedAt: 1 };
+      contentDefinition.main(ctx);
+      await wait(20);
+
+      window.dispatchEvent(new Event('pagehide'));
+      window.dispatchEvent(new Event('beforeunload'));
+      await wait(20);
+
+      expect(dataWrites()).toBe(0);
+      expect(mockLocalStorage[pageKey()].elements).toHaveLength(1);
+    });
+
+    it('does not save before the initial load finishes', async () => {
+      mockChrome.storage.local.get = vi.fn(() => new Promise(() => {}));
+      contentDefinition.main(ctx);
+      await wait(10);
+
+      messageListener?.({ type: 'PAGE_ANCHOR_CLEAR' }, {}, vi.fn());
+      await wait(320);
+
+      expect(mockChrome.storage.local.set).not.toHaveBeenCalled();
+      expect(mockChrome.storage.local.remove).not.toHaveBeenCalled();
+    });
+
+    it('routes the clear message through the normal save path with undo', async () => {
+      mockLocalStorage[pageKey()] = { url: window.location.href, elements: [stroke('a'), stroke('b')], updatedAt: 1 };
+      contentDefinition.main(ctx);
+      await wait(20);
+      expect(status().count).toBe(2);
+
+      messageListener?.({ type: 'PAGE_ANCHOR_CLEAR' }, {}, vi.fn());
+      await wait(320);
+
+      expect(status().count).toBe(0);
+      expect(mockLocalStorage[pageKey()]).toBeUndefined();
+      expect(undoButton().disabled).toBe(false);
+    });
+
+    it('live-reloads drawings saved by another tab when this tab has no local edits', async () => {
+      contentDefinition.main(ctx);
+      await wait(20);
+      expect(status().count).toBe(0);
+
+      const incoming = { url: window.location.href, elements: [stroke('x'), stroke('y')], updatedAt: 99 };
+      storageListener?.({ [pageKey()]: { newValue: incoming } }, 'local');
+      expect(status().count).toBe(2);
+
+      storageListener?.({ [pageKey()]: { oldValue: incoming } }, 'local');
+      expect(status().count).toBe(0);
+    });
+
+    it('ignores remote changes while it has unsaved edits', async () => {
+      mockLocalStorage[pageKey()] = { url: window.location.href, elements: [stroke('a')], updatedAt: 1 };
+      contentDefinition.main(ctx);
+      await wait(20);
+
+      messageListener?.({ type: 'PAGE_ANCHOR_CLEAR' }, {}, vi.fn());
+      storageListener?.({ [pageKey()]: { newValue: { elements: [stroke('r1'), stroke('r2')], updatedAt: 50 } } }, 'local');
+      expect(status().count).toBe(0);
+    });
+
+    it('ignores the change event caused by its own save', async () => {
+      mockLocalStorage[pageKey()] = { url: window.location.href, elements: [stroke('a')], updatedAt: 1 };
+      contentDefinition.main(ctx);
+      await wait(20);
+
+      messageListener?.({ type: 'PAGE_ANCHOR_CLEAR' }, {}, vi.fn());
+      await wait(320);
+      expect(undoButton().disabled).toBe(false);
+
+      storageListener?.({ [pageKey()]: { oldValue: { elements: [stroke('a')] } } }, 'local');
+      expect(undoButton().disabled).toBe(false);
+    });
+
+    it('applies settings changed in another tab', async () => {
+      contentDefinition.main(ctx);
+      await wait(20);
+
+      storageListener?.({ page_anchor_settings: { newValue: { shortcuts: { 'tool-pen': 'g' } } } }, 'local');
+      messageListener?.({ type: 'PAGE_ANCHOR_TOGGLE' }, {}, vi.fn());
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true, cancelable: true }));
+
+      expect((shadow().querySelector('[data-tool="pen"]') as HTMLElement).classList.contains('active')).toBe(true);
+    });
+
+    it('keeps undo history across a same-page hash change', async () => {
+      mockLocalStorage[pageKey()] = { url: window.location.href, elements: [stroke('a')], updatedAt: 1 };
+      contentDefinition.main(ctx);
+      await wait(20);
+
+      messageListener?.({ type: 'PAGE_ANCHOR_CLEAR' }, {}, vi.fn());
+      await wait(20);
+
+      window.location.hash = '#details';
+      window.dispatchEvent(new Event('hashchange'));
+      await wait(20);
+
+      expect(undoButton().disabled).toBe(false);
+      window.location.hash = '';
+    });
+
+    it('tears itself down when its extension context is gone instead of showing a save error', async () => {
+      mockLocalStorage[pageKey()] = { url: window.location.href, elements: [stroke('a')], updatedAt: 1 };
+      contentDefinition.main(ctx);
+      await wait(20);
+      const host = document.getElementById('page-anchor-host') as HTMLElement;
+
+      mockChrome.storage.local.get = vi.fn(() => Promise.reject(new Error('Extension context invalidated.')));
+      messageListener?.({ type: 'PAGE_ANCHOR_CLEAR' }, {}, vi.fn());
+      await wait(320);
+
+      expect(host.dataset.destroyed).toBe('true');
+      expect(host.isConnected).toBe(false);
+      expect(host.shadowRoot!.querySelector('.pa-save-error')).toBeNull();
+    });
+
+    it('still shows the save error while the extension context is valid', async () => {
+      mockChrome.runtime.id = 'test-extension';
+      mockLocalStorage[pageKey()] = { url: window.location.href, elements: [stroke('a')], updatedAt: 1 };
+      contentDefinition.main(ctx);
+      await wait(20);
+
+      mockChrome.storage.local.get = vi.fn(() => Promise.reject(new Error('IO error')));
+      messageListener?.({ type: 'PAGE_ANCHOR_CLEAR' }, {}, vi.fn());
+      await wait(320);
+
+      expect(shadow().querySelector('.pa-save-error')).not.toBeNull();
+    });
   });
 });

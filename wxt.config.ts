@@ -14,9 +14,12 @@ export default defineConfig({
     version: '1.0.1',
     permissions: [
       'storage',
+      'unlimitedStorage',
       'activeTab',
       ...(browser === 'firefox' || browser === 'safari' ? [] : ['scripting']),
     ],
+    // Content script matches alone don't let the background read tab URLs or re-inject into tabs open before an install or update.
+    host_permissions: ['<all_urls>'],
     ...(browser === 'firefox'
       ? {
           browser_specific_settings: {
@@ -40,9 +43,8 @@ export default defineConfig({
       128: '/icon-128.png',
     },
     action: {
-      // Names the behaviour, since clicking the icon toggles the in-page
-      // toolbar between expanded and docked.
-      default_title: 'Page Anchor — toggle drawing toolbar',
+      // Names the behaviour, since clicking the icon shows or hides the in-page toolbar.
+      default_title: 'Page Anchor: toggle drawing toolbar',
       default_icon: {
         16: '/icon-16.png',
         32: '/icon-32.png',

@@ -37,7 +37,7 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   {
     id: 'action-toggle-toolbar',
     name: 'Toggle Toolbar Visibility',
-    description: 'Dock the toolbar to the left edge or restore it',
+    description: 'Show or hide the toolbar',
     defaultKey: DEFAULT_SHORTCUTS['action-toggle-toolbar'],
   },
   {
@@ -186,6 +186,12 @@ export function normalizeKeyEvent(e: KeyboardEvent): string {
   else if (key === 'Escape') key = 'Esc';
   else if (key.length === 1) key = key.toLowerCase();
 
+  // Option on macOS and non-Latin layouts change `key`, so fall back to the physical key; Latin layouts keep their own letters.
+  if (!/^[a-z0-9]$/.test(key) || e.altKey) {
+    const physical = /^Key([A-Z])$/.exec(e.code || '') || /^Digit([0-9])$/.exec(e.code || '');
+    if (physical) key = physical[1].toLowerCase();
+  }
+
   parts.push(key);
   return parts.join('+');
 }
@@ -330,18 +336,30 @@ export function getBrowserShortcutConflict(combo: string): BrowserConflictInfo |
   return BROWSER_RESERVED_CONFLICTS[normalized] || null;
 }
 
+const EDITABLE_TAGS = new Set(['input', 'textarea', 'select']);
+const EDITABLE_ROLES = new Set(['textbox', 'combobox', 'searchbox', 'spinbutton']);
+
+function isEditableElement(el: Element): boolean {
+  if (EDITABLE_TAGS.has(el.tagName.toLowerCase())) return true;
+  if ((el as HTMLElement).isContentEditable) return true;
+  const editable = el.getAttribute('contenteditable');
+  if (editable !== null && editable !== 'false') return true;
+  const role = el.getAttribute('role');
+  return role !== null && EDITABLE_ROLES.has(role.toLowerCase());
+}
+
 export function isEditableTarget(e: KeyboardEvent): boolean {
   const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
-  const target = (path.find((n) => n instanceof HTMLElement) as HTMLElement | null) ??
-    (e.target as HTMLElement | null);
-  if (!target || typeof target.getAttribute !== 'function') return false;
-  const tagName = target.tagName?.toLowerCase();
-  return (
-    tagName === 'input' ||
-    tagName === 'textarea' ||
-    target.isContentEditable ||
-    target.getAttribute('contenteditable') === 'true'
-  );
+  const pathElements = path.filter((n): n is Element => typeof Element !== 'undefined' && n instanceof Element);
+  if (pathElements.length > 0) return pathElements.some(isEditableElement);
+
+  // Synthetic or already-dispatched events have no path; walk up from the target instead.
+  let node = e.target instanceof Element ? e.target : null;
+  while (node) {
+    if (isEditableElement(node)) return true;
+    node = node.parentElement;
+  }
+  return false;
 }
 
 /**

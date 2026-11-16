@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import contentDefinition from '../entrypoints/content';
+
+const ctx = {} as import('wxt/utils/content-script-context').ContentScriptContext;
 import { loadPageData } from '../src/core/storage';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -63,7 +65,7 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
   });
 
   it('EXECUTES COMPLETE REAL USER LIFECYCLE: Open Toolbar -> Draw Pen & Shapes -> Add Text -> Select & Move -> Eraser -> Undo/Redo -> Persistence', async () => {
-    contentDefinition.main();
+    contentDefinition.main(ctx);
     await new Promise((r) => setTimeout(r, 20));
 
     const host = document.getElementById('page-anchor-host') as HTMLElement;
@@ -198,7 +200,7 @@ describe('End-to-End User Flow: Real User Drawing, Selection, Anchoring, & Navig
   });
 
   it('VERIFIES SMART DOM ANCHORING: Annotations dynamically follow moving elements', async () => {
-    contentDefinition.main();
+    contentDefinition.main(ctx);
     await new Promise((r) => setTimeout(r, 20));
 
     const host = document.getElementById('page-anchor-host') as HTMLElement;

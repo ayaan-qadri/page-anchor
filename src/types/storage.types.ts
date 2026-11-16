@@ -33,7 +33,7 @@ export interface ExtensionSettings {
   urlMatchMode: UrlMatchMode;
   strokeSimplification: boolean;
   toolbarPosition: { x: number; y: number } | null;
-  isToolbarOpen: boolean;
+  keepToolbarOpen: boolean;
   areAnnotationsVisible: boolean;
   domAnchoringEnabled: boolean;
   orphanedAnchorMode: OrphanedAnchorMode;

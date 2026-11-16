@@ -5,7 +5,8 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
   let mockChrome: any;
   let listeners: {
     command?: (cmd: string) => Promise<void>;
-    onInstalled?: () => Promise<void>;
+    onInstalled?: (details?: { reason?: string }) => Promise<void>;
+    tabUpdated?: (tabId: number, changeInfo: { url?: string; status?: string }) => void;
     actionClick?: (tab?: any) => Promise<void>;
   };
 
@@ -26,6 +27,11 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
       tabs: {
         query: vi.fn(),
         sendMessage: vi.fn(),
+        onUpdated: {
+          addListener: vi.fn((fn) => {
+            listeners.tabUpdated = fn;
+          }),
+        },
       },
       commands: {
         onCommand: {
@@ -124,7 +130,7 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
       { id: 3, url: 'chrome://settings' }, // ineligible without id or standard http
     ]);
 
-    await listeners.onInstalled?.();
+    await listeners.onInstalled?.({ reason: 'install' });
 
     expect(mockChrome.tabs.query).toHaveBeenCalledWith({
       url: ['http://*/*', 'https://*/*'],
@@ -137,5 +143,25 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
       target: { tabId: 2 },
       files: ['content-scripts/content.js'],
     });
+  });
+
+  it('does not re-inject content scripts on a browser update', async () => {
+    backgroundDefinition.main();
+    mockChrome.tabs.query.mockResolvedValue([{ id: 1, url: 'https://example.com' }]);
+
+    await listeners.onInstalled?.({ reason: 'chrome_update' });
+
+    expect(mockChrome.scripting.executeScript).not.toHaveBeenCalled();
+  });
+
+  it('tells a tab to reload its drawings when its URL changes without a page load', () => {
+    backgroundDefinition.main();
+    mockChrome.tabs.sendMessage.mockReturnValue(Promise.reject(new Error('no receiver')));
+
+    listeners.tabUpdated?.(5, { status: 'loading' });
+    expect(mockChrome.tabs.sendMessage).not.toHaveBeenCalled();
+
+    listeners.tabUpdated?.(5, { url: 'https://example.com/app/route-2' });
+    expect(mockChrome.tabs.sendMessage).toHaveBeenCalledWith(5, { type: 'PAGE_ANCHOR_URL_CHANGED' });
   });
 });

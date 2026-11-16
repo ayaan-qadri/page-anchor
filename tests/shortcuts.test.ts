@@ -223,5 +223,76 @@ describe('Shortcuts Engine: Keyboard Normalization & Dispatching', () => {
     it('flags Cmd-based browser conflicts via the Mod token', () => {
       expect(getBrowserShortcutConflict('Mod+t')).not.toBeNull();
     });
+
+    it('matches Option+Shift+D even though Option turns the key into another character', () => {
+      expect(
+        normalizeKeyEvent({ key: 'Î', code: 'KeyD', altKey: true, shiftKey: true, metaKey: false, ctrlKey: false } as KeyboardEvent)
+      ).toBe('Alt+Shift+d');
+    });
+  });
+
+  describe('Layout-independent letters', () => {
+    it('maps non-Latin layouts to the physical letter and digit keys', () => {
+      expect(normalizeKeyEvent({ key: 'з', code: 'KeyP', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false } as KeyboardEvent)).toBe('p');
+      expect(normalizeKeyEvent({ key: 'я', code: 'KeyZ', ctrlKey: true, altKey: false, shiftKey: false, metaKey: false } as KeyboardEvent)).toBe('Mod+z');
+      expect(normalizeKeyEvent({ key: '&', code: 'Digit1', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false } as KeyboardEvent)).toBe('1');
+    });
+
+    it('keeps the typed letter on Latin layouts and leaves named keys alone', () => {
+      expect(normalizeKeyEvent({ key: 'a', code: 'KeyQ', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false } as KeyboardEvent)).toBe('a');
+      expect(normalizeKeyEvent({ key: 'Delete', code: 'Delete', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false } as KeyboardEvent)).toBe('Delete');
+    });
+  });
+
+  describe('Editable targets', () => {
+    const dispatchFrom = (target: HTMLElement) => {
+      const manager = new ShortcutManager({ 'tool-pen': 'p' });
+      const callback = vi.fn();
+      manager.addListener(callback);
+      manager.attach();
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', bubbles: true, composed: true, cancelable: true }));
+      manager.detach();
+      return callback;
+    };
+
+    it('ignores keys typed in a select element', () => {
+      const select = document.createElement('select');
+      document.body.appendChild(select);
+      expect(dispatchFrom(select)).not.toHaveBeenCalled();
+      select.remove();
+    });
+
+    it('ignores keys typed in textbox, combobox and searchbox widgets', () => {
+      for (const role of ['textbox', 'combobox', 'searchbox']) {
+        const widget = document.createElement('div');
+        widget.setAttribute('role', role);
+        widget.tabIndex = 0;
+        document.body.appendChild(widget);
+        expect(dispatchFrom(widget)).not.toHaveBeenCalled();
+        widget.remove();
+      }
+    });
+
+    it('ignores keys typed inside a contenteditable ancestor', () => {
+      const editor = document.createElement('div');
+      editor.setAttribute('contenteditable', '');
+      const inner = document.createElement('p');
+      editor.appendChild(inner);
+      document.body.appendChild(editor);
+      expect(dispatchFrom(inner)).not.toHaveBeenCalled();
+      editor.remove();
+    });
+
+    it('still fires on ordinary page elements', () => {
+      const plain = document.createElement('div');
+      document.body.appendChild(plain);
+      expect(dispatchFrom(plain)).toHaveBeenCalledWith('tool-pen', expect.any(KeyboardEvent));
+      plain.remove();
+    });
+  });
+
+  it('describes the toolbar toggle as showing or hiding the toolbar', () => {
+    const def = SHORTCUT_DEFINITIONS.find((d) => d.id === 'action-toggle-toolbar');
+    expect(def?.description).toBe('Show or hide the toolbar');
   });
 });

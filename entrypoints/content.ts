@@ -1,9 +1,19 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { CanvasEngine } from '../src/core/engine';
 import { HistoryManager } from '../src/core/history';
+import { getExtensionApi, isExtensionContextValid } from '../src/core/inject';
 import { ShortcutManager, isEditableTarget } from '../src/core/shortcuts';
-import { clearPageData, loadPageData, loadSettings, savePageData, DEFAULT_SETTINGS } from '../src/core/storage';
-import { AnchorElement, ExtensionSettings } from '../src/types';
+import {
+  DEFAULT_SETTINGS,
+  SETTINGS_STORAGE_KEY,
+  getPageStorageKey,
+  loadPageData,
+  loadSettings,
+  normalizeUrl,
+  savePageData,
+  settingsFromStored,
+} from '../src/core/storage';
+import { AnchorElement, ExtensionSettings, PageAnchorData, ShortcutAction, ToolType } from '../src/types';
 import { SHADOW_STYLES } from '../src/ui/styles';
 import { TextEditorOverlay } from '../src/ui/text-editor';
 import { FloatingToolbar } from '../src/ui/toolbar';
@@ -16,23 +26,81 @@ const HANDLED_MESSAGE_TYPES = new Set([
   'PAGE_ANCHOR_URL_CHANGED',
 ]);
 
+const HOST_ID = 'page-anchor-host';
+
+/** A freshly injected copy (e.g. after an extension update) asks any older copy on the page to tear down. */
+const TAKEOVER_EVENT = 'page-anchor:takeover';
+
+const SAVE_DEBOUNCE_MS = 250;
+
+/** Marks that this tab's last own write removed the page's data key. */
+const REMOVED_MARKER = -1;
+
+/** Pinned with !important so page CSS targeting `div` or `html > *` cannot hide or distort the overlay. */
+const HOST_STYLES: Record<string, string> = {
+  position: 'absolute',
+  top: '0',
+  left: '0',
+  width: '0',
+  height: '0',
+  margin: '0',
+  padding: '0',
+  overflow: 'visible',
+  'z-index': '2147483647',
+  display: 'block',
+  visibility: 'visible',
+  opacity: '1',
+  transform: 'none',
+  translate: 'none',
+  rotate: 'none',
+  scale: 'none',
+  filter: 'none',
+  contain: 'none',
+  'clip-path': 'none',
+  'pointer-events': 'auto',
+};
+
+const TOOL_SHORTCUTS: Partial<Record<ShortcutAction, ToolType>> = {
+  'tool-select': 'select',
+  'tool-pen': 'pen',
+  'tool-highlighter': 'highlighter',
+  'tool-rect': 'rect',
+  'tool-circle': 'circle',
+  'tool-line': 'line',
+  'tool-arrow': 'arrow',
+  'tool-double-arrow': 'double-arrow',
+  'tool-text': 'text',
+  'tool-eraser': 'eraser',
+};
+
+interface StorageChange {
+  newValue?: unknown;
+  oldValue?: unknown;
+}
+
+type NavigationTarget = Window & { navigation?: EventTarget };
+
 export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_end',
   main() {
-    const existing = document.getElementById('page-anchor-host');
-    if (existing && existing.dataset.paMounted === 'true') return;
+    document.dispatchEvent(new CustomEvent(TAKEOVER_EVENT));
+    document.querySelectorAll<HTMLElement>(`#${HOST_ID}`).forEach((stale) => {
+      // Older builds re-attach their host unless it is flagged as destroyed.
+      stale.dataset.destroyed = 'true';
+      stale.remove();
+    });
+
+    const lifetime = new AbortController();
+    const { signal } = lifetime;
+    let torn = false;
 
     const host = document.createElement('div');
-    host.id = 'page-anchor-host';
+    host.id = HOST_ID;
     host.dataset.paMounted = 'true';
-    host.style.position = 'absolute';
-    host.style.top = '0';
-    host.style.left = '0';
-    host.style.width = '0';
-    host.style.height = '0';
-    host.style.overflow = 'visible';
-    host.style.zIndex = '2147483647';
+    for (const [property, value] of Object.entries(HOST_STYLES)) {
+      host.style.setProperty(property, value, 'important');
+    }
 
     const shadowRoot = host.attachShadow({ mode: 'open' });
 
@@ -54,23 +122,42 @@ export default defineContentScript({
 
     ensureHostAttached();
 
+    let hostObserver: MutationObserver | null = null;
     if (typeof MutationObserver !== 'undefined' && document.documentElement) {
-      const observer = new MutationObserver(() => {
+      hostObserver = new MutationObserver(() => {
         if (host.dataset.destroyed === 'true') {
-          observer.disconnect();
+          hostObserver?.disconnect();
           return;
         }
         if (!host.isConnected) {
           ensureHostAttached();
         }
       });
-      observer.observe(document.documentElement, { childList: true });
+      hostObserver.observe(document.documentElement, { childList: true });
     }
 
     let settings: ExtensionSettings = { ...DEFAULT_SETTINGS };
     let currentLoadedUrl = window.location.href;
+    let currentPageKey = getPageStorageKey(currentLoadedUrl, settings.urlMatchMode);
     let saveTimeout: number | null = null;
     let saveErrorVisible = false;
+
+    /** True once this page's stored drawings were read; saving earlier could overwrite them with an empty canvas. */
+    let loaded = false;
+    let hasLoadedOnce = false;
+    let loadInFlight = false;
+    /** Unsaved local edits exist; only a dirty tab writes, so idle tabs never clobber another tab's work. */
+    let dirty = false;
+    let editVersion = 0;
+    let saveInFlight = 0;
+    let lastOwnWrite: number | null = null;
+    let navToken = 0;
+    let navigatingTo: string | null = null;
+
+    const setLoadedUrl = (url: string) => {
+      currentLoadedUrl = url;
+      currentPageKey = getPageStorageKey(url, settings.urlMatchMode);
+    };
 
     const showSaveError = (error: unknown) => {
       const message = error instanceof Error ? error.message : String(error ?? '');
@@ -108,27 +195,59 @@ export default defineContentScript({
       }, 8000);
     };
 
-    const triggerSave = (elements: AnchorElement[]) => {
-      if (saveTimeout) clearTimeout(saveTimeout);
-      const url = currentLoadedUrl;
-      saveTimeout = window.setTimeout(async () => {
-        try {
-          await savePageData(url, elements, document.title, engine.getDomAnchoringEnabled());
-          toolbar?.updateBadge();
-        } catch (error) {
-          showSaveError(error);
-        }
-      }, 250);
+    const handleSaveError = (error: unknown) => {
+      // An updated or reloaded extension orphans this script; a newer copy owns the page now.
+      if (!isExtensionContextValid()) {
+        teardown();
+        return;
+      }
+      showSaveError(error);
     };
 
-    const flushSave = async () => {
-      if (engine && currentLoadedUrl) {
-        try {
-          await savePageData(currentLoadedUrl, engine.getElements(), document.title, engine.getDomAnchoringEnabled());
-        } catch (error) {
-          showSaveError(error);
-        }
+    const persist = async () => {
+      if (saveTimeout !== null) {
+        clearTimeout(saveTimeout);
+        saveTimeout = null;
       }
+      if (!dirty || !loaded || torn) return;
+
+      const version = editVersion;
+      saveInFlight++;
+      try {
+        const written = await savePageData(
+          currentLoadedUrl,
+          engine.getElements(),
+          document.title,
+          engine.getDomAnchoringEnabled()
+        );
+        lastOwnWrite = written ? written.updatedAt : REMOVED_MARKER;
+        if (version === editVersion) dirty = false;
+        if (!torn) toolbar.updateBadge();
+      } catch (error) {
+        handleSaveError(error);
+      } finally {
+        saveInFlight--;
+      }
+    };
+
+    const scheduleSave = () => {
+      if (saveTimeout !== null) clearTimeout(saveTimeout);
+      saveTimeout = window.setTimeout(() => {
+        saveTimeout = null;
+        void persist();
+      }, SAVE_DEBOUNCE_MS);
+    };
+
+    const markDirty = () => {
+      if (torn) return;
+      dirty = true;
+      editVersion++;
+      if (!loaded) {
+        // A failed initial read is retried on the first edit; the load merges the edit and then saves.
+        if (!loadInFlight) void loadPage(window.location.href);
+        return;
+      }
+      scheduleSave();
     };
 
     const history = new HistoryManager([]);
@@ -139,7 +258,7 @@ export default defineContentScript({
         history.pushState(elements);
         toolbar.updateHistoryButtons();
         toolbar.updateBadge();
-        triggerSave(elements);
+        markDirty();
       },
       onTextCreateRequested: (pt) => {
         textEditor.open(
@@ -166,10 +285,10 @@ export default defineContentScript({
           ensureHostAttached();
         },
         onClear: () => {
-          triggerSave(engine.getElements());
+          markDirty();
         },
         onToggleDomAnchoring: () => {
-          triggerSave(engine.getElements());
+          markDirty();
         },
         onSettingsUpdate: (newSettings) => {
           settings = newSettings;
@@ -178,9 +297,8 @@ export default defineContentScript({
           engine.setStrokeSimplification(settings.strokeSimplification);
         },
         onOpenOptions: () => {
-          const ext = typeof browser !== 'undefined' ? browser : chrome;
           try {
-            const sent = ext.runtime.sendMessage({ type: 'PAGE_ANCHOR_OPEN_OPTIONS' });
+            const sent = getExtensionApi()?.runtime.sendMessage({ type: 'PAGE_ANCHOR_OPEN_OPTIONS' });
             if (sent && typeof sent.catch === 'function') sent.catch(() => {});
           } catch {
             // The background may be asleep; the options page stays reachable
@@ -197,108 +315,154 @@ export default defineContentScript({
     });
     shortcutManager.attach();
 
+    const applySettings = (next: ExtensionSettings) => {
+      settings = next;
+      toolbar.setSettings(next);
+      shortcutManager.setShortcuts(next.shortcuts);
+      engine.setOrphanedAnchorMode(next.orphanedAnchorMode);
+      engine.setStrokeSimplification(next.strokeSimplification);
+      setLoadedUrl(currentLoadedUrl);
+    };
+
+    const applyPageData = (elements: AnchorElement[], domAnchoringEnabled: boolean | undefined) => {
+      const isAnchoring = domAnchoringEnabled ?? settings.domAnchoringEnabled ?? true;
+      engine.setDomAnchoringEnabled(isAnchoring);
+      toolbar.updateDomAnchoringUI(isAnchoring);
+      history.reset(elements);
+      engine.setElements(elements);
+      toolbar.updateBadge();
+      toolbar.updateHistoryButtons();
+    };
+
+    async function loadPage(url: string): Promise<void> {
+      const token = ++navToken;
+      loadInFlight = true;
+      try {
+        const saved = await loadPageData(url);
+        if (token !== navToken || torn) return;
+
+        let elements = saved?.elements ?? [];
+        // Only edits made before the very first read are merged; mid-navigation edits belong to the previous page.
+        const keepLocalEdits = !hasLoadedOnce && dirty;
+        if (keepLocalEdits) {
+          const local = engine.getElements();
+          const localIds = new Set(local.map((el) => el.id));
+          elements = [...elements.filter((el) => !localIds.has(el.id)), ...local];
+        }
+
+        setLoadedUrl(url);
+        applyPageData(elements, saved?.domAnchoringEnabled);
+        lastOwnWrite = null;
+        loaded = true;
+        hasLoadedOnce = true;
+        dirty = keepLocalEdits;
+        if (keepLocalEdits) scheduleSave();
+      } catch {
+        // Stay unloaded so nothing is written over drawings this tab could not read.
+      } finally {
+        if (token === navToken) loadInFlight = false;
+      }
+    }
+
     // Backspace stays a fixed convenience key for deleting the selection.
     // The configurable Delete key is dispatched by ShortcutManager ('action-delete').
-    window.addEventListener('keydown', (e) => {
-      if (!engine.getActiveMode()) return;
-      if (e.key !== 'Backspace') return;
-      if (isEditableTarget(e)) return;
-      engine.deleteSelected();
-    });
-
-    let navToken = 0;
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        if (!engine.getActiveMode()) return;
+        if (e.key !== 'Backspace') return;
+        if (isEditableTarget(e)) return;
+        engine.deleteSelected();
+      },
+      { signal }
+    );
 
     const handleUrlChange = async () => {
+      if (torn) return;
       const newUrl = window.location.href;
-      if (newUrl === currentLoadedUrl) return;
+      if (newUrl === currentLoadedUrl || newUrl === navigatingTo) return;
 
-      const token = ++navToken;
-      const prevUrl = currentLoadedUrl;
+      // Same page under the current match mode (e.g. a #section jump): keep drawings and undo history.
+      if (loaded && normalizeUrl(newUrl, settings.urlMatchMode) === normalizeUrl(currentLoadedUrl, settings.urlMatchMode)) {
+        setLoadedUrl(newUrl);
+        return;
+      }
 
-      ensureHostAttached();
+      navigatingTo = newUrl;
+      try {
+        ensureHostAttached();
+        if (loaded) await persist();
+        if (torn || window.location.href !== newUrl) return;
+        loaded = false;
+        dirty = false;
+        await loadPage(newUrl);
+      } finally {
+        if (navigatingTo === newUrl) navigatingTo = null;
+      }
+    };
 
-      if (engine && prevUrl) {
-        try {
-          await savePageData(prevUrl, engine.getElements(), document.title, engine.getDomAnchoringEnabled());
-        } catch (error) {
-          showSaveError(error);
+    const flushIfDirty = () => {
+      if (dirty) void persist();
+    };
+
+    window.addEventListener('beforeunload', flushIfDirty, { signal });
+    window.addEventListener('pagehide', flushIfDirty, { signal });
+    window.addEventListener('popstate', () => void handleUrlChange(), { signal });
+    window.addEventListener('hashchange', () => void handleUrlChange(), { signal });
+
+    // Fires after the URL commits, including for history.pushState calls made by the page's own scripts.
+    const navigation = (window as NavigationTarget).navigation;
+    navigation?.addEventListener?.('currententrychange', () => void handleUrlChange(), { signal });
+    navigation?.addEventListener?.('navigatesuccess', () => void handleUrlChange(), { signal });
+
+    document.addEventListener(
+      'visibilitychange',
+      () => {
+        if (document.visibilityState === 'hidden') {
+          flushIfDirty();
+        } else if (window.location.href !== currentLoadedUrl) {
+          void handleUrlChange();
+        }
+      },
+      { signal }
+    );
+
+    const onStorageChanged = (changes: Record<string, StorageChange>, areaName: string) => {
+      if (torn || areaName !== 'local') return;
+
+      const settingsChange = changes[SETTINGS_STORAGE_KEY];
+      if (settingsChange) {
+        const next = settingsFromStored(settingsChange.newValue);
+        if (JSON.stringify(next) !== JSON.stringify(settings)) {
+          const modeChanged = next.urlMatchMode !== settings.urlMatchMode;
+          applySettings(next);
+          if (modeChanged && loaded && !dirty && saveInFlight === 0) {
+            void loadPage(currentLoadedUrl);
+          }
         }
       }
 
-      if (token !== navToken) return;
+      const pageChange = changes[currentPageKey];
+      if (!pageChange || !loaded || dirty || saveInFlight > 0) return;
 
-      try {
-        const saved = await loadPageData(newUrl);
-        if (token !== navToken) return;
+      const incoming = pageChange.newValue as PageAnchorData | undefined;
+      const isOwnWrite = incoming ? incoming.updatedAt === lastOwnWrite : lastOwnWrite === REMOVED_MARKER;
+      if (isOwnWrite) return;
 
-        const newElements = saved?.elements || [];
-        const isAnchoring = saved?.domAnchoringEnabled !== undefined
-          ? saved.domAnchoringEnabled
-          : (settings.domAnchoringEnabled ?? true);
-        currentLoadedUrl = newUrl;
-        engine.setDomAnchoringEnabled(isAnchoring);
-        toolbar.updateDomAnchoringUI(isAnchoring);
-
-        history.reset(newElements);
-        engine.setElements(newElements);
-        toolbar.updateBadge();
-        toolbar.updateHistoryButtons();
-      } catch {}
+      lastOwnWrite = null;
+      applyPageData(incoming?.elements ?? [], incoming?.domAnchoringEnabled);
     };
 
-    window.addEventListener('beforeunload', () => {
-      flushSave();
-    });
-    window.addEventListener('pagehide', () => {
-      flushSave();
-    });
-    window.addEventListener('popstate', () => {
-      handleUrlChange();
-    });
-    window.addEventListener('hashchange', () => {
-      handleUrlChange();
-    });
-
-    const origPush = window.history.pushState;
-    window.history.pushState = function (data: any, unused: string, url?: string | URL | null) {
-      const res = origPush.call(this, data, unused, url);
-      handleUrlChange();
-      return res;
-    };
-
-    const origReplace = window.history.replaceState;
-    window.history.replaceState = function (data: any, unused: string, url?: string | URL | null) {
-      const res = origReplace.call(this, data, unused, url);
-      handleUrlChange();
-      return res;
-    };
-
-    // Catches URL changes the patched history methods miss, event-driven rather
-    // than polled so an idle page costs no main-thread time.
-    const navigation = (window as any).navigation;
-    navigation?.addEventListener?.('navigate', () => {
-      handleUrlChange();
-    });
-
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && window.location.href !== currentLoadedUrl) {
-        handleUrlChange();
-      }
-    });
-
-    const runtime = typeof browser !== 'undefined' ? browser.runtime : (typeof chrome !== 'undefined' ? chrome.runtime : null);
-    runtime?.onMessage?.addListener((msg: any, _sender: any, sendResponse: (r?: any) => void) => {
-      const type = typeof msg?.type === 'string' ? msg.type : '';
-      if (!HANDLED_MESSAGE_TYPES.has(type)) {
-        // Not one of ours: don't hold the response channel open.
-        return false;
-      }
+    const onMessage = (msg: unknown, _sender: unknown, sendResponse: (response?: unknown) => void): boolean => {
+      const rawType = (msg as { type?: unknown } | null)?.type;
+      const type = typeof rawType === 'string' ? rawType : '';
+      if (!HANDLED_MESSAGE_TYPES.has(type) || torn) return false;
 
       ensureHostAttached();
 
       switch (type) {
         case 'PAGE_ANCHOR_TOGGLE':
-          toolbar.toggleDrawingMode(true);
+          toolbar.toggleDrawingMode();
           sendResponse({ active: engine.getActiveMode(), count: engine.getElements().length });
           break;
         case 'PAGE_ANCHOR_GET_STATUS':
@@ -311,138 +475,84 @@ export default defineContentScript({
           break;
         case 'PAGE_ANCHOR_CLEAR':
           toolbar.clearPageWithToast();
-          clearPageData(currentLoadedUrl).catch(() => {});
-          toolbar.updateBadge();
-          toolbar.updateHistoryButtons();
           sendResponse({ success: true });
           break;
         case 'PAGE_ANCHOR_URL_CHANGED':
-          handleUrlChange();
+          void handleUrlChange();
           sendResponse({ success: true });
           break;
       }
-      return true;
-    });
+      // Every response above is sent synchronously, so the channel can close.
+      return false;
+    };
 
-    (async () => {
-      try {
-        const loadedSettings = await loadSettings();
-        if (loadedSettings) {
-          settings = loadedSettings;
-          toolbar.setSettings(settings);
-          shortcutManager.setShortcuts(settings.shortcuts);
-          engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
-          engine.setStrokeSimplification(settings.strokeSimplification);
-        }
-      } catch {}
+    const api = getExtensionApi();
+    const runtimeEvents = api?.runtime?.onMessage;
+    const storageEvents = api?.storage?.onChanged;
+    runtimeEvents?.addListener(onMessage);
+    storageEvents?.addListener(onStorageChanged);
 
-      try {
-        const saved = await loadPageData(window.location.href);
-        const initialElements = saved?.elements || [];
-        const isAnchoring = saved?.domAnchoringEnabled !== undefined
-          ? saved.domAnchoringEnabled
-          : (settings.domAnchoringEnabled ?? true);
-        engine.setDomAnchoringEnabled(isAnchoring);
-        toolbar.updateDomAnchoringUI(isAnchoring);
+    function teardown(): void {
+      if (torn) return;
+      torn = true;
+      host.dataset.destroyed = 'true';
+      if (saveTimeout !== null) clearTimeout(saveTimeout);
+      lifetime.abort();
+      hostObserver?.disconnect();
+      const safely = (fn: () => void) => {
+        try {
+          fn();
+        } catch {}
+      };
+      safely(() => shortcutManager.detach());
+      safely(() => runtimeEvents?.removeListener(onMessage));
+      safely(() => storageEvents?.removeListener(onStorageChanged));
+      safely(() => textEditor.close());
+      safely(() => toolbar.destroy());
+      safely(() => engine.destroy());
+      host.remove();
+    }
 
-        history.reset(initialElements);
-        engine.setElements(initialElements);
-        toolbar.updateBadge();
-        toolbar.updateHistoryButtons();
-      } catch {}
+    document.addEventListener(TAKEOVER_EVENT, teardown, { signal });
+
+    void (async () => {
+      const loadedSettings = await loadSettings();
+      if (torn) return;
+      applySettings(loadedSettings);
+      if (!loaded && navToken === 0) await loadPage(window.location.href);
     })();
 
-    function handleShortcutAction(action: string): void {
+    function handleShortcutAction(action: ShortcutAction): void {
+      const tool = TOOL_SHORTCUTS[action];
+      if (tool) {
+        toolbar.setDrawingMode(true);
+        engine.setTool(tool);
+        toolbar.updateActiveToolUI();
+        return;
+      }
+
       switch (action) {
         case 'toggle-active':
-          toolbar.toggleDrawingMode();
-          break;
         case 'action-toggle-toolbar':
-          toolbar.toggleToolbarVisibility();
-          break;
-        case 'tool-select':
-          toolbar.setDrawingMode(true);
-          engine.setTool('select');
-          toolbar.updateActiveToolUI();
+          toolbar.toggleDrawingMode();
           break;
         case 'action-select-all':
           toolbar.setDrawingMode(true);
           engine.selectAll();
           toolbar.updateActiveToolUI();
           break;
-        case 'tool-pen':
-          toolbar.setDrawingMode(true);
-          engine.setTool('pen');
-          toolbar.updateActiveToolUI();
+        case 'action-undo':
+          toolbar.undo();
           break;
-        case 'tool-highlighter':
-          toolbar.setDrawingMode(true);
-          engine.setTool('highlighter');
-          toolbar.updateActiveToolUI();
+        case 'action-redo':
+          toolbar.redo();
           break;
-        case 'tool-rect':
-          toolbar.setDrawingMode(true);
-          engine.setTool('rect');
-          toolbar.updateActiveToolUI();
-          break;
-        case 'tool-circle':
-          toolbar.setDrawingMode(true);
-          engine.setTool('circle');
-          toolbar.updateActiveToolUI();
-          break;
-        case 'tool-line':
-          toolbar.setDrawingMode(true);
-          engine.setTool('line');
-          toolbar.updateActiveToolUI();
-          break;
-        case 'tool-arrow':
-          toolbar.setDrawingMode(true);
-          engine.setTool('arrow');
-          toolbar.updateActiveToolUI();
-          break;
-        case 'tool-double-arrow':
-          toolbar.setDrawingMode(true);
-          engine.setTool('double-arrow');
-          toolbar.updateActiveToolUI();
-          break;
-        case 'tool-text':
-          toolbar.setDrawingMode(true);
-          engine.setTool('text');
-          toolbar.updateActiveToolUI();
-          break;
-        case 'tool-eraser':
-          toolbar.setDrawingMode(true);
-          engine.setTool('eraser');
-          toolbar.updateActiveToolUI();
-          break;
-        case 'action-undo': {
-          const prev = history.undo();
-          if (prev !== null) {
-            engine.setElements(prev);
-            toolbar.updateHistoryButtons();
-            toolbar.updateBadge();
-            triggerSave(prev);
-          }
-          break;
-        }
-        case 'action-redo': {
-          const next = history.redo();
-          if (next !== null) {
-            engine.setElements(next);
-            toolbar.updateHistoryButtons();
-            toolbar.updateBadge();
-            triggerSave(next);
-          }
-          break;
-        }
-        case 'action-delete': {
+        case 'action-delete':
           engine.deleteSelected();
           break;
-        }
-        case 'action-clear': {
+        case 'action-clear':
           toolbar.clearPageWithToast();
           break;
-        }
       }
     }
   },

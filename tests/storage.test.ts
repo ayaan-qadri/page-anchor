@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   clearPageData,
+  getPageStorageKey,
   exportAllDataAsJson,
   getAllSavedPagesSummary,
   importDataFromJson,
@@ -8,6 +9,7 @@ import {
   loadPageData,
   loadSettings,
   normalizeUrl,
+  rekeySavedPages,
   savePageData,
   saveSettings,
 } from '../src/core/storage';
@@ -32,6 +34,24 @@ describe('Storage Engine: URL Normalization', () => {
   it('reduces to origin when "domain" mode is chosen', () => {
     const rawUrl = 'https://sub.example.com:8080/nested/path?key=val#hash';
     expect(normalizeUrl(rawUrl, 'domain')).toBe('https://sub.example.com:8080');
+  });
+
+  it('keeps hash-router fragments but strips plain section anchors in "clean" mode', () => {
+    expect(normalizeUrl('https://app.example.com/#/inbox/42', 'clean')).toBe('https://app.example.com/#/inbox/42');
+    expect(normalizeUrl('https://app.example.com/#!/settings', 'clean')).toBe('https://app.example.com/#!/settings');
+    expect(normalizeUrl('https://app.example.com/#/a', 'clean')).not.toBe(normalizeUrl('https://app.example.com/#/b', 'clean'));
+    expect(normalizeUrl('https://example.com/docs#install', 'clean')).toBe('https://example.com/docs');
+  });
+
+  it('treats a trailing slash as the same page but keeps the root path', () => {
+    expect(normalizeUrl('https://example.com/docs/', 'clean')).toBe(normalizeUrl('https://example.com/docs', 'clean'));
+    expect(normalizeUrl('https://example.com/', 'clean')).toBe('https://example.com/');
+  });
+
+  it('keeps meaningful ref and source parameters', () => {
+    expect(normalizeUrl('https://example.com/compare?ref=main&source=x&utm_source=y', 'clean')).toBe(
+      'https://example.com/compare?ref=main&source=x'
+    );
   });
 });
 
@@ -66,22 +86,15 @@ describe('Storage Engine: Persistence with Mocked Chrome Storage', () => {
       },
       storage: {
         local: {
-          get: (keys: any, cb: (res: any) => void) => {
-            if (keys === null) {
-              cb({ ...mockStore });
-            } else if (typeof keys === 'string') {
-              cb({ [keys]: mockStore[keys] });
-            } else {
-              cb({ ...mockStore });
-            }
+          get: async (keys: any) => {
+            if (typeof keys === 'string') return { [keys]: mockStore[keys] };
+            return { ...mockStore };
           },
-          set: (items: Record<string, any>, cb?: () => void) => {
+          set: async (items: Record<string, any>) => {
             Object.assign(mockStore, items);
-            cb?.();
           },
-          remove: (key: string, cb?: () => void) => {
-            delete mockStore[key];
-            cb?.();
+          remove: async (keys: string | string[]) => {
+            for (const key of Array.isArray(keys) ? keys : [keys]) delete mockStore[key];
           },
         },
       },
@@ -188,22 +201,22 @@ describe('Storage Engine: Persistence with Mocked Chrome Storage', () => {
     await Promise.all([
       saveSettings({ defaultStrokeWidth: 9 }),
       saveSettings({ defaultStrokeColor: '#10b981' }),
-      saveSettings({ isToolbarOpen: true }),
+      saveSettings({ keepToolbarOpen: true }),
     ]);
 
     const settings = await loadSettings();
     expect(settings.defaultStrokeWidth).toBe(9);
     expect(settings.defaultStrokeColor).toBe('#10b981');
-    expect(settings.isToolbarOpen).toBe(true);
+    expect(settings.keepToolbarOpen).toBe(true);
   });
 
   it('keeps saving after one settings write fails', async () => {
     const originalSet = (globalThis as any).chrome.storage.local.set;
     let calls = 0;
-    (globalThis as any).chrome.storage.local.set = (data: any, cb?: () => void) => {
+    (globalThis as any).chrome.storage.local.set = (data: any) => {
       calls += 1;
       if (calls === 1) throw new Error('quota');
-      return originalSet(data, cb);
+      return originalSet(data);
     };
 
     await expect(saveSettings({ defaultStrokeWidth: 7 })).rejects.toThrow('quota');
@@ -350,6 +363,94 @@ describe('Storage Engine: Persistence with Mocked Chrome Storage', () => {
       expect(ids).not.toContain('bad-type');
       expect(ids).toContain('good');
       expect(loaded!.elements.find((e) => e.id === 'bad-anchor')!.anchor).toBeUndefined();
+    });
+  });
+  describe('Regression: writes, index and keying', () => {
+    const el = (id: string) =>
+      ({ id, type: 'pen', points: [], strokeColor: '#000', strokeWidth: 1, opacity: 1, createdAt: 1, bbox: { minX: 0, minY: 0, maxX: 0, maxY: 0 } }) as AnchorElement;
+
+    it('drops the stale isToolbarOpen key instead of mapping it', async () => {
+      mockStore['page_anchor_settings'] = { isToolbarOpen: true };
+      const settings = await loadSettings();
+      expect((settings as any).isToolbarOpen).toBeUndefined();
+      expect(settings.keepToolbarOpen).toBe(false);
+    });
+
+    it('fails the save instead of writing under a default-mode key when the settings read fails', async () => {
+      mockStore['page_anchor_settings'] = { urlMatchMode: 'exact' };
+      const originalGet = (globalThis as any).chrome.storage.local.get;
+      (globalThis as any).chrome.storage.local.get = async () => {
+        throw new Error('transient');
+      };
+      await expect(savePageData('https://example.com/a#x', [el('1')], 'A')).rejects.toThrow('transient');
+      (globalThis as any).chrome.storage.local.get = originalGet;
+      expect(Object.keys(mockStore).filter((k) => k.startsWith('page_anchor_data:'))).toHaveLength(0);
+    });
+
+    it('serializes concurrent saves so no index entry is lost', async () => {
+      await Promise.all(
+        Array.from({ length: 8 }, (_, i) => savePageData(`https://example.com/p${i}`, [el(`e${i}`)], `P${i}`))
+      );
+      expect(Object.keys(mockStore['page_anchor_index'])).toHaveLength(8);
+    });
+
+    it('rebuilds missing index entries and drops entries whose data is gone', async () => {
+      mockStore['page_anchor_data:https://example.com/kept'] = {
+        url: 'https://example.com/kept', normalizedUrl: 'https://example.com/kept', pageTitle: 'Kept', updatedAt: 5, elements: [el('k')],
+      };
+      mockStore['page_anchor_index'] = {
+        'https://example.com/gone': { normalizedUrl: 'https://example.com/gone', url: '', pageTitle: 'Gone', updatedAt: 1, elementCount: 1 },
+      };
+      const summary = await getAllSavedPagesSummary();
+      expect(summary.map((s) => s.pageTitle)).toEqual(['Kept']);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(Object.keys(mockStore['page_anchor_index'])).toEqual(['https://example.com/kept']);
+    });
+
+    it('re-keys and merges saved pages when the URL match mode changes', async () => {
+      await savePageData('https://example.com/a', [el('a1'), el('shared')], 'A');
+      await new Promise((r) => setTimeout(r, 2));
+      await savePageData('https://example.com/b?x=1', [el('b1'), el('shared')], 'B');
+
+      await saveSettings({ urlMatchMode: 'domain' });
+
+      const keys = Object.keys(mockStore).filter((k) => k.startsWith('page_anchor_data:'));
+      expect(keys).toEqual(['page_anchor_data:https://example.com']);
+      const merged = mockStore['page_anchor_data:https://example.com'];
+      expect(merged.elements.map((e: any) => e.id).sort()).toEqual(['a1', 'b1', 'shared']);
+      expect(merged.pageTitle).toBe('B');
+      expect(Object.keys(mockStore['page_anchor_index'])).toEqual(['https://example.com']);
+      expect((await loadPageData('https://example.com/anything'))?.elements).toHaveLength(3);
+    });
+
+    it('re-keys pages saved under older clean-mode rules', async () => {
+      mockStore['page_anchor_data:https://example.com/docs/'] = {
+        url: 'https://example.com/docs/', normalizedUrl: 'https://example.com/docs/', pageTitle: 'Docs', updatedAt: 1, elements: [el('d')],
+      };
+      await rekeySavedPages();
+      expect(mockStore['page_anchor_data:https://example.com/docs/']).toBeUndefined();
+      expect((await loadPageData('https://example.com/docs'))?.elements).toHaveLength(1);
+    });
+
+    it('merges an imported index with the current one instead of replacing it', async () => {
+      await savePageData('https://example.com/local', [el('l')], 'Local');
+      const backup = JSON.stringify({
+        page_anchor_index: {
+          'https://example.com/imported': { normalizedUrl: 'https://example.com/imported', url: 'https://example.com/imported', pageTitle: 'Imported', updatedAt: 2, elementCount: 1 },
+        },
+        'page_anchor_data:https://example.com/imported': {
+          url: 'https://example.com/imported', normalizedUrl: 'https://example.com/imported', pageTitle: 'Imported', updatedAt: 2, elements: [el('i')],
+        },
+        page_anchor_unknown_thing: { foo: 1 },
+      });
+      expect(await importDataFromJson(backup)).toBe(true);
+      const titles = (await getAllSavedPagesSummary()).map((s) => s.pageTitle).sort();
+      expect(titles).toEqual(['Imported', 'Local']);
+      expect(mockStore.page_anchor_unknown_thing).toBeUndefined();
+    });
+
+    it('exposes the storage key used for a page under a given mode', () => {
+      expect(getPageStorageKey('https://example.com/x/#top', 'clean')).toBe('page_anchor_data:https://example.com/x');
     });
   });
 });
