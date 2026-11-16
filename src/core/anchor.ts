@@ -411,13 +411,17 @@ const LAYOUT_ATTRIBUTES = ['class', 'style', 'open', 'hidden'];
 
 export class DOMAnchorManager {
   private cache = new Map<string, CachedResolution>();
+  private keyByAnchor = new WeakMap<DOMAnchor, string>();
+  private scrollX = 0;
+  private scrollY = 0;
+  /** Set by any DOM mutation until the next invalidation, so cache hits only pay for `isConnected` when nodes may have gone. */
+  private domChanged = false;
   private textWalkAt = new Map<string, number>();
   private mutationObserver: MutationObserver | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private listeners = typeof AbortController !== 'undefined' ? new AbortController() : null;
   private onPositionsChanged?: () => void;
   private invalidateTimer: number | null = null;
-  private resizeTimer: number | null = null;
   private destroyed = false;
 
   constructor(onPositionsChanged?: () => void) {
@@ -429,20 +433,12 @@ export class DOMAnchorManager {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
     const signal = this.listeners?.signal;
 
-    window.addEventListener(
-      'resize',
-      () => {
-        if (this.resizeTimer !== null) clearTimeout(this.resizeTimer);
-        this.resizeTimer = window.setTimeout(() => {
-          this.resizeTimer = null;
-          this.invalidateCache();
-          this.onPositionsChanged?.();
-        }, 120);
-      },
-      { passive: true, signal }
-    );
+    this.syncScroll();
+    window.addEventListener('scroll', () => this.syncScroll(), { passive: true, signal });
 
     const scheduleInvalidate = () => this.scheduleInvalidate();
+    // Shares the throttle with the root ResizeObserver, which fires for the same resize, so layout is re-resolved once.
+    window.addEventListener('resize', scheduleInvalidate, { passive: true, signal });
     window.addEventListener('load', scheduleInvalidate, { signal });
     // Images and iframes finishing their load shift layout; `load` does not bubble, so capture it.
     document.addEventListener('load', scheduleInvalidate, { capture: true, passive: true, signal });
@@ -452,7 +448,10 @@ export class DOMAnchorManager {
     if (!root) return;
 
     if (typeof MutationObserver !== 'undefined') {
-      this.mutationObserver = new MutationObserver(scheduleInvalidate);
+      this.mutationObserver = new MutationObserver(() => {
+        this.domChanged = true;
+        this.scheduleInvalidate();
+      });
       // Observing the root (not body) keeps working when a page swaps out <body>.
       this.mutationObserver.observe(root, {
         childList: true,
@@ -514,24 +513,34 @@ export class DOMAnchorManager {
     return anchor;
   }
 
+  /** Scroll position used for fixed/sticky anchors; the engine refreshes it once per render. */
+  public syncScroll(): void {
+    if (typeof window === 'undefined') return;
+    this.scrollX = window.scrollX;
+    this.scrollY = window.scrollY;
+  }
+
+  /** Called for every drawing on every frame, so cache hits avoid string building, clock reads and DOM property reads. */
   public resolve(anchor: DOMAnchor): ResolvedAnchor {
-    const key = `${anchor.selector}::${anchor.initialRect.left}::${anchor.initialRect.top}`;
-    const scrollX = typeof window !== 'undefined' ? window.scrollX : 0;
-    const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
-    const now = Date.now();
-    const textWalkDue = now - (this.textWalkAt.get(key) ?? 0) >= TEXT_WALK_INTERVAL_MS;
+    let key = this.keyByAnchor.get(anchor);
+    if (key === undefined) {
+      key = `${anchor.selector}::${anchor.initialRect.left}::${anchor.initialRect.top}`;
+      this.keyByAnchor.set(anchor, key);
+    }
 
     const cached = this.cache.get(key);
     if (cached) {
       const element = cached.resolved.element;
-      const scrollValid =
-        !cached.scrollSensitive || (cached.scrollX === scrollX && cached.scrollY === scrollY);
-      const stillValid = element
-        ? element.isConnected && scrollValid
-        : cached.textWalked || !textWalkDue || !anchor.textQuote?.exact;
-      if (stillValid) return cached.resolved;
+      if (element) {
+        const scrollValid = !cached.scrollSensitive || (cached.scrollX === this.scrollX && cached.scrollY === this.scrollY);
+        if (scrollValid && (!this.domChanged || element.isConnected)) return cached.resolved;
+      } else if (cached.textWalked || !anchor.textQuote?.exact || !this.isTextWalkDue(key, Date.now())) {
+        return cached.resolved;
+      }
     }
 
+    const now = Date.now();
+    const textWalkDue = this.isTextWalkDue(key, now);
     if (textWalkDue) this.textWalkAt.set(key, now);
     const resolved = resolveAnchor(anchor, textWalkDue);
 
@@ -546,16 +555,22 @@ export class DOMAnchorManager {
     // Misses are cached too; the next DOM change invalidates them, so reattached nodes still recover.
     this.cache.set(key, {
       resolved,
-      scrollX,
-      scrollY,
+      scrollX: this.scrollX,
+      scrollY: this.scrollY,
       scrollSensitive,
       textWalked: textWalkDue,
     });
     return resolved;
   }
 
+  private isTextWalkDue(key: string, now: number): boolean {
+    return now - (this.textWalkAt.get(key) ?? 0) >= TEXT_WALK_INTERVAL_MS;
+  }
+
+
   public invalidateCache(): void {
     this.cache.clear();
+    this.domChanged = false;
   }
 
   public destroy(): void {
@@ -563,10 +578,6 @@ export class DOMAnchorManager {
     if (this.invalidateTimer !== null) {
       clearTimeout(this.invalidateTimer);
       this.invalidateTimer = null;
-    }
-    if (this.resizeTimer !== null) {
-      clearTimeout(this.resizeTimer);
-      this.resizeTimer = null;
     }
     this.mutationObserver?.disconnect();
     this.mutationObserver = null;

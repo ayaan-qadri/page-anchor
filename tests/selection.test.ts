@@ -97,6 +97,25 @@ describe('Selection & Move All Engine: Multi-Select and Batch Manipulation', () 
     expect(mockChange).toHaveBeenCalled();
   });
 
+  it('keeps elements untouched mid-drag and applies the whole move once on drop', () => {
+    engine.selectAll();
+    engine.setDomAnchoringEnabled(false);
+    const canvas = container.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
+    const before = engine.getElements();
+
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { clientX: 75, clientY: 65, button: 0, pointerId: 1 }));
+    for (let i = 1; i <= 10; i++) {
+      window.dispatchEvent(new PointerEvent('pointermove', { clientX: 75 + i * 3, clientY: 65, pointerId: 1 }));
+    }
+    const mid = engine.getElements();
+    expect(mid.every((el, i) => el === before[i])).toBe(true);
+    expect(engine.getElementEffectiveBBox(mid[1]).bbox.minX).toBe(before[1].bbox.minX + 30);
+
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: 105, clientY: 65, pointerId: 1 }));
+    expect((engine.getElements()[1] as ShapeElement).startX).toBe(sampleRect.startX + 30);
+    expect(mockChange).toHaveBeenCalledTimes(1);
+  });
+
   it('moves all selected elements together when dragged', () => {
     engine.selectAll();
     expect(engine.getSelectedElements()).toHaveLength(3);

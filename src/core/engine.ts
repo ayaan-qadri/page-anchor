@@ -35,6 +35,7 @@ const SELECTION_COLOR = '#8fa6cc';
 const SELECTION_BADGE_BG = 'rgba(56, 70, 106, 0.94)';
 
 const ORPHAN_DIM_FACTOR = 0.35;
+const REANCHOR_MAX_ELEMENTS = 50;
 const TEXT_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 const TEXT_PADDING = 6;
 const TEXT_MIN_WIDTH = 60;
@@ -89,6 +90,9 @@ export class CanvasEngine {
   private selectedElements: AnchorElement[] = [];
   private isDraggingSelected = false;
   private dragStartPoint: Point | null = null;
+  /** Translation applied at render time while dragging; committed to the elements once on drop. */
+  private dragOffset: Point = { x: 0, y: 0 };
+  private draggedSet: Set<AnchorElement> | null = null;
   private isMarqueeSelecting = false;
   private marqueeStartPoint: Point | null = null;
   private currentMarqueeBBox: BoundingBox | null = null;
@@ -201,6 +205,10 @@ export class CanvasEngine {
         deltaX = res.deltaX;
         deltaY = res.deltaY;
       }
+    }
+    if (this.draggedSet?.has(el)) {
+      deltaX += this.dragOffset.x;
+      deltaY += this.dragOffset.y;
     }
 
     return {
@@ -490,6 +498,8 @@ export class CanvasEngine {
     this.currentShape = null;
     this.isDraggingSelected = false;
     this.dragStartPoint = null;
+    this.dragOffset = { x: 0, y: 0 };
+    this.draggedSet = null;
     this.isMarqueeSelecting = false;
     this.marqueeStartPoint = null;
     this.currentMarqueeBBox = null;
@@ -649,17 +659,9 @@ export class CanvasEngine {
 
   private continueSelectGesture(docPt: Point): void {
     if (this.isDraggingSelected && this.selectedElements.length > 0 && this.dragStartPoint) {
-      const dx = docPt.x - this.dragStartPoint.x;
-      const dy = docPt.y - this.dragStartPoint.y;
-      if (dx !== 0 || dy !== 0) {
-        const replacements = new Map<AnchorElement, AnchorElement>();
-        for (const el of this.selectedElements) {
-          replacements.set(el, this.movedElement(el, dx, dy));
-        }
-        this.replaceElements(replacements);
-        this.hasMovedElements = true;
-      }
-      this.dragStartPoint = docPt;
+      this.draggedSet ??= new Set(this.selectedElements);
+      this.dragOffset = { x: docPt.x - this.dragStartPoint.x, y: docPt.y - this.dragStartPoint.y };
+      this.hasMovedElements = this.dragOffset.x !== 0 || this.dragOffset.y !== 0;
       this.renderBase();
       return;
     }
@@ -702,21 +704,28 @@ export class CanvasEngine {
     this.renderBase();
   }
 
-  /** Reports a finished drag, re-anchoring each moved element where it now appears. */
+  /** Applies a finished drag once. Small selections are re-anchored to whatever they were dropped on; large ones keep their anchors, which stays correct and avoids thousands of DOM lookups. */
   private commitDrag(): void {
+    const { x, y } = this.dragOffset;
+    this.dragOffset = { x: 0, y: 0 };
+    this.draggedSet = null;
     if (!this.hasMovedElements) return;
     this.hasMovedElements = false;
-    if (this.isDomAnchoringEnabled) {
-      const replacements = new Map<AnchorElement, AnchorElement>();
-      for (const el of this.selectedElements) {
-        // Bake the live anchor offset into the stored coordinates, or the element would jump back by it once re-anchored.
-        const { deltaX, deltaY } = this.getElementEffectiveBBox(el);
-        const placed = this.movedElement(el, deltaX, deltaY);
-        placed.anchor = this.anchorManager.captureAnchor(placed.bbox, anchorHint(placed));
-        replacements.set(el, placed);
+
+    const reanchor = this.isDomAnchoringEnabled && this.selectedElements.length <= REANCHOR_MAX_ELEMENTS;
+    const replacements = new Map<AnchorElement, AnchorElement>();
+    for (const el of this.selectedElements) {
+      if (!reanchor) {
+        replacements.set(el, this.movedElement(el, x, y));
+        continue;
       }
-      this.replaceElements(replacements);
+      // Bake the live anchor offset into the stored coordinates, or the element would jump back by it once re-anchored.
+      const { deltaX, deltaY } = this.getElementEffectiveBBox(el);
+      const placed = this.movedElement(el, x + deltaX, y + deltaY);
+      placed.anchor = this.anchorManager.captureAnchor(placed.bbox, anchorHint(placed));
+      replacements.set(el, placed);
     }
+    this.replaceElements(replacements);
     this.emitChange();
     this.renderBase();
   }
@@ -928,6 +937,7 @@ export class CanvasEngine {
     if (!ctx) return;
 
     ctx.clearRect(0, 0, this.baseCanvas.width, this.baseCanvas.height);
+    this.anchorManager.syncScroll();
     this.beginDocTransform(ctx);
 
     const viewportBox: BoundingBox = {
@@ -946,7 +956,7 @@ export class CanvasEngine {
       this.renderSingleElementWithOffset(ctx, el, eff);
     }
 
-    this.renderSelection(ctx);
+    this.renderSelection(ctx, viewportBox);
     ctx.restore();
   }
 
@@ -1124,7 +1134,7 @@ export class CanvasEngine {
     ctx.restore();
   }
 
-  private renderSelection(ctx: CanvasRenderingContext2D): void {
+  private renderSelection(ctx: CanvasRenderingContext2D, viewportBox: BoundingBox): void {
     const visible = this.selectedElements.filter((el) => this.isRendered(el));
     if (visible.length === 0) return;
     if (visible.length === 1) {
@@ -1133,7 +1143,7 @@ export class CanvasEngine {
     }
 
     for (const el of visible) {
-      this.renderIndividualItemOutline(ctx, el);
+      if (intersectsBoundingBox(this.getElementEffectiveBBox(el).bbox, viewportBox)) this.renderIndividualItemOutline(ctx, el);
     }
 
     const union = this.unionBBox(visible);

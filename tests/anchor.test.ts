@@ -479,7 +479,7 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       manager.destroy();
     });
 
-    it('re-resolves a cached hit whose element was detached', () => {
+    it('re-resolves a cached hit whose element was detached', async () => {
       const el = document.createElement('div');
       el.id = 'detached-hit';
       el.getBoundingClientRect = () => mockRect(20, 80, 200, 40);
@@ -490,6 +490,8 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
       expect(manager.resolve(anchor).element).toBe(el);
 
       el.remove();
+      // Mutation observers deliver before the next frame renders.
+      await Promise.resolve();
       expect(manager.resolve(anchor).status).toBe('orphaned');
       manager.destroy();
     });
@@ -529,6 +531,7 @@ describe('DOM Anchoring Engine & Deterministic Positioning', () => {
 
       try {
         window.scrollTo(0, 400);
+        manager.syncScroll();
         expect(manager.resolve(anchor).deltaY).toBe(400);
       } finally {
         window.scrollTo(0, 0);
