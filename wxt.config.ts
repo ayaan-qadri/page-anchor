@@ -11,7 +11,6 @@ export default defineConfig({
   manifest: ({ browser }) => ({
     name: 'Page Anchor - Web Annotation & Drawing',
     description: 'Freehand drawing, shapes, and text annotations directly on web pages with persistent storage and customizable shortcuts.',
-    version: '1.0.1',
     permissions: [
       'storage',
       'unlimitedStorage',
