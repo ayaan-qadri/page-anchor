@@ -246,7 +246,6 @@ test.describe('Page Anchor: content script fixes', () => {
           const select = document.getElementById('pref-url-match-mode') as HTMLSelectElement;
           select.value = 'domain';
           select.dispatchEvent(new Event('change', { bubbles: true }));
-          (document.getElementById('btn-save') as HTMLButtonElement).click();
         });
         const settings = (await readStorage(context)).page_anchor_settings as { urlMatchMode?: string } | undefined;
         return settings?.urlMatchMode;

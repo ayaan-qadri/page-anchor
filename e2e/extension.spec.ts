@@ -616,7 +616,7 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     // 1. Verify header branding and save indicator
     await expect(optionsPage.locator('h1')).toHaveText(/Page Anchor/i);
     const saveStatus = optionsPage.locator('#save-status');
-    await expect(saveStatus).toHaveAttribute('data-state', 'saved');
+    await expect(saveStatus).toHaveText('Changes save automatically');
 
     // 2. Tab Navigation via clicks
     const shortcutsTab = optionsPage.locator('#tab-btn-shortcuts');
@@ -641,8 +641,8 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     await orphanMode.selectOption('dimmed');
     await expect(orphanMode).toHaveValue('dimmed');
 
-    // Header should now reflect dirty/unsaved state
-    await expect(saveStatus).toHaveAttribute('data-state', 'dirty');
+    // Each edit saves at once and the header confirms it
+    await expect(saveStatus).toHaveAttribute('data-state', 'saved');
 
     // 4. Shortcuts Tab & Rebinding
     await shortcutsTab.click();
@@ -663,17 +663,15 @@ test.describe('Page Anchor: Pure Real-User End-to-End Tests', () => {
     await optionsPage.keyboard.press('Control+KeyT');
     await expect(firstKeyBadge).toHaveAttribute('data-conflict', 'true');
 
-    // Reset shortcuts button
-    optionsPage.once('dialog', (dialog) => dialog.accept());
+    // Reset shortcuts: applies at once, with Undo instead of a confirm dialog
     await optionsPage.locator('#btn-reset-shortcuts').click();
     await expect(firstKeyBadge).not.toHaveAttribute('data-conflict');
 
-    // 5. Save Settings & Verify Toast
-    const saveBtn = optionsPage.locator('#btn-save');
-    await saveBtn.click();
-    const toast = optionsPage.locator('div[role="status"]');
+    // 5. Settings save on their own
+    const toast = optionsPage.locator('.pa-toast');
     await expect(toast).toBeVisible();
-    await expect(toast).toHaveText('Settings saved successfully!');
+    await expect(toast).toContainText('Shortcuts reset to defaults');
+    await expect(optionsPage.locator('#btn-save')).toHaveCount(0);
     await expect(saveStatus).toHaveAttribute('data-state', 'saved');
 
     // 6. Saved Pages Tab

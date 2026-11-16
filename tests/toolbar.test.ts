@@ -286,6 +286,23 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     expect(q('[data-tool="rect"] .pa-menu-item-key').textContent).toBe('W');
   });
 
+  it('prints single-key tool shortcuts on the tool buttons and keeps combos in the tooltip only', () => {
+    const hint = (tool: string) => q(`.pa-btn[data-tool="${tool}"] .pa-key-hint`);
+    expect(hint('pen').textContent).toBe('P');
+    expect(hint('pen').getAttribute('aria-hidden')).toBe('true');
+    expect(q('[data-tool="pen"]').getAttribute('aria-label')).toBe('Pen (P)');
+    expect(q('[data-action="undo"] .pa-key-hint')).toBeNull();
+
+    toolbar.setSettings(settingsWith({ shortcuts: { ...DEFAULT_SETTINGS.shortcuts, 'tool-pen': 'Ctrl+Shift+P', 'tool-eraser': 'x' } }));
+    expect(hint('pen').style.display).toBe('none');
+    expect(q('[data-tool="pen"] .pa-tooltip kbd')?.textContent).toBe('Ctrl + Shift + P');
+    expect(hint('eraser').textContent).toBe('X');
+
+    toolbar.setSettings(settingsWith({ shortcuts: { ...DEFAULT_SETTINGS.shortcuts, 'tool-pen': 'k' } }));
+    expect(hint('pen').style.display).toBe('');
+    expect(hint('pen').textContent).toBe('K');
+  });
+
   it('groups the shape tools behind a single menu entry', () => {
     const shapesTrigger = q('[data-action="shapes"]');
     expect(shapesTrigger).not.toBeNull();
@@ -802,13 +819,11 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
 
       const toolName = q<HTMLElement>('.pa-popover-tool-name');
       expect(toolName.textContent).toBe('Text Note');
-      expect(q<HTMLElement>('.pa-popover-badge').textContent).toBe('Selected');
-      expect(q<HTMLElement>('.pa-color-target').textContent).toBe('Text note colours');
 
       expect(groupOf('defaultFontSize').style.display).toBe('flex');
       expect(groupOf('defaultStrokeWidth').style.display).toBe('none');
       expect(groupOf('defaultHighlighterWidth').style.display).toBe('none');
-      expect(q('input[data-setting="defaultStrokeColor"]').getAttribute('aria-label')).toBe('Text colour');
+      expect(q('input[data-setting="defaultStrokeColor"]').getAttribute('aria-label')).toBe('Custom text colour');
 
       const fontSizeSlider = q<HTMLInputElement>('input[data-setting="defaultFontSize"]');
       fontSizeSlider.value = '24';
@@ -828,7 +843,6 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
       q('.pa-color-preview-btn').click();
 
       expect(q<HTMLElement>('.pa-popover-tool-name').textContent).toBe('Pen');
-      expect(q<HTMLElement>('.pa-popover-badge').textContent).toBe('Selected');
       expect(groupOf('defaultStrokeWidth').style.display).toBe('flex');
       expect(groupOf('defaultFontSize').style.display).toBe('none');
       expect(groupOf('defaultHighlighterWidth').style.display).toBe('none');
@@ -851,7 +865,7 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
 
       expect(q<HTMLElement>('.pa-popover-tool-name').textContent).toBe('Rectangle');
       expect(groupOf('defaultStrokeWidth').style.display).toBe('flex');
-      expect(q('input[data-setting="defaultStrokeWidth"]').getAttribute('aria-label')).toBe('Stroke width');
+      expect(q('input[data-setting="defaultStrokeWidth"]').getAttribute('aria-label')).toBe('Width');
     });
 
     it('shows empty notice and quick tool switch buttons when eraser tool is selected', () => {
@@ -950,6 +964,79 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
       container.querySelectorAll('.pa-toolbar-wrapper button, .pa-toolbar-wrapper .pa-drag-handle').forEach((el) => {
         expect(el.getAttribute('title')).toBeNull();
       });
+    });
+
+    it('hides a button tooltip once the button is pressed, until the pointer leaves it', () => {
+      const clear = q('[data-action="clear"]');
+      clear.querySelector('svg')?.dispatchEvent(new Event('pointerdown', { bubbles: true, composed: true }));
+      expect(clear.classList.contains('pa-tip-hidden')).toBe(true);
+
+      clear.dispatchEvent(new Event('pointerleave'));
+      expect(clear.classList.contains('pa-tip-hidden')).toBe(false);
+    });
+  });
+
+  describe('Recolouring the selection', () => {
+    it('recolours the selected drawings from the popover as one undoable step, leaving the pen colour alone', () => {
+      engine.addElement(penElement('a'));
+      engine.addElement(rectElement('b'));
+      engine.selectAll();
+      toolbar.updateActiveToolUI();
+      const penBefore = settingsOf(toolbar).defaultStrokeColor;
+
+      q('.pa-color-preview-btn').click();
+      expect(q<HTMLElement>('.pa-popover-tool-name').textContent).toBe('2 selected');
+      expect(q('.pa-color-preview-btn').getAttribute('aria-label')).toBe('Recolour selection');
+
+      q('.pa-color-swatch[data-color="#3b82f6"]').click();
+
+      expect(engine.getElements().map((el) => el.strokeColor)).toEqual(['#3b82f6', '#3b82f6']);
+      expect(settingsOf(toolbar).defaultStrokeColor).toBe(penBefore);
+      expect(q('.pa-color-swatch[data-color="#3b82f6"]').getAttribute('aria-pressed')).toBe('true');
+
+      toolbar.undo();
+      expect(engine.getElements().map((el) => el.strokeColor)).toEqual(['#000', '#000']);
+    });
+
+    it('recolours a highlighter stroke and keeps it translucent', () => {
+      engine.addElement({ ...penElement('h'), type: 'highlighter', opacity: 0.35 });
+      engine.selectAll();
+      toolbar.updateActiveToolUI();
+
+      q('.pa-color-preview-btn').click();
+      q('.pa-color-swatch[data-color="#22c55e"]').click();
+
+      const [stroke] = engine.getElements();
+      expect(stroke.strokeColor).toBe('#22c55e');
+      expect(stroke.opacity).toBe(0.35);
+    });
+
+    it('shows an empty colour button for tools without a colour, and a prompt to select drawings with the select tool', () => {
+      q('[data-tool="select"]').click();
+      const colorBtn = q('.pa-color-preview-btn');
+      expect(colorBtn.classList.contains('is-empty')).toBe(true);
+
+      colorBtn.click();
+      expect(q('.pa-tool-empty-msg').textContent).toBe('Select drawings to recolour them, or pick a tool.');
+
+      q('[data-tool="pen"]').click();
+      expect(colorBtn.classList.contains('is-empty')).toBe(false);
+    });
+  });
+
+  describe('Shapes button', () => {
+    it('shows the icon of the last shape used', () => {
+      const trigger = q('[data-action="shapes"]');
+      const before = trigger.querySelector('svg')?.outerHTML;
+
+      q('.pa-menu-item[data-tool="circle"]').click();
+      const circleIcon = q('.pa-menu-item[data-tool="circle"] .pa-menu-item-icon svg').outerHTML;
+      expect(trigger.querySelector('svg')?.outerHTML).toBe(circleIcon);
+      expect(trigger.querySelector('svg')?.outerHTML).not.toBe(before);
+      expect(trigger.querySelector('.pa-tooltip')).not.toBeNull();
+
+      q('[data-tool="pen"]').click();
+      expect(trigger.querySelector('svg')?.outerHTML).toBe(circleIcon);
     });
   });
 });

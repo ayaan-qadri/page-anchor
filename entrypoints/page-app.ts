@@ -320,7 +320,10 @@ export default defineUnlistedScript({
           toolbar.updateBadge();
           markDirty();
         },
+        onSelectionChange: () => toolbar?.refreshColorControls(),
         onTextCreateRequested: (pt) => {
+          // A click away from an open note only saves it; a second click starts the next one.
+          if (textEditor.isOpen()) return;
           textEditor.open(
             pt,
             {

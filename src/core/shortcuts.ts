@@ -30,14 +30,14 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
 export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   {
     id: 'toggle-active',
-    name: 'Toggle Drawing Mode',
-    description: 'Turn drawing mode on or off across page',
+    name: 'Show or Hide Toolbar',
+    description: 'Open the drawing toolbar on this page, or close it',
     defaultKey: DEFAULT_SHORTCUTS['toggle-active'],
   },
   {
     id: 'action-toggle-toolbar',
-    name: 'Toggle Toolbar Visibility',
-    description: 'Show or hide the toolbar',
+    name: 'Show or Hide Toolbar (second key)',
+    description: 'Another key for the same action',
     defaultKey: DEFAULT_SHORTCUTS['action-toggle-toolbar'],
   },
   {

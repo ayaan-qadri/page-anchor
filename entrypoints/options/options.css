@@ -1,12 +1,16 @@
 @import "tailwindcss";
 @import "../../src/styles/tailwind.css";
 
-/*
- * The settings page is styled entirely with Tailwind utilities in the markup.
- * Only two document-wide guarantees stay here, because they target elements the
- * markup does not own: `*` and every focusable control on the page.
- */
 @layer base {
+  /* Switching to a short tab must not shift the layout sideways when the scrollbar disappears. */
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    @apply bg-brand-bg text-brand-text font-sans text-sm leading-normal antialiased;
+  }
+
   /* WCAG 2.4.7 — one consistent, visible indicator on every focusable control. */
   :focus-visible {
     outline: 2px solid var(--color-brand-ring);
@@ -23,5 +27,123 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+  }
+}
+
+/* The building blocks every pane repeats; markup and options.ts share these names. */
+@layer components {
+  .pa-tab-btn {
+    @apply flex items-center gap-3 w-full px-3 py-2.5 rounded-xl border-none bg-transparent text-brand-muted text-sm font-medium text-left cursor-pointer transition-colors duration-150;
+    @apply hover:bg-brand-hover hover:text-brand-text;
+    @apply aria-selected:bg-brand-accent-tint aria-selected:text-brand-text;
+  }
+
+  .pa-tab-icon {
+    @apply flex-none text-brand-faint;
+  }
+
+  .pa-tab-btn[aria-selected="true"] .pa-tab-icon {
+    @apply text-brand-accent-soft;
+  }
+
+  .pa-pane-head h2 {
+    @apply text-[22px] font-semibold tracking-[-0.02em] leading-tight text-brand-text;
+  }
+
+  .pa-pane-head p {
+    @apply mt-1.5 text-[14px] leading-relaxed text-brand-muted max-w-[62ch];
+  }
+
+  .pa-card {
+    @apply rounded-2xl border border-brand-line bg-brand-surface overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.05)];
+  }
+
+  .pa-card-head {
+    @apply px-5 pt-4 pb-3.5 border-b border-brand-line;
+  }
+
+  .pa-card-head h3 {
+    @apply text-[15px] font-semibold tracking-[-0.01em] text-brand-text;
+  }
+
+  .pa-card-head p {
+    @apply mt-1 text-[13px] leading-relaxed text-brand-muted max-w-[62ch];
+  }
+
+  .pa-rows > * + * {
+    @apply border-t border-brand-line;
+  }
+
+  .pa-row {
+    @apply flex items-center justify-between gap-8 px-5 py-4;
+    @apply max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3;
+  }
+
+  .pa-row-text {
+    @apply flex-[1_1_auto] min-w-0;
+  }
+
+  .pa-row-title {
+    @apply block text-sm font-medium text-brand-text;
+  }
+
+  .pa-row-desc {
+    @apply mt-1 text-[13px] leading-relaxed text-brand-muted;
+  }
+
+  .pa-row-control {
+    @apply flex-none flex items-center gap-3;
+  }
+
+  .pa-select {
+    @apply w-full appearance-none pl-3 pr-9 py-2 rounded-lg border border-brand-line-strong bg-brand-surface text-brand-text text-[13px] cursor-pointer transition-colors duration-150 hover:border-brand-faint;
+  }
+
+  .pa-switch {
+    @apply relative inline-flex items-center w-10 h-6 cursor-pointer;
+  }
+
+  .pa-switch-track {
+    @apply pointer-events-none absolute inset-0 rounded-full bg-brand-line-strong transition-colors duration-150;
+    @apply after:content-[''] after:absolute after:top-1 after:left-1 after:w-4 after:h-4 after:rounded-full after:bg-white after:shadow-sm after:transition-transform after:duration-150;
+    @apply peer-checked:bg-brand-accent peer-checked:after:translate-x-4;
+    @apply peer-focus-visible:outline-2 peer-focus-visible:outline-brand-ring peer-focus-visible:outline-offset-2;
+  }
+
+  .pa-btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border text-[13px] font-semibold cursor-pointer transition-colors duration-150;
+  }
+
+  .pa-btn-primary {
+    @apply border-transparent bg-brand-accent text-white hover:bg-brand-accent-hover;
+  }
+
+  .pa-btn-secondary {
+    @apply border-brand-line-strong bg-brand-surface text-brand-text hover:bg-brand-hover;
+  }
+
+  .pa-btn-danger {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-transparent bg-transparent text-[13px] font-medium text-brand-danger-soft cursor-pointer transition-colors duration-150;
+    @apply hover:bg-brand-danger/10 hover:border-brand-danger/25;
+  }
+
+  .pa-key-badge {
+    @apply flex-none inline-flex items-center justify-center gap-1 min-w-24 px-2 py-1.5 rounded-lg border border-transparent bg-transparent text-brand-muted text-xs cursor-pointer transition-colors duration-150;
+    @apply hover:bg-brand-hover hover:border-brand-line;
+    @apply data-[capturing=true]:border-brand-accent data-[capturing=true]:bg-brand-accent-tint data-[capturing=true]:text-brand-accent-soft data-[capturing=true]:font-semibold data-[capturing=true]:animate-pulse;
+    @apply data-[conflict=true]:border-brand-warning;
+  }
+
+  /* Each key of a combination looks like a physical key. */
+  .pa-keycap {
+    @apply inline-flex items-center justify-center min-w-7 h-7 px-2 rounded-md border border-brand-line-strong border-b-2 bg-brand-keycap text-brand-text font-mono text-xs font-semibold;
+  }
+
+  .pa-key-plus {
+    @apply text-brand-faint text-xs;
+  }
+
+  .pa-group-label {
+    @apply px-1 pb-2 text-xs font-semibold uppercase tracking-[0.06em] text-brand-faint;
   }
 }

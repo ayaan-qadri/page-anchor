@@ -151,12 +151,20 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
     });
 
     it('should render color swatches as accessible buttons with aria-pressed', () => {
-      const swatches = container.querySelectorAll('.pa-color-swatch');
+      const swatches = container.querySelectorAll('button.pa-color-swatch');
       expect(swatches.length).toBeGreaterThan(0);
       swatches.forEach((s) => {
-        expect(s.tagName).toBe('BUTTON');
         expect(s.getAttribute('aria-label')).toMatch(/^Color /);
         expect(['true', 'false']).toContain(s.getAttribute('aria-pressed'));
+      });
+    });
+
+    it('should label the custom colour swatch through its colour input', () => {
+      const custom = container.querySelectorAll<HTMLElement>('.pa-color-custom');
+      expect(custom.length).toBeGreaterThan(0);
+      custom.forEach((swatch) => {
+        expect(swatch.tagName).toBe('LABEL');
+        expect(swatch.querySelector('input[type="color"]')?.getAttribute('aria-label')).toBeTruthy();
       });
     });
 

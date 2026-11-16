@@ -121,7 +121,7 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
     badge.click();
     pressKey({ key: 't', code: 'KeyT', ctrlKey: true });
 
-    expect(badge.classList.contains('border-amber-500')).toBe(true);
+    expect(badge.dataset.conflict).toBe('true');
     expect(badge.title).toContain('conflicts with');
   });
 
@@ -147,7 +147,7 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
     expect(error.hidden).toBe(true);
   });
 
-  it('refuses to save while two actions share a shortcut', async () => {
+  it('refuses to save shortcuts while two actions share one, but still saves other settings', async () => {
     mockLocalStore['page_anchor_settings'] = { shortcuts: { 'tool-pen': 'h' } };
     await initOptions();
 
@@ -155,16 +155,42 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
     expect(error.hidden).toBe(false);
     expect(error.textContent).toBe('Also used by Highlighter.');
 
+    badgeFor('tool-eraser').click();
+    pressKey({ key: 'q', code: 'KeyQ' });
+    await flush();
+    expect((savedSettings(mockLocalStore).shortcuts as Record<string, string>)['tool-eraser']).toBeUndefined();
+
     const strokeSimplification = document.getElementById('pref-stroke-simplification') as HTMLInputElement;
     strokeSimplification.checked = false;
     strokeSimplification.dispatchEvent(new Event('change', { bubbles: true }));
-    mockChrome.storage.local.set.mockClear();
-
-    (document.getElementById('btn-save') as HTMLButtonElement).click();
     await flush();
 
-    expect(mockChrome.storage.local.set).not.toHaveBeenCalled();
-    expect(document.getElementById('save-status')?.dataset.state).toBe('dirty');
+    expect(savedSettings(mockLocalStore).strokeSimplification).toBe(false);
+    expect(document.getElementById('save-status')?.dataset.state).toBe('saved');
+  });
+
+  it('groups shortcuts into cards and shows each key as its own keycap', async () => {
+    await initOptions();
+
+    const groups = Array.from(document.querySelectorAll('#shortcuts-container .pa-group-label')).map((el) => el.textContent);
+    expect(groups).toEqual(['Toolbar', 'Tools', 'Editing']);
+    expect(document.querySelectorAll('.pa-key-badge')).toHaveLength(17);
+
+    const toggle = badgeFor('toggle-active');
+    expect(Array.from(toggle.querySelectorAll('kbd.pa-keycap')).map((k) => k.textContent)).toEqual(['Alt', 'Shift', 'D']);
+    expect(toggle.textContent).toBe('Alt + Shift + D');
+  });
+
+  it('saves a recorded shortcut without a separate save step', async () => {
+    await initOptions();
+    expect(document.getElementById('btn-save')).toBeNull();
+
+    badgeFor('tool-pen').click();
+    pressKey({ key: 'q', code: 'KeyQ' });
+    await flush();
+
+    expect((savedSettings(mockLocalStore).shortcuts as Record<string, string>)['tool-pen']).toBe('q');
+    expect(document.getElementById('save-status')?.textContent).toBe('Saved');
   });
 
   it('cancels the first recording when a second one starts', async () => {
@@ -227,8 +253,6 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
     const strokeSimplification = document.getElementById('pref-stroke-simplification') as HTMLInputElement;
     strokeSimplification.checked = false;
     strokeSimplification.dispatchEvent(new Event('change'));
-
-    (document.getElementById('btn-save') as HTMLButtonElement).click();
     await flush();
 
     expect(mockChrome.storage.local.set).toHaveBeenCalled();
@@ -257,8 +281,6 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
     const strokeSimplification = document.getElementById('pref-stroke-simplification') as HTMLInputElement;
     strokeSimplification.checked = false;
     strokeSimplification.dispatchEvent(new Event('change', { bubbles: true }));
-
-    (document.getElementById('btn-save') as HTMLButtonElement).click();
     await flush();
 
     const saved = savedSettings(mockLocalStore);
@@ -268,10 +290,42 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
     expect(saved.areAnnotationsVisible).toBe(false);
   });
 
-  it('resets shortcuts to defaults when reset button is confirmed', async () => {
+  it('resets shortcuts at once without a confirm dialog, and Undo brings the old ones back', async () => {
+    mockLocalStore['page_anchor_settings'] = { shortcuts: { 'tool-pen': 'k' } };
     await initOptions();
+
     (document.getElementById('btn-reset-shortcuts') as HTMLButtonElement).click();
-    expect(globalThis.confirm).toHaveBeenCalled();
+    await flush();
+    expect(globalThis.confirm).not.toHaveBeenCalled();
+    expect((savedSettings(mockLocalStore).shortcuts as Record<string, string>)['tool-pen']).toBe('p');
+    expect(badgeFor('tool-pen').textContent).toBe('P');
+
+    (document.querySelector('.pa-toast-btn') as HTMLButtonElement).click();
+    await flush();
+    expect((savedSettings(mockLocalStore).shortcuts as Record<string, string>)['tool-pen']).toBe('k');
+    expect(badgeFor('tool-pen').textContent).toBe('K');
+  });
+
+  it('removes a saved page without a confirm dialog and keeps it if Undo is pressed', async () => {
+    const page = { url: 'https://example.com/a', normalizedUrl: 'example.com/a', pageTitle: 'A', updatedAt: 1, elements: [{ id: 'x' }] };
+    mockLocalStore['page_anchor_data:example.com/a'] = page;
+    await initOptions();
+    vi.useFakeTimers();
+
+    (document.querySelector('.pa-btn-danger') as HTMLButtonElement).click();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(globalThis.confirm).not.toHaveBeenCalled();
+    expect(document.querySelector('.pa-btn-danger')).toBeNull();
+    expect(mockLocalStore['page_anchor_data:example.com/a']).toBeDefined();
+
+    (document.querySelector('.pa-toast-btn') as HTMLButtonElement).click();
+    await vi.advanceTimersByTimeAsync(7000);
+    expect(mockLocalStore['page_anchor_data:example.com/a']).toBeDefined();
+    expect(document.querySelector('.pa-btn-danger')).not.toBeNull();
+
+    (document.querySelector('.pa-btn-danger') as HTMLButtonElement).click();
+    await vi.advanceTimersByTimeAsync(7000);
+    expect(mockLocalStore['page_anchor_data:example.com/a']).toBeUndefined();
   });
 
   it('handles JSON backup export and import file reader flow', async () => {

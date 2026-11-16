@@ -42,6 +42,16 @@ describe('TextEditorOverlay: In-Place Text Editing', () => {
     Object.defineProperty(window, 'scrollY', { value: 0, writable: true, configurable: true });
   });
 
+  it('reports whether a note is being edited and shows the key hints', () => {
+    expect(editor.isOpen()).toBe(false);
+    editor.open({ x: 0, y: 0 }, { fontSize: 16, fontColor: '#ffffff' }, vi.fn());
+    expect(editor.isOpen()).toBe(true);
+    expect(container.querySelector('.pa-text-hint')?.textContent).toContain('Enter to save');
+
+    (container.querySelector('.pa-text-textarea') as HTMLTextAreaElement).dispatchEvent(new Event('blur'));
+    expect(editor.isOpen()).toBe(false);
+  });
+
   it('commits text note and creates TextElement when Enter is pressed', () => {
     const onCommit = vi.fn();
     const onCancel = vi.fn();

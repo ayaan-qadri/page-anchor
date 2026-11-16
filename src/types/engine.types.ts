@@ -82,4 +82,5 @@ export interface EngineCallbacks {
   onElementsChange?: (elements: AnchorElement[]) => void;
   onTextCreateRequested?: (pt: Point) => void;
   onDomAnchoringToggle?: (enabled: boolean) => void;
+  onSelectionChange?: () => void;
 }

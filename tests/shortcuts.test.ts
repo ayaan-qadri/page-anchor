@@ -293,6 +293,6 @@ describe('Shortcuts Engine: Keyboard Normalization & Dispatching', () => {
 
   it('describes the toolbar toggle as showing or hiding the toolbar', () => {
     const def = SHORTCUT_DEFINITIONS.find((d) => d.id === 'action-toggle-toolbar');
-    expect(def?.description).toBe('Show or hide the toolbar');
+    expect(def?.name).toBe('Show or Hide Toolbar (second key)');
   });
 });

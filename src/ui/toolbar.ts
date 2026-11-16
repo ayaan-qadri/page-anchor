@@ -5,7 +5,7 @@ import { ExtensionSettings } from '../types/storage.types';
 import { ShortcutAction } from '../types/shortcuts.types';
 import { ToolbarCallbacks } from '../types/ui.types';
 import { ICONS, IconName } from '../icons/svg-icons';
-import { buildTooltip, setMarkup } from './dom';
+import { buildTooltip, markupToNodes, setMarkup } from './dom';
 import { TextEditorOverlay } from './text-editor';
 import { formatShortcutForDisplay } from '../core/shortcuts';
 import { DEFAULT_SETTINGS, saveSettings } from '../core/storage';
@@ -21,6 +21,7 @@ const PRESET_COLORS = [
   '#3b82f6',
   '#8b5cf6',
   '#ec4899',
+  '#64748b',
   '#ffffff',
   '#000000',
 ];
@@ -37,14 +38,13 @@ interface ToolInfo {
   category: ToolCategory;
   label: string;
   icon: IconName;
-  targetText?: string;
 }
 
 const TOOL_INFO: Record<ToolType, ToolInfo> = {
   select: { category: 'none', label: 'Select & Move', icon: 'select' },
   pen: { category: 'pen', label: 'Pen', icon: 'pen' },
   highlighter: { category: 'highlighter', label: 'Highlighter', icon: 'highlighter' },
-  text: { category: 'text', label: 'Text Note', icon: 'text', targetText: 'Text note colours' },
+  text: { category: 'text', label: 'Text Note', icon: 'text' },
   eraser: { category: 'none', label: 'Eraser', icon: 'eraser' },
   rect: { category: 'shape', label: 'Rectangle', icon: 'rect' },
   circle: { category: 'shape', label: 'Circle', icon: 'circle' },
@@ -55,21 +55,35 @@ const TOOL_INFO: Record<ToolType, ToolInfo> = {
 
 const SHAPE_TOOLS: ToolType[] = ['rect', 'circle', 'line', 'arrow', 'double-arrow'];
 
-const GRID_LABELS: Record<ToolCategory, string> = {
+/** What the popover is editing: the defaults of a drawing tool, the current selection, or nothing. */
+type StyleTarget = ToolCategory | 'selection';
+
+const GRID_LABELS: Record<StyleTarget, string> = {
   pen: 'Preset pen colors',
   highlighter: 'Preset highlighter colors',
   text: 'Preset text colors',
   shape: 'Preset shape colors',
+  selection: 'Preset colors for the selection',
   none: 'Preset pen colors',
 };
 
-/** Which popover controls each tool category shows, with the label each one takes. */
-const PANEL_LAYOUT: Record<ToolCategory, Partial<Record<PanelControl, string>>> = {
-  pen: { strokeColor: 'Pen colour', strokeWidth: 'Pen width' },
-  shape: { strokeColor: 'Stroke colour', strokeWidth: 'Stroke width' },
-  highlighter: { hlColor: 'Highlighter colour', hlWidth: 'Highlighter width' },
-  text: { strokeColor: 'Text colour', fontSize: 'Text note size' },
+/** Which popover controls each target shows, with the label each one takes. */
+const PANEL_LAYOUT: Record<StyleTarget, Partial<Record<PanelControl, string>>> = {
+  pen: { strokeColor: 'Custom pen colour', strokeWidth: 'Width' },
+  shape: { strokeColor: 'Custom shape colour', strokeWidth: 'Width' },
+  highlighter: { hlColor: 'Custom highlighter colour', hlWidth: 'Width' },
+  text: { strokeColor: 'Custom text colour', fontSize: 'Text size' },
+  selection: { strokeColor: 'Custom colour for the selection' },
   none: { none: '' },
+};
+
+const BUTTON_LABELS: Record<StyleTarget, string> = {
+  pen: 'Colour and width',
+  shape: 'Colour and width',
+  highlighter: 'Colour and width',
+  text: 'Colour and size',
+  selection: 'Recolour selection',
+  none: 'Colour and width',
 };
 
 interface PanelEntry {
@@ -148,6 +162,7 @@ export class FloatingToolbar {
   private clearBtn!: HTMLButtonElement;
   private countBadge!: HTMLElement;
   private visibilityItem!: HTMLButtonElement;
+  private shapesTrigger!: HTMLButtonElement;
   private anchorItem!: HTMLButtonElement;
   private panels!: Record<PanelControl, PanelEntry>;
   private menus: Menu[] = [];
@@ -454,7 +469,9 @@ export class FloatingToolbar {
         },
       })
     );
-    return this.buildMenu('shapes', 'Shape tools', 'shapes', false, items);
+    const menu = this.buildMenu('shapes', 'Shape tools', 'shapes', false, items);
+    this.shapesTrigger = menu.querySelector<HTMLButtonElement>('.pa-menu-trigger')!;
+    return menu;
   }
 
   private buildMoreMenu(): HTMLElement {
@@ -879,7 +896,8 @@ export class FloatingToolbar {
     this.colorPopover.classList.add('open');
     this.colorPreviewBtn.setAttribute('aria-expanded', 'true');
     this.refreshColorControls();
-    this.firstVisibleControl(this.colorPopover)?.focus();
+    const body = this.colorPopover.querySelector<HTMLElement>('.pa-popover-body');
+    (body && this.firstVisibleControl(body))?.focus();
   }
 
   private closeColorPopover(restoreFocus = false): void {
@@ -919,19 +937,9 @@ export class FloatingToolbar {
     toolInfo.appendChild(toolIcon);
     toolInfo.appendChild(toolName);
 
-    const badge = document.createElement('span');
-    badge.className = 'pa-popover-badge';
-    badge.textContent = 'Selected';
-
     headerRow.appendChild(toolInfo);
-    headerRow.appendChild(badge);
+    headerRow.appendChild(this.buildResetButton());
     header.appendChild(headerRow);
-
-    // Names the tool the swatches will change, so the grid is never ambiguous about what it recolours.
-    const target = document.createElement('div');
-    target.className = 'pa-color-target';
-    target.setAttribute('aria-live', 'polite');
-    header.appendChild(target);
 
     this.colorPopover.appendChild(header);
 
@@ -948,31 +956,24 @@ export class FloatingToolbar {
       swatch.style.backgroundColor = color;
       swatch.dataset.color = color;
       swatch.setAttribute('aria-label', `Color ${color}`);
-      swatch.addEventListener('click', () => {
-        this.updateDrawingDefaults(
-          this.isHighlighterActive() ? { defaultHighlighterColor: color } : { defaultStrokeColor: color }
-        );
-      });
+      swatch.addEventListener('click', () => this.applyColor(color));
       grid.appendChild(swatch);
     }
     body.appendChild(grid);
 
     this.panels = {
-      strokeColor: this.buildColorRow('defaultStrokeColor'),
+      strokeColor: this.buildCustomColorSwatch('defaultStrokeColor'),
       strokeWidth: this.buildSliderField('defaultStrokeWidth', 1, 30),
-      hlColor: this.buildColorRow('defaultHighlighterColor'),
+      hlColor: this.buildCustomColorSwatch('defaultHighlighterColor'),
       hlWidth: this.buildSliderField('defaultHighlighterWidth', 8, 50),
       fontSize: this.buildSliderField('defaultFontSize', 12, 36),
       none: { root: this.buildNonePanel() },
     };
-    for (const entry of Object.values(this.panels)) body.appendChild(entry.root);
-
-    const footer = document.createElement('div');
-    footer.className = 'pa-popover-footer';
-    footer.appendChild(this.buildResetButton());
+    grid.appendChild(this.panels.strokeColor.root);
+    grid.appendChild(this.panels.hlColor.root);
+    for (const key of ['strokeWidth', 'hlWidth', 'fontSize', 'none'] as const) body.appendChild(this.panels[key].root);
 
     this.colorPopover.appendChild(body);
-    this.colorPopover.appendChild(footer);
 
     this.colorPopover.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
@@ -998,10 +999,6 @@ export class FloatingToolbar {
     emptyMsg.className = 'pa-tool-empty-msg';
     panel.appendChild(emptyMsg);
 
-    const switchPrompt = document.createElement('p');
-    switchPrompt.className = 'pa-tool-switch-prompt';
-    switchPrompt.textContent = 'Configure defaults for:';
-    panel.appendChild(switchPrompt);
 
     const quickTools = document.createElement('div');
     quickTools.className = 'pa-quick-tools';
@@ -1014,7 +1011,7 @@ export class FloatingToolbar {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'pa-quick-tool-btn';
-      btn.setAttribute('aria-label', `Configure ${label} defaults`);
+      btn.setAttribute('aria-label', `Switch to ${label}`);
       setMarkup(btn, ICONS[TOOL_INFO[tool].icon]);
       const span = document.createElement('span');
       span.textContent = label;
@@ -1029,37 +1026,27 @@ export class FloatingToolbar {
     return panel;
   }
 
-  /** A label + native color input pair inside the popover. */
-  private buildColorRow(setting: ColorSetting): PanelEntry {
-    const row = document.createElement('div');
-    row.className = 'pa-popover-row';
-
-    const name = document.createElement('span');
-    name.className = 'pa-popover-label';
+  /** The last swatch in the grid, which opens the browser's colour picker for any other colour. */
+  private buildCustomColorSwatch(setting: ColorSetting): PanelEntry {
+    const swatch = document.createElement('label');
+    swatch.className = 'pa-color-swatch pa-color-custom';
 
     const input = document.createElement('input');
     input.type = 'color';
     input.className = 'pa-popover-color';
     input.dataset.setting = setting;
+    input.setAttribute('aria-label', 'Custom colour');
     input.addEventListener('input', () => {
-      const isHlSetting = setting === 'defaultHighlighterColor';
-      if (isHlSetting) this.engine.setHighlighterColor(input.value);
+      if (this.styleTarget() === 'selection') return;
+      if (setting === 'defaultHighlighterColor') this.engine.setHighlighterColor(input.value);
       else this.engine.setStrokeColor(input.value);
-      if (isHlSetting === this.isHighlighterActive()) {
-        this.colorPreviewBtn.style.backgroundColor = input.value;
-      }
+      this.colorPreviewBtn.style.backgroundColor = input.value;
     });
-    input.addEventListener('change', () => {
-      const patch: Partial<ExtensionSettings> = {};
-      patch[setting] = input.value;
-      this.updateDrawingDefaults(patch);
-    });
+    input.addEventListener('change', () => this.applyColor(input.value));
 
-    row.appendChild(name);
-    row.appendChild(input);
+    swatch.appendChild(input);
     return {
-      root: row,
-      label: name,
+      root: swatch,
       input,
       sync: () => {
         input.value = this.settings[setting];
@@ -1119,7 +1106,8 @@ export class FloatingToolbar {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'pa-popover-reset';
-    button.textContent = 'Reset to defaults';
+    button.textContent = 'Reset';
+    button.setAttribute('aria-label', 'Reset colours and sizes to defaults');
     button.addEventListener('click', () =>
       this.updateDrawingDefaults({
         defaultStrokeColor: DEFAULT_SETTINGS.defaultStrokeColor,
@@ -1154,57 +1142,86 @@ export class FloatingToolbar {
     this.refreshColorControls();
   }
 
-  /** Keeps the color preview button, popover header, and panel in step with the active tool. */
+  /** With the select tool and drawings selected, colours apply to them instead of to a tool's defaults. */
+  private styleTarget(): StyleTarget {
+    const tool = this.engine.getTool();
+    if (tool === 'select' && this.engine.getSelectedElements().length > 0) return 'selection';
+    return TOOL_INFO[tool].category;
+  }
+
+  private applyColor(color: string): void {
+    const target = this.styleTarget();
+    if (target === 'selection') {
+      this.engine.recolorSelected(color);
+      this.refreshColorControls();
+      return;
+    }
+    this.updateDrawingDefaults(target === 'highlighter' ? { defaultHighlighterColor: color } : { defaultStrokeColor: color });
+  }
+
+  /** The colour the selection shares, or null when it mixes colours. */
+  private selectionColor(): string | null {
+    const colors = new Set(this.engine.getSelectedElements().map((el) => el.strokeColor.toLowerCase()));
+    return colors.size === 1 ? [...colors][0] : null;
+  }
+
+  /** Keeps the color preview button, popover header, and panel in step with the active tool or selection. */
   public refreshColorControls(): void {
+    const target = this.styleTarget();
     const tool = this.engine.getTool();
     const info = TOOL_INFO[tool];
-    const isNone = info.category === 'none';
+    const isNone = target === 'none';
     const color =
-      info.category === 'highlighter' ? this.settings.defaultHighlighterColor : this.settings.defaultStrokeColor;
+      target === 'selection'
+        ? this.selectionColor()
+        : target === 'highlighter'
+          ? this.settings.defaultHighlighterColor
+          : this.settings.defaultStrokeColor;
 
-    this.colorPreviewBtn.style.backgroundColor = color;
-    const title =
-      info.category === 'highlighter'
-        ? 'Highlighter defaults'
-        : info.category === 'pen'
-          ? 'Drawing defaults'
-          : `${info.label} defaults`;
+    this.colorPreviewBtn.style.backgroundColor = isNone ? '' : (color ?? '');
+    this.colorPreviewBtn.classList.toggle('is-empty', isNone);
+    this.colorPreviewBtn.classList.toggle('is-mixed', !isNone && color === null);
+    const title = BUTTON_LABELS[target];
     this.colorPreviewBtn.setAttribute('aria-label', title);
     const tip = childWithClass(this.colorPreviewBtn, 'pa-tooltip');
     if (tip) tip.textContent = title;
-    this.colorPopover.setAttribute('aria-label', `${info.label} defaults`);
+
+    const isSelection = target === 'selection';
+    this.colorPopover.setAttribute('aria-label', isSelection ? 'Selection colour' : `${info.label} settings`);
 
     const toolIcon = this.colorPopover.querySelector<HTMLElement>('.pa-popover-tool-icon');
-    if (toolIcon) setMarkup(toolIcon, ICONS[info.icon]);
+    if (toolIcon) setMarkup(toolIcon, ICONS[isSelection ? 'selectAll' : info.icon]);
     const toolName = this.colorPopover.querySelector('.pa-popover-tool-name');
-    if (toolName) toolName.textContent = info.label;
+    if (toolName) toolName.textContent = isSelection ? `${this.engine.getSelectedElements().length} selected` : info.label;
 
-    const target = this.colorPopover.querySelector<HTMLElement>('.pa-color-target');
-    if (target) {
-      target.textContent = info.targetText ?? `${info.label} ${isNone ? 'tool' : 'colours'}`;
-      target.style.display = isNone ? 'none' : 'block';
-    }
+    const reset = this.colorPopover.querySelector<HTMLElement>('.pa-popover-reset');
+    if (reset) reset.style.display = isNone || isSelection ? 'none' : '';
 
     const grid = this.colorPopover.querySelector<HTMLElement>('.pa-color-grid');
     if (grid) {
       grid.style.display = isNone ? 'none' : 'grid';
-      grid.setAttribute('aria-label', GRID_LABELS[info.category]);
+      grid.setAttribute('aria-label', GRID_LABELS[target]);
     }
 
-    const layout = PANEL_LAYOUT[info.category];
+    const layout = PANEL_LAYOUT[target];
     for (const [key, entry] of Object.entries(this.panels) as Array<[PanelControl, PanelEntry]>) {
       const label = layout[key];
-      entry.root.style.display = label === undefined ? 'none' : 'flex';
+      const shown = entry.root.classList.contains('pa-color-swatch') ? 'block' : 'flex';
+      entry.root.style.display = label === undefined ? 'none' : shown;
       if (!label) continue;
       if (entry.label) entry.label.textContent = label;
       entry.input?.setAttribute('aria-label', label);
     }
+    if (isSelection && color && this.panels.strokeColor.input) this.panels.strokeColor.input.value = color;
 
     const emptyMsg = this.colorPopover.querySelector('.pa-tool-empty-msg');
-    if (emptyMsg) emptyMsg.textContent = `${info.label} has no drawing color or width settings.`;
+    if (emptyMsg) {
+      emptyMsg.textContent =
+        tool === 'select' ? 'Select drawings to recolour them, or pick a tool.' : 'Pick a tool to set its colour and width.';
+    }
 
-    this.colorPopover.querySelectorAll<HTMLButtonElement>('.pa-color-swatch').forEach((swatch) => {
-      const isActive = swatch.dataset.color === color;
+    this.colorPopover.querySelectorAll<HTMLButtonElement>('button.pa-color-swatch').forEach((swatch) => {
+      const isActive = !!color && swatch.dataset.color === color.toLowerCase();
       swatch.classList.toggle('active', isActive);
       swatch.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
@@ -1306,6 +1323,23 @@ export class FloatingToolbar {
     if (tip) tip.replaceChildren(...Array.from(fresh.childNodes));
     else el.appendChild(fresh);
 
+    // Tool keys are printed on the button itself; combos like Ctrl + Z are too long and stay in the tooltip.
+    if (el.dataset.tool) {
+      const singleKey = keys && !keys.includes(' + ') ? keys : '';
+      let hint = childWithClass(el, 'pa-key-hint');
+      if (singleKey && !hint) {
+        hint = document.createElement('span');
+        hint.className = 'pa-key-hint';
+        hint.setAttribute('aria-hidden', 'true');
+        el.appendChild(hint);
+      }
+      if (hint) {
+        hint.textContent = singleKey;
+        hint.style.display = singleKey ? '' : 'none';
+      }
+      el.classList.toggle('has-key-hint', !!singleKey);
+    }
+
     const count = el === this.clearBtn ? this.engine.getElements().length : 0;
     const countText = count > 0 ? `, ${count} drawing${count === 1 ? '' : 's'}` : '';
     el.setAttribute('aria-label', `${label}${countText}${keys ? ` (${keys})` : ''}`);
@@ -1328,11 +1362,14 @@ export class FloatingToolbar {
     });
 
     // Shape tools live in a menu, so their trigger carries the active state on the bar.
-    const shapeTrigger = this.toolbar.querySelector<HTMLElement>('[data-action="shapes"]');
-    if (shapeTrigger) {
-      const isShapeActive = SHAPE_TOOLS.includes(current);
-      shapeTrigger.classList.toggle('active', isShapeActive);
-      shapeTrigger.setAttribute('aria-pressed', isShapeActive ? 'true' : 'false');
+    const isShapeActive = SHAPE_TOOLS.includes(current);
+    this.shapesTrigger.classList.toggle('active', isShapeActive);
+    this.shapesTrigger.setAttribute('aria-pressed', isShapeActive ? 'true' : 'false');
+    // The trigger shows the last shape used, so the bar always says which shape a press will draw.
+    if (isShapeActive) {
+      const [icon] = markupToNodes(ICONS[TOOL_INFO[current].icon]);
+      const svg = this.shapesTrigger.querySelector('svg');
+      if (icon && svg) svg.replaceWith(icon);
     }
 
     this.refreshColorControls();
@@ -1424,6 +1461,17 @@ export class FloatingToolbar {
     };
     this.wrapper.addEventListener('pointerenter', (e) => handleTooltipTarget(e.target), true);
     this.wrapper.addEventListener('focusin', (e) => handleTooltipTarget(e.target), true);
+    // A pressed button has done its job; its tooltip would only cover the menu, popover or toast it opened.
+    this.wrapper.addEventListener('pointerdown', (e) => {
+      if (e.target instanceof Element) e.target.closest('.pa-btn, .pa-color-preview-btn')?.classList.add('pa-tip-hidden');
+    });
+    this.wrapper.addEventListener(
+      'pointerleave',
+      (e) => {
+        if (e.target instanceof Element) e.target.classList.remove('pa-tip-hidden');
+      },
+      true
+    );
   }
 
   public adjustTooltipPosition(btn: HTMLElement, tip: HTMLElement): void {

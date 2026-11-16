@@ -88,6 +88,7 @@ export class CanvasEngine {
 
   private elements: AnchorElement[] = [];
   private selectedElements: AnchorElement[] = [];
+  private reportedSelection: { list: AnchorElement[]; size: number } = { list: [], size: 0 };
   private isDraggingSelected = false;
   private dragStartPoint: Point | null = null;
   /** Translation applied at render time while dragging; committed to the elements once on drop. */
@@ -379,6 +380,26 @@ export class CanvasEngine {
     this.replaceElements(replacements);
     this.emitChange();
     this.renderBase();
+  }
+
+  /** Recolours the selected drawings as one undoable change. Returns false when nothing is selected. */
+  public recolorSelected(color: string): boolean {
+    if (this.selectedElements.length === 0) return false;
+    const replacements = new Map<AnchorElement, AnchorElement>();
+    for (const el of this.selectedElements) {
+      if (el.strokeColor === color && (el.type !== 'text' || el.fontColor === color)) continue;
+      const recolored: AnchorElement = el.type === 'text' ? { ...el, strokeColor: color, fontColor: color } : { ...el, strokeColor: color };
+      if (el.type === 'pen' || el.type === 'highlighter') {
+        const outline = this.strokeOutlines.get(el);
+        if (outline) this.strokeOutlines.set(recolored as StrokeElement, outline);
+      }
+      replacements.set(el, recolored);
+    }
+    if (replacements.size === 0) return true;
+    this.replaceElements(replacements);
+    this.emitChange();
+    this.renderBase();
+    return true;
   }
 
   public deleteSelected(): void {
@@ -958,6 +979,14 @@ export class CanvasEngine {
 
     this.renderSelection(ctx, viewportBox);
     ctx.restore();
+    this.reportSelectionChange();
+  }
+
+  private reportSelectionChange(): void {
+    const { list, size } = this.reportedSelection;
+    if (list === this.selectedElements && size === list.length) return;
+    this.reportedSelection = { list: this.selectedElements, size: this.selectedElements.length };
+    this.callbacks.onSelectionChange?.();
   }
 
   private renderSingleElementWithOffset(ctx: CanvasRenderingContext2D, el: AnchorElement, eff: EffectiveBBox): void {

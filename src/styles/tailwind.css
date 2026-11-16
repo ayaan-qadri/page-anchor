@@ -4,19 +4,23 @@
  * Page Anchor design tokens.
  *
  * The palette is sampled from the brand mark: a periwinkle-blue nib, a violet
- * highlight and a mint counter, all resting on a near-black navy canvas. The
- * accent set stays deliberately small — one blue, one violet, one mint — so the
- * colour gradient reads as a signature rather than decoration.
+ * highlight and a mint counter. Dark is the base; a light set below follows the
+ * system theme so the settings page matches the in-page toolbar.
  */
 @theme {
-  --color-brand-bg: #0a0d16;
-  --color-brand-surface: #11141f;
-  --color-brand-surface-2: #161a27;
-  --color-brand-elevated: #1b2030;
+  --color-brand-bg: #0b0e17;
+  --color-brand-surface: #121623;
+  --color-brand-surface-2: #181d2c;
+  --color-brand-elevated: #1f2536;
 
   --color-brand-text: #e8eaf3;
-  --color-brand-muted: #99a1b8;
-  --color-brand-faint: #7c849e;
+  --color-brand-muted: #9aa3ba;
+  --color-brand-faint: #737c95;
+
+  --color-brand-line: rgba(255, 255, 255, 0.08);
+  --color-brand-line-strong: rgba(255, 255, 255, 0.14);
+  --color-brand-hover: rgba(255, 255, 255, 0.05);
+  --color-brand-keycap: #1d2333;
 
   --color-brand-blue: #5b8def;
   --color-brand-violet: #8b7ae0;
@@ -24,6 +28,7 @@
   --color-brand-accent: #3f63da;
   --color-brand-accent-hover: #3557c6;
   --color-brand-accent-soft: #a9c1f8;
+  --color-brand-accent-tint: rgba(91, 141, 239, 0.16);
   --color-brand-ring: #7ca5f7;
 
   --color-brand-danger: #e0576b;
@@ -41,8 +46,35 @@
     color-scheme: dark;
   }
 
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --color-brand-bg: #f5f6fa;
+      --color-brand-surface: #ffffff;
+      --color-brand-surface-2: #f0f2f7;
+      --color-brand-elevated: #1b2030;
+
+      --color-brand-text: #151b2b;
+      --color-brand-muted: #545e77;
+      --color-brand-faint: #78819a;
+
+      --color-brand-line: rgba(15, 23, 42, 0.09);
+      --color-brand-line-strong: rgba(15, 23, 42, 0.16);
+      --color-brand-hover: rgba(15, 23, 42, 0.04);
+      --color-brand-keycap: #ffffff;
+
+      --color-brand-accent-soft: #2f55cc;
+      --color-brand-accent-tint: rgba(63, 99, 218, 0.1);
+      --color-brand-ring: #3f6fe0;
+
+      --color-brand-danger: #d23c52;
+      --color-brand-danger-soft: #bf2f45;
+      --color-brand-warning-soft: #a86a12;
+      --color-brand-success: #128a48;
+    }
+  }
+
   ::selection {
     background: rgba(91, 141, 239, 0.35);
-    color: #ffffff;
   }
 }

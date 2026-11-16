@@ -8,7 +8,7 @@ import {
   loadSettings,
   saveSettings,
 } from '../../src/core/storage';
-import { ExtensionSettings, OrphanedAnchorMode, ShortcutAction, UrlMatchMode } from '../../src/types';
+import { ExtensionSettings, OrphanedAnchorMode, PageMetadataSummary, ShortcutAction, UrlMatchMode } from '../../src/types';
 import {
   canonicalizeShortcut,
   formatShortcutForDisplay,
@@ -33,28 +33,25 @@ interface ShortcutRow {
 
 let currentSettings: ExtensionSettings;
 let saveStatusEl: HTMLElement | null = null;
+let savedStatusTimer: number | null = null;
 const shortcutRecorder = new ShortcutRecorder();
-const dirtyKeys = new Set<EditableKey>();
 const shortcutRows = new Map<ShortcutAction, ShortcutRow>();
 let refusedShortcut: { id: ShortcutAction; message: string } | null = null;
+/** Deletions wait out their Undo window before touching storage. */
+const pendingDeletes = new Map<string, () => Promise<void>>();
 
-/* Shared Tailwind recipes for the rows the page builds in TypeScript. */
-const ROW = 'pa-row flex items-center justify-between gap-6 px-4.5 py-3.5 max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3';
-const ROW_TEXT = 'pa-row-text flex-[1_1_auto] min-w-0';
-const ROW_TITLE = 'pa-row-title block text-[13px] font-medium text-brand-text';
-const ROW_DESC = 'pa-row-desc mt-0.5 text-xs leading-[1.45] text-brand-muted';
-const ROW_CONTROL = 'pa-row-control flex-none flex items-center gap-3 max-[820px]:justify-start';
-const KEY_BADGE =
-  'pa-key-badge flex-none min-w-26 px-3 py-1.75 rounded-[9px] border border-white/10 bg-white/5 ' +
-  'text-brand-accent-soft font-mono text-xs font-semibold text-center cursor-pointer ' +
-  'transition-colors duration-130 hover:bg-white/9 hover:border-white/18 ' +
-  'data-[capturing=true]:bg-brand-danger/[0.12] data-[capturing=true]:border-brand-danger ' +
-  'data-[capturing=true]:text-brand-danger-soft data-[capturing=true]:animate-pulse ' +
-  'data-[conflict=true]:border-brand-warning data-[conflict=true]:text-brand-warning-soft';
+/** Shortcut cards, in the order they appear; every action belongs to exactly one. */
+const SHORTCUT_GROUPS: Array<{ label: string; ids: ShortcutAction[] }> = [
+  { label: 'Toolbar', ids: ['toggle-active', 'action-toggle-toolbar'] },
+  {
+    label: 'Tools',
+    ids: ['tool-select', 'tool-pen', 'tool-highlighter', 'tool-text', 'tool-eraser', 'tool-rect', 'tool-circle', 'tool-line', 'tool-arrow', 'tool-double-arrow'],
+  },
+  { label: 'Editing', ids: ['action-undo', 'action-redo', 'action-select-all', 'action-delete', 'action-clear'] },
+];
 
 export async function initOptions() {
   shortcutRecorder.stop();
-  dirtyKeys.clear();
   refusedShortcut = null;
   currentSettings = await loadSettings();
   saveStatusEl = document.getElementById('save-status');
@@ -65,46 +62,50 @@ export async function initOptions() {
   await renderSavedPages();
   setupBackupRestore();
 
-  // Any edit to a preference flips the header into an "unsaved" state so the
-  // Save button never feels like a shot in the dark.
-  const content = document.getElementById('main-settings-content');
-  content?.addEventListener('input', () => markDirty());
-  content?.addEventListener('change', () => markDirty());
-
-  document.getElementById('btn-save')?.addEventListener('click', async () => {
-    if (!(await saveCurrentSettings())) {
-      announce('Some shortcuts are used twice. Change them before saving.');
-      return;
-    }
-    markSaved();
-    showToast('Settings saved successfully!');
-  });
-
   document.getElementById('btn-reset-shortcuts')?.addEventListener('click', () => {
     shortcutRecorder.cancel();
-    if (confirm('Reset all shortcuts to factory defaults?')) {
-      currentSettings.shortcuts = { ...DEFAULT_SETTINGS.shortcuts };
-      refusedShortcut = null;
-      renderShortcuts();
-      markDirty('shortcuts');
-      announce('Shortcuts reset to defaults. Save to apply.');
-    }
+    const previous = { ...currentSettings.shortcuts };
+    setShortcuts({ ...DEFAULT_SETTINGS.shortcuts });
+    showToast('Shortcuts reset to defaults', 'Undo', () => setShortcuts(previous));
+  });
+
+  const flushDeletes = () => {
+    for (const commit of pendingDeletes.values()) void commit();
+  };
+  window.addEventListener('pagehide', flushDeletes);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushDeletes();
   });
 }
 
-/** Marks the settings as having unsaved edits (drives the header status). */
-function markDirty(key?: EditableKey) {
-  if (key) dirtyKeys.add(key);
-  if (!saveStatusEl) return;
-  saveStatusEl.dataset.state = 'dirty';
-  saveStatusEl.textContent = 'Unsaved changes';
+function setShortcuts(shortcuts: ExtensionSettings['shortcuts']): void {
+  currentSettings.shortcuts = shortcuts;
+  refusedShortcut = null;
+  renderShortcuts();
+  void persist('shortcuts');
 }
 
-/** Marks the settings as in sync with storage. */
+/** Saves one edited setting right away; the header briefly confirms it. */
+async function persist(key: EditableKey): Promise<void> {
+  if (key === 'shortcuts' && renderShortcutErrors()) return;
+  const patch: Partial<ExtensionSettings> = {};
+  copySetting(patch, key);
+  if (patch.shortcuts) patch.shortcuts = { ...patch.shortcuts };
+  await saveSettings(patch);
+  markSaved();
+}
+
 function markSaved() {
   if (!saveStatusEl) return;
   saveStatusEl.dataset.state = 'saved';
-  saveStatusEl.textContent = 'All changes saved';
+  saveStatusEl.textContent = 'Saved';
+  if (savedStatusTimer !== null) clearTimeout(savedStatusTimer);
+  savedStatusTimer = window.setTimeout(() => {
+    savedStatusTimer = null;
+    if (!saveStatusEl) return;
+    saveStatusEl.dataset.state = 'idle';
+    saveStatusEl.textContent = 'Changes save automatically';
+  }, 2000);
 }
 
 function announce(msg: string) {
@@ -129,6 +130,7 @@ function setupTabs() {
     });
     panes.forEach((p) => {
       p.classList.add('hidden');
+      p.classList.remove('flex');
       p.hidden = true;
     });
 
@@ -139,8 +141,10 @@ function setupTabs() {
     const targetPane = document.getElementById(targetId);
     if (targetPane) {
       targetPane.classList.remove('hidden');
+      targetPane.classList.add('flex');
       targetPane.hidden = false;
     }
+    window.scrollTo({ top: 0 });
 
     if (shouldFocus) {
       tab.focus();
@@ -176,44 +180,83 @@ function renderShortcuts() {
   container.replaceChildren();
   shortcutRows.clear();
 
-  SHORTCUT_DEFINITIONS.forEach((def) => {
-    const item = document.createElement('div');
-    item.className = ROW;
+  const grouped = new Set(SHORTCUT_GROUPS.flatMap((g) => g.ids));
+  const groups = [...SHORTCUT_GROUPS, { label: 'Other', ids: SHORTCUT_DEFINITIONS.map((d) => d.id).filter((id) => !grouped.has(id)) }];
 
-    const info = document.createElement('div');
-    info.className = ROW_TEXT;
-    const titleEl = document.createElement('span');
-    titleEl.className = ROW_TITLE;
-    titleEl.textContent = def.name;
-    const descEl = document.createElement('span');
-    descEl.className = ROW_DESC;
-    descEl.textContent = def.description;
-    info.replaceChildren(titleEl, descEl);
+  for (const group of groups) {
+    const defs = group.ids
+      .map((id) => SHORTCUT_DEFINITIONS.find((d) => d.id === id))
+      .filter((d): d is (typeof SHORTCUT_DEFINITIONS)[number] => !!d);
+    if (defs.length === 0) continue;
 
-    const error = document.createElement('span');
-    error.id = `shortcut-error-${def.id}`;
-    error.className = 'pa-shortcut-error mt-1 block text-xs font-medium text-brand-danger-soft';
-    error.hidden = true;
-    info.appendChild(error);
+    const section = document.createElement('section');
+    const heading = document.createElement('h3');
+    heading.className = 'pa-group-label';
+    heading.textContent = group.label;
+    const card = document.createElement('div');
+    card.className = 'pa-card pa-rows';
+    section.setAttribute('aria-label', `${group.label} shortcuts`);
+    section.append(heading, card);
+    container.appendChild(section);
 
-    const badge = document.createElement('button');
-    badge.type = 'button';
-    badge.className = KEY_BADGE;
-    badge.dataset.shortcutId = def.id;
-    badge.title = 'Click to record new keystroke (Esc to cancel)';
-    badge.addEventListener('click', (e) => {
-      e.stopPropagation();
-      startRecordingShortcut(def.id, badge);
-    });
-
-    shortcutRows.set(def.id, { badge, error });
-    renderShortcutBadge(def.id);
-
-    item.appendChild(info);
-    item.appendChild(badge);
-    container.appendChild(item);
-  });
+    for (const def of defs) card.appendChild(buildShortcutRow(def));
+  }
   renderShortcutErrors();
+}
+
+function buildShortcutRow(def: (typeof SHORTCUT_DEFINITIONS)[number]): HTMLElement {
+  const item = document.createElement('div');
+  item.className = 'pa-row !py-3';
+
+  const info = document.createElement('div');
+  info.className = 'pa-row-text';
+  const titleEl = document.createElement('span');
+  titleEl.className = 'pa-row-title';
+  titleEl.textContent = def.name;
+  const descEl = document.createElement('span');
+  descEl.className = 'pa-row-desc block !mt-0.5';
+  descEl.textContent = def.description;
+  info.replaceChildren(titleEl, descEl);
+
+  const error = document.createElement('span');
+  error.id = `shortcut-error-${def.id}`;
+  error.className = 'pa-shortcut-error mt-1.5 block text-[13px] font-medium text-brand-danger-soft';
+  error.hidden = true;
+  info.appendChild(error);
+
+  const badge = document.createElement('button');
+  badge.type = 'button';
+  badge.className = 'pa-key-badge';
+  badge.dataset.shortcutId = def.id;
+  badge.title = 'Click, then press the new keys (Esc to cancel)';
+  badge.addEventListener('click', (e) => {
+    e.stopPropagation();
+    startRecordingShortcut(def.id, badge);
+  });
+
+  shortcutRows.set(def.id, { badge, error });
+  renderShortcutBadge(def.id);
+
+  item.appendChild(info);
+  item.appendChild(badge);
+  return item;
+}
+
+/** Shows each key as its own keycap; the text still reads "Ctrl + Z" for tests and assistive tech. */
+function renderKeycaps(target: HTMLElement, display: string): void {
+  target.replaceChildren();
+  display.split(' + ').forEach((key, i) => {
+    if (i > 0) {
+      const plus = document.createElement('span');
+      plus.className = 'pa-key-plus';
+      plus.textContent = ' + ';
+      target.appendChild(plus);
+    }
+    const cap = document.createElement('kbd');
+    cap.className = 'pa-keycap';
+    cap.textContent = key;
+    target.appendChild(cap);
+  });
 }
 
 function shortcutName(id: ShortcutAction): string {
@@ -238,7 +281,7 @@ function renderShortcutBadge(id: ShortcutAction): void {
   const row = shortcutRows.get(id);
   if (!row) return;
   const display = formatShortcutForDisplay(bindingOf(id));
-  row.badge.textContent = display;
+  renderKeycaps(row.badge, display);
   row.badge.setAttribute('aria-label', `Rebind shortcut for ${shortcutName(id)}. Current shortcut is ${display}`);
 }
 
@@ -269,13 +312,8 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
   renderShortcutErrors();
 
   const setConflict = (on: boolean) => {
-    if (on) {
-      btn.dataset.conflict = 'true';
-      btn.classList.add('border-amber-500', 'text-amber-400');
-    } else {
-      delete btn.dataset.conflict;
-      btn.classList.remove('border-amber-500', 'text-amber-400');
-    }
+    if (on) btn.dataset.conflict = 'true';
+    else delete btn.dataset.conflict;
   };
 
   btn.dataset.capturing = 'true';
@@ -308,7 +346,7 @@ function startRecordingShortcut(actionId: ShortcutAction, btn: HTMLElement) {
     currentSettings.shortcuts[actionId] = combo;
     renderShortcutBadge(actionId);
     renderShortcutErrors();
-    markDirty('shortcuts');
+    void persist('shortcuts');
 
     if (conflict) {
       setConflict(true);
@@ -332,22 +370,22 @@ function setupPersistenceForm() {
 
   matchMode.addEventListener('change', () => {
     currentSettings.urlMatchMode = matchMode.value as UrlMatchMode;
-    markDirty('urlMatchMode');
+    void persist('urlMatchMode');
   });
 
   strokeSimplification.addEventListener('change', () => {
     currentSettings.strokeSimplification = strokeSimplification.checked;
-    markDirty('strokeSimplification');
+    void persist('strokeSimplification');
   });
 
   domAnchorMode?.addEventListener('change', () => {
     currentSettings.domAnchoringEnabled = domAnchorMode.checked;
-    markDirty('domAnchoringEnabled');
+    void persist('domAnchoringEnabled');
   });
 
   orphanMode?.addEventListener('change', () => {
     currentSettings.orphanedAnchorMode = orphanMode.value as OrphanedAnchorMode;
-    markDirty('orphanedAnchorMode');
+    void persist('orphanedAnchorMode');
   });
 }
 
@@ -369,14 +407,17 @@ async function renderSavedPages() {
   const countBadge = document.getElementById('saved-count');
   if (!listContainer) return;
 
-  const pages = await getAllSavedPagesSummary();
+  const pages = (await getAllSavedPagesSummary()).filter((page) => !pendingDeletes.has(page.normalizedUrl));
   if (countBadge) countBadge.textContent = `${pages.length}`;
 
   if (pages.length === 0) {
     listContainer.replaceChildren();
     appendMarkup(
       listContainer,
-      '<div class="pa-empty p-4.5 text-[13px] text-brand-muted text-center">No saved annotations yet. Draw on any web page and it will appear here.</div>'
+      '<div class="pa-empty flex flex-col items-center gap-1 px-6 py-12 text-center">' +
+        '<p class="text-[15px] font-semibold text-brand-text">No saved pages yet</p>' +
+        '<p class="text-[13px] text-brand-muted">Draw on any web page and it will show up here.</p>' +
+        '</div>'
     );
     return;
   }
@@ -384,10 +425,16 @@ async function renderSavedPages() {
   listContainer.replaceChildren();
   pages.forEach((page) => {
     const item = document.createElement('div');
-    item.className = ROW;
+    item.className = 'pa-row !justify-start !gap-4 max-[820px]:!flex-row max-[820px]:!items-center';
+
+    const avatar = document.createElement('div');
+    avatar.className =
+      'flex-none flex items-center justify-center w-10 h-10 rounded-xl bg-brand-accent-tint text-brand-accent-soft text-[15px] font-semibold uppercase';
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.textContent = siteInitial(page.url, page.pageTitle);
 
     const info = document.createElement('div');
-    info.className = ROW_TEXT;
+    info.className = 'pa-row-text';
 
     const dateStr = new Date(page.updatedAt).toLocaleDateString(undefined, {
       month: 'short',
@@ -399,14 +446,14 @@ async function renderSavedPages() {
     const title = page.pageTitle || 'Untitled Page';
 
     const titleEl = document.createElement('div');
-    titleEl.className = `pa-saved-title ${ROW_TITLE}`;
+    titleEl.className = 'pa-saved-title pa-row-title truncate';
     titleEl.textContent = title;
 
     // Only http(s) URLs become links; a stored URL can come from an untrusted backup.
     const isLink = isSafeHttpUrl(page.url);
     const urlEl = document.createElement(isLink ? 'a' : 'span');
     urlEl.className =
-      'pa-saved-url block text-xs text-brand-accent-soft max-w-[46ch] truncate' + (isLink ? ' hover:underline' : '');
+      'pa-saved-url block mt-0.5 text-[13px] text-brand-accent-soft max-w-[52ch] truncate' + (isLink ? ' hover:underline' : '');
     urlEl.textContent = page.url;
     if (urlEl instanceof HTMLAnchorElement) {
       urlEl.href = page.url;
@@ -416,34 +463,66 @@ async function renderSavedPages() {
     }
 
     const metaEl = document.createElement('div');
-    metaEl.className = `pa-saved-meta ${ROW_DESC}`;
-    const elementLabel = `${page.elementCount} element${page.elementCount === 1 ? '' : 's'}`;
-    metaEl.textContent = `${elementLabel} • ${formatBytes(page.bytes ?? 0)} • Last updated ${dateStr}`;
+    metaEl.className = 'pa-saved-meta mt-1 text-xs text-brand-faint';
+    const elementLabel = `${page.elementCount} drawing${page.elementCount === 1 ? '' : 's'}`;
+    metaEl.textContent = `${elementLabel} · ${formatBytes(page.bytes ?? 0)} · Updated ${dateStr}`;
 
     info.appendChild(titleEl);
     info.appendChild(urlEl);
     info.appendChild(metaEl);
 
     const actions = document.createElement('div');
-    actions.className = `pa-saved-actions ${ROW_CONTROL}`;
+    actions.className = 'pa-saved-actions pa-row-control ml-auto';
 
     const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'pa-btn-danger px-3 py-1.5 rounded-lg border border-brand-danger/35 bg-brand-danger/10 text-xs font-semibold text-brand-danger-soft cursor-pointer transition-colors duration-130 ease-out hover:bg-brand-danger/20 hover:border-brand-danger/50';
-    deleteBtn.textContent = 'Delete';
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'pa-btn-danger';
+    appendMarkup(
+      deleteBtn,
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
+    );
+    deleteBtn.append('Delete');
     deleteBtn.setAttribute('aria-label', `Delete saved drawings for ${page.pageTitle || page.url}`);
-    deleteBtn.addEventListener('click', async () => {
-      if (confirm(`Remove all drawings for "${page.pageTitle || page.url}"?`)) {
-        await clearPageData(page.url, page.normalizedUrl);
-        await renderSavedPages();
-        announce(`Deleted annotations for ${page.pageTitle || page.url}`);
-      }
-    });
+    deleteBtn.addEventListener('click', () => deleteSavedPage(page));
 
     actions.appendChild(deleteBtn);
+    item.appendChild(avatar);
     item.appendChild(info);
     item.appendChild(actions);
     listContainer.appendChild(item);
   });
+}
+
+function siteInitial(url: string, title: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '').charAt(0) || '?';
+  } catch {
+    return title.trim().charAt(0) || '?';
+  }
+}
+
+/** Hides the page at once and only deletes it once the Undo window has passed. */
+async function deleteSavedPage(page: PageMetadataSummary): Promise<void> {
+  const key = page.normalizedUrl;
+  let done = false;
+  const commit = async () => {
+    if (done) return;
+    done = true;
+    pendingDeletes.delete(key);
+    await clearPageData(page.url, page.normalizedUrl);
+  };
+  pendingDeletes.set(key, commit);
+  await renderSavedPages();
+  showToast(
+    `Drawings removed from ${page.pageTitle || page.url}`,
+    'Undo',
+    async () => {
+      done = true;
+      pendingDeletes.delete(key);
+      await renderSavedPages();
+    },
+    () => void commit()
+  );
 }
 
 function setupBackupRestore() {
@@ -486,7 +565,6 @@ function setupBackupRestore() {
         announce('Backup restored successfully!');
         shortcutRecorder.cancel();
         currentSettings = await loadSettings();
-        dirtyKeys.clear();
         refusedShortcut = null;
         renderShortcuts();
         syncPersistenceFormValues();
@@ -510,27 +588,45 @@ function copySetting<K extends EditableKey>(target: Partial<ExtensionSettings>, 
   target[key] = currentSettings[key];
 }
 
-/** Writes only the keys edited here, so changes made in open tabs meanwhile are kept. Refuses while a shortcut is shared. */
-async function saveCurrentSettings(): Promise<boolean> {
-  refusedShortcut = null;
-  if (renderShortcutErrors()) return false;
-  const patch: Partial<ExtensionSettings> = {};
-  for (const key of dirtyKeys) copySetting(patch, key);
-  if (patch.shortcuts) patch.shortcuts = { ...patch.shortcuts };
-  if (Object.keys(patch).length > 0) await saveSettings(patch);
-  dirtyKeys.clear();
-  return true;
-}
+let activeToast: { el: HTMLElement; finish: () => void } | null = null;
 
-function showToast(msg: string) {
+/** A short notice with an optional action; `onExpire` runs when it closes without the action being used. */
+function showToast(msg: string, actionLabel?: string, onAction?: () => void | Promise<void>, onExpire?: () => void) {
+  activeToast?.finish();
   announce(msg);
   const toast = document.createElement('div');
   toast.setAttribute('role', 'status');
-  toast.setAttribute('aria-live', 'polite');
-  toast.className = 'fixed bottom-6 right-6 bg-brand-success text-brand-bg px-4.5 py-2.5 rounded-lg font-semibold shadow-xl shadow-black/40 z-9999 transition-all';
-  toast.textContent = msg;
+  toast.className =
+    'pa-toast fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 max-w-[min(560px,calc(100vw-32px))] ' +
+    'pl-4.5 pr-2 py-2 rounded-xl bg-brand-elevated text-[#eef0f6] text-sm font-medium shadow-2xl shadow-black/30 z-9999';
+  const text = document.createElement('span');
+  text.className = 'truncate';
+  text.textContent = msg;
+  toast.appendChild(text);
+
+  let timer = 0;
+  const finish = (expired = true) => {
+    clearTimeout(timer);
+    toast.remove();
+    if (activeToast?.el === toast) activeToast = null;
+    if (expired) onExpire?.();
+  };
+  if (actionLabel && onAction) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className =
+      'pa-toast-btn flex-none px-3 py-1.5 rounded-lg border-none bg-white/10 text-[#b9cdfa] text-[13px] font-semibold cursor-pointer hover:bg-white/16';
+    btn.textContent = actionLabel;
+    btn.addEventListener('click', () => {
+      finish(false);
+      void onAction();
+      announce('Undone');
+    });
+    toast.appendChild(btn);
+  }
   document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 2500);
+  timer = window.setTimeout(() => finish(), actionLabel ? 6000 : 2500);
+  activeToast = { el: toast, finish };
 }
 
 document.addEventListener('DOMContentLoaded', initOptions);

@@ -3,194 +3,199 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Page Anchor - Settings & Preferences</title>
+    <meta name="color-scheme" content="light dark" />
+    <title>Page Anchor - Settings</title>
     <!-- WXT entrypoint option: open the settings page in its own tab instead of
          embedding it inside the browser's add-ons manager. -->
     <meta name="manifest.open_in_tab" content="true" />
     <link rel="icon" type="image/png" href="/icon-128.png" />
     <link rel="stylesheet" href="./options.css" />
   </head>
-  <body class="bg-brand-bg text-brand-text font-sans text-sm leading-relaxed m-0 p-0 antialiased">
-    <a href="#main-settings-content" class="pa-skip-link absolute -top-16 left-5 z-99999 rounded-lg bg-brand-accent px-4.5 py-2.5 text-xs font-bold text-white shadow-xl shadow-black/50 transition-[top] duration-150 ease-out focus:top-4">Skip to settings content</a>
+  <body class="m-0 p-0">
+    <a href="#main-settings-content" class="pa-skip-link absolute -top-16 left-5 z-99999 rounded-lg bg-brand-accent px-4 py-2.5 text-sm font-semibold text-white transition-[top] duration-150 ease-out focus:top-4 focus:shadow-xl">Skip to settings content</a>
 
-    <header class="pa-appbar sticky top-0 z-20 flex items-center justify-between gap-5 py-3.5 px-[max(28px,calc((100vw-960px)/2+28px))] border-b border-white/[0.07] bg-brand-bg/82 backdrop-blur-[14px] backdrop-saturate-[1.6] max-[820px]:px-4.5">
-      <div class="pa-appbar-brand flex items-center gap-3 min-w-0">
-        <div class="pa-brand-icon w-8.5 h-8.5 rounded-[10px] overflow-hidden flex items-center justify-center bg-brand-surface ring-1 ring-white/10" aria-hidden="true">
-          <img src="/icon-128.png" alt="" width="34" height="34" class="block w-full h-full" />
+    <header class="pa-appbar sticky top-0 z-20 border-b border-brand-line bg-brand-bg/85 backdrop-blur-md">
+      <div class="flex items-center justify-between gap-5 max-w-[1040px] mx-auto px-8 py-4 max-[820px]:px-5">
+        <div class="pa-appbar-brand flex items-center gap-3 min-w-0">
+          <div class="pa-brand-icon w-9 h-9 rounded-[10px] overflow-hidden flex items-center justify-center bg-brand-elevated ring-1 ring-brand-line" aria-hidden="true">
+            <img src="/icon-128.png" alt="" width="36" height="36" class="block w-full h-full" />
+          </div>
+          <div class="pa-appbar-titles">
+            <h1 class="text-base font-semibold tracking-[-0.01em] text-brand-text leading-tight">Page Anchor</h1>
+            <p class="text-[13px] text-brand-muted leading-tight mt-0.5 max-[520px]:hidden">Settings</p>
+          </div>
         </div>
-        <div class="pa-appbar-titles">
-          <h1 class="text-[15px] font-semibold tracking-[-0.015em] text-brand-text leading-[1.2]">Page Anchor</h1>
-          <p class="text-xs text-brand-faint leading-[1.3] max-[520px]:hidden">Settings &amp; preferences</p>
-        </div>
-      </div>
 
-      <div class="pa-appbar-actions flex items-center gap-3.5">
-        <span id="save-status" class="pa-save-status inline-flex items-center gap-1.5 text-xs font-medium text-brand-faint whitespace-nowrap before:content-[''] before:w-1.5 before:h-1.5 before:rounded-full before:bg-current before:opacity-70 data-[state=dirty]:text-brand-warning-soft data-[state=saved]:text-brand-faint max-[820px]:hidden" data-state="saved" role="status" aria-live="polite">All changes saved</span>
-        <button id="btn-save" class="pa-btn pa-btn-primary inline-flex items-center justify-center gap-1.75 px-3.5 py-2 rounded-[9px] border border-transparent bg-brand-accent text-white text-[12.5px] font-semibold cursor-pointer transition-colors duration-130 hover:bg-brand-accent-hover">Save changes</button>
+        <span id="save-status" class="pa-save-status inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-line bg-brand-surface text-xs font-medium text-brand-muted whitespace-nowrap before:content-[''] before:w-1.5 before:h-1.5 before:rounded-full before:bg-current data-[state=saved]:text-brand-success data-[state=saved]:border-brand-success/30 max-[520px]:hidden" data-state="idle" role="status" aria-live="polite">Changes save automatically</span>
       </div>
     </header>
 
-    <div class="pa-layout grid grid-cols-[216px_minmax(0,1fr)] items-start gap-8 max-w-240 mx-auto px-7 pt-7 pb-18 max-[820px]:grid-cols-[minmax(0,1fr)] max-[820px]:gap-5 max-[820px]:px-4.5 max-[820px]:pt-5 max-[820px]:pb-14">
-      <nav class="pa-sidenav sticky top-20.5 max-[820px]:static" aria-label="Settings">
-        <div class="pa-tabs flex flex-col gap-0.5 max-[820px]:flex-row max-[820px]:gap-1 max-[820px]:overflow-x-auto max-[820px]:pb-1" role="tablist" aria-label="Settings categories">
-          <button role="tab" id="tab-btn-shortcuts" class="pa-tab-btn group flex items-center gap-2.5 w-full px-2.75 py-2.25 border-none rounded-[10px] bg-transparent text-brand-muted text-[13px] font-medium text-left cursor-pointer transition-colors duration-130 hover:text-brand-text hover:bg-white/4.5 aria-selected:text-brand-text aria-selected:bg-brand-blue/16 max-[820px]:w-auto max-[820px]:flex-none max-[820px]:whitespace-nowrap" data-tab="shortcuts" aria-selected="true" aria-controls="tab-shortcuts" tabindex="0">
-            <svg class="pa-tab-icon flex-none opacity-85 group-aria-selected:text-brand-accent-soft group-aria-selected:opacity-100" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>
+    <div class="pa-layout grid grid-cols-[220px_minmax(0,1fr)] items-start gap-12 max-w-[1040px] mx-auto px-8 pt-10 pb-24 max-[820px]:grid-cols-[minmax(0,1fr)] max-[820px]:gap-6 max-[820px]:px-5 max-[820px]:pt-6">
+      <nav class="pa-sidenav sticky top-24 max-[820px]:static" aria-label="Settings">
+        <div class="pa-tabs flex flex-col gap-1 max-[820px]:flex-row max-[820px]:overflow-x-auto max-[820px]:pb-1" role="tablist" aria-label="Settings categories">
+          <button role="tab" id="tab-btn-shortcuts" class="pa-tab-btn max-[820px]:w-auto max-[820px]:flex-none max-[820px]:whitespace-nowrap" data-tab="shortcuts" aria-selected="true" aria-controls="tab-shortcuts" tabindex="0">
+            <svg class="pa-tab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>
             <span>Keyboard shortcuts</span>
           </button>
-          <button role="tab" id="tab-btn-persistence" class="pa-tab-btn group flex items-center gap-2.5 w-full px-2.75 py-2.25 border-none rounded-[10px] bg-transparent text-brand-muted text-[13px] font-medium text-left cursor-pointer transition-colors duration-130 hover:text-brand-text hover:bg-white/4.5 aria-selected:text-brand-text aria-selected:bg-brand-blue/16 max-[820px]:w-auto max-[820px]:flex-none max-[820px]:whitespace-nowrap" data-tab="persistence" aria-selected="false" aria-controls="tab-persistence" tabindex="-1">
-            <svg class="pa-tab-icon flex-none opacity-85 group-aria-selected:text-brand-accent-soft group-aria-selected:opacity-100" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
-            <span>Persistence &amp; matching</span>
+          <button role="tab" id="tab-btn-persistence" class="pa-tab-btn max-[820px]:w-auto max-[820px]:flex-none max-[820px]:whitespace-nowrap" data-tab="persistence" aria-selected="false" aria-controls="tab-persistence" tabindex="-1">
+            <svg class="pa-tab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
+            <span>Drawings &amp; pages</span>
           </button>
-          <button role="tab" id="tab-btn-saved-pages" class="pa-tab-btn group flex items-center gap-2.5 w-full px-2.75 py-2.25 border-none rounded-[10px] bg-transparent text-brand-muted text-[13px] font-medium text-left cursor-pointer transition-colors duration-130 hover:text-brand-text hover:bg-white/4.5 aria-selected:text-brand-text aria-selected:bg-brand-blue/16 max-[820px]:w-auto max-[820px]:flex-none max-[820px]:whitespace-nowrap" data-tab="saved-pages" aria-selected="false" aria-controls="tab-saved-pages" tabindex="-1">
-            <svg class="pa-tab-icon flex-none opacity-85 group-aria-selected:text-brand-accent-soft group-aria-selected:opacity-100" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+          <button role="tab" id="tab-btn-saved-pages" class="pa-tab-btn max-[820px]:w-auto max-[820px]:flex-none max-[820px]:whitespace-nowrap" data-tab="saved-pages" aria-selected="false" aria-controls="tab-saved-pages" tabindex="-1">
+            <svg class="pa-tab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
             <span>Saved pages</span>
-            <span id="saved-count" class="pa-tab-count ml-auto px-1.75 py-px rounded-full bg-white/8 text-brand-muted text-[11px] font-semibold tabular-nums group-aria-selected:bg-white/[0.14] group-aria-selected:text-brand-text max-[820px]:ml-0.5">0</span>
+            <span id="saved-count" class="pa-tab-count ml-auto min-w-6 px-1.5 py-0.5 rounded-full bg-brand-hover text-brand-muted text-xs font-semibold text-center tabular-nums max-[820px]:ml-1">0</span>
           </button>
-          <button role="tab" id="tab-btn-backup" class="pa-tab-btn group flex items-center gap-2.5 w-full px-2.75 py-2.25 border-none rounded-[10px] bg-transparent text-brand-muted text-[13px] font-medium text-left cursor-pointer transition-colors duration-130 hover:text-brand-text hover:bg-white/4.5 aria-selected:text-brand-text aria-selected:bg-brand-blue/16 max-[820px]:w-auto max-[820px]:flex-none max-[820px]:whitespace-nowrap" data-tab="backup" aria-selected="false" aria-controls="tab-backup" tabindex="-1">
-            <svg class="pa-tab-icon flex-none opacity-85 group-aria-selected:text-brand-accent-soft group-aria-selected:opacity-100" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+          <button role="tab" id="tab-btn-backup" class="pa-tab-btn max-[820px]:w-auto max-[820px]:flex-none max-[820px]:whitespace-nowrap" data-tab="backup" aria-selected="false" aria-controls="tab-backup" tabindex="-1">
+            <svg class="pa-tab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
             <span>Backup &amp; restore</span>
           </button>
         </div>
       </nav>
 
-      <main id="main-settings-content" class="pa-content flex flex-col gap-4.5 min-w-0 outline-none" tabindex="-1">
-        <section role="tabpanel" id="tab-shortcuts" class="pa-tab-pane" aria-labelledby="tab-btn-shortcuts" tabindex="0">
+      <main id="main-settings-content" class="pa-content min-w-0 outline-none" tabindex="-1">
+        <section role="tabpanel" id="tab-shortcuts" class="pa-tab-pane flex flex-col gap-7" aria-labelledby="tab-btn-shortcuts" tabindex="0">
           <div class="pa-pane-head">
-            <h2 class="text-[17px] font-semibold tracking-[-0.015em] text-brand-text">Keyboard shortcuts</h2>
-            <p class="mt-1 text-[13px] text-brand-muted max-w-[60ch]">Click any key combination and press the keys you want to use. Press Esc to cancel.</p>
+            <h2>Keyboard shortcuts</h2>
+            <p>Click a shortcut, then press the keys you want to use. Press Esc to cancel.</p>
           </div>
-          <div class="pa-card border border-white/[0.07] rounded-[14px] bg-white/[0.022] overflow-hidden">
-            <div id="shortcuts-container" class="pa-rows flex flex-col [&>*+*]:border-t [&>*+*]:border-white/6"></div>
-          </div>
-          <div class="pa-pane-footer flex justify-start">
-            <button id="btn-reset-shortcuts" class="pa-btn inline-flex items-center justify-center gap-1.75 px-3.5 py-2 rounded-[9px] border border-white/10 bg-white/6 text-brand-text text-[12.5px] font-semibold cursor-pointer transition-colors duration-130 hover:bg-white/10 hover:border-white/18">Reset shortcuts to default</button>
+          <div id="shortcuts-container" class="flex flex-col gap-6"></div>
+          <div class="pa-pane-footer">
+            <button id="btn-reset-shortcuts" class="pa-btn pa-btn-secondary">Reset all shortcuts</button>
           </div>
         </section>
 
-        <section role="tabpanel" id="tab-persistence" class="pa-tab-pane hidden" aria-labelledby="tab-btn-persistence" tabindex="0" hidden>
+        <section role="tabpanel" id="tab-persistence" class="pa-tab-pane hidden flex-col gap-7" aria-labelledby="tab-btn-persistence" tabindex="0" hidden>
           <div class="pa-pane-head">
-            <h2 class="text-[17px] font-semibold tracking-[-0.015em] text-brand-text">Persistence &amp; matching</h2>
-            <p class="mt-1 text-[13px] text-brand-muted max-w-[60ch]">Control how drawings attach to pages and how they behave when content moves.</p>
+            <h2>Drawings &amp; pages</h2>
+            <p>Choose which pages share drawings and how drawings follow the content they were made on.</p>
           </div>
 
-          <div class="pa-card border border-white/[0.07] rounded-[14px] bg-white/[0.022] overflow-hidden">
-            <div class="pa-card-head px-4.5 pt-3.75 pb-3.25 border-b border-white/6">
-              <h3 class="text-[13.5px] font-semibold text-brand-text">URL matching</h3>
-              <p class="mt-0.75 text-[12.5px] text-brand-muted max-w-[62ch]">Decides which pages a drawing belongs to.</p>
-            </div>
-            <div class="pa-rows flex flex-col [&>*+*]:border-t [&>*+*]:border-white/6">
-              <div class="pa-row flex items-center justify-between gap-6 px-4.5 py-3.5 max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3">
-                <div class="pa-row-text flex-[1_1_auto] min-w-0">
-                  <label class="pa-row-title block text-[13px] font-medium text-brand-text" for="pref-url-match-mode">Match mode</label>
-                  <p class="pa-row-desc mt-0.5 text-xs leading-[1.45] text-brand-muted" id="pref-url-match-hint">Clean ignores tracking parameters so drawings stay attached; Exact keeps every parameter; Entire domain shares drawings across the whole site.</p>
+          <div class="flex flex-col gap-5">
+            <div class="pa-card">
+              <div class="pa-card-head">
+                <h3>Which pages share drawings</h3>
+              </div>
+              <div class="pa-rows">
+                <div class="pa-row">
+                  <div class="pa-row-text">
+                    <label class="pa-row-title" for="pref-url-match-mode">Match pages by</label>
+                    <p class="pa-row-desc" id="pref-url-match-hint">Clean URL ignores tracking parameters, so drawings stay put. Exact URL keeps every parameter. Entire domain shows the same drawings across a whole site.</p>
+                  </div>
+                  <div class="pa-row-control">
+                    <div class="relative w-64 max-[820px]:w-full">
+                      <select id="pref-url-match-mode" class="pa-select" aria-describedby="pref-url-match-hint">
+                        <option value="clean">Clean URL (recommended)</option>
+                        <option value="exact">Exact URL</option>
+                        <option value="domain">Entire domain</option>
+                      </select>
+                      <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+                  </div>
                 </div>
-                <div class="pa-row-control flex-none flex items-center gap-3 max-[820px]:justify-start">
-                  <div class="relative w-65 max-w-[46vw] max-[820px]:w-full max-[820px]:max-w-none">
-                    <select id="pref-url-match-mode" class="pa-select w-full appearance-none pl-2.75 pr-8 py-2 border border-white/10 rounded-[9px] bg-white/4 text-brand-text text-[12.5px] cursor-pointer transition-colors duration-130 hover:border-white/18" aria-describedby="pref-url-match-hint">
-                      <option value="clean">Clean URL (default)</option>
-                      <option value="exact">Exact URL</option>
-                      <option value="domain">Entire domain</option>
-                    </select>
-                    <svg class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>
+              </div>
+            </div>
+
+            <div class="pa-card">
+              <div class="pa-card-head">
+                <h3>Keep drawings attached to content</h3>
+              </div>
+              <div class="pa-rows">
+                <div class="pa-row">
+                  <div class="pa-row-text">
+                    <label class="pa-row-title" for="pref-dom-anchoring">Smart anchoring</label>
+                    <p class="pa-row-desc">Drawings move with the cards, comments and sections they were drawn on, instead of staying at a fixed spot.</p>
+                  </div>
+                  <div class="pa-row-control">
+                    <label class="pa-switch">
+                      <input type="checkbox" id="pref-dom-anchoring" class="absolute inset-0 w-full h-full m-0 opacity-0 cursor-pointer peer" checked />
+                      <span class="pa-switch-track" aria-hidden="true"></span>
+                    </label>
+                  </div>
+                </div>
+                <div class="pa-row">
+                  <div class="pa-row-text">
+                    <label class="pa-row-title" for="pref-orphan-mode">When that content is gone</label>
+                    <p class="pa-row-desc" id="pref-orphan-hint">For example when an item is closed, filtered out or removed from the page.</p>
+                  </div>
+                  <div class="pa-row-control">
+                    <div class="relative w-64 max-[820px]:w-full">
+                      <select id="pref-orphan-mode" class="pa-select" aria-describedby="pref-orphan-hint">
+                        <option value="hide">Hide until it comes back</option>
+                        <option value="dimmed">Keep showing, faded</option>
+                      </select>
+                      <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="pa-card">
+              <div class="pa-card-head">
+                <h3>Performance</h3>
+              </div>
+              <div class="pa-rows">
+                <div class="pa-row">
+                  <div class="pa-row-text">
+                    <label class="pa-row-title" for="pref-stroke-simplification">Lighter pen strokes</label>
+                    <p class="pa-row-desc">Stores freehand strokes with fewer points so pages with many drawings stay fast. Very fine detail may soften slightly.</p>
+                  </div>
+                  <div class="pa-row-control">
+                    <label class="pa-switch">
+                      <input type="checkbox" id="pref-stroke-simplification" class="absolute inset-0 w-full h-full m-0 opacity-0 cursor-pointer peer" checked />
+                      <span class="pa-switch-track" aria-hidden="true"></span>
+                    </label>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+        </section>
 
-          <div class="pa-card border border-white/[0.07] rounded-[14px] bg-white/[0.022] overflow-hidden">
-            <div class="pa-card-head px-4.5 pt-3.75 pb-3.25 border-b border-white/6">
-              <h3 class="text-[13.5px] font-semibold text-brand-text">Element anchoring</h3>
-              <p class="mt-0.75 text-[12.5px] text-brand-muted max-w-[62ch]">Pins drawings to page content so they survive layout shifts.</p>
-            </div>
-            <div class="pa-rows flex flex-col [&>*+*]:border-t [&>*+*]:border-white/6">
-              <div class="pa-row flex items-center justify-between gap-6 px-4.5 py-3.5 max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3">
-                <div class="pa-row-text flex-[1_1_auto] min-w-0">
-                  <label class="pa-row-title block text-[13px] font-medium text-brand-text" for="pref-dom-anchoring">Smart element anchoring</label>
-                  <p class="pa-row-desc mt-0.5 text-xs leading-[1.45] text-brand-muted">Follows moving GitHub issues, cards and comments instead of fixed screen pixels.</p>
-                </div>
-                <div class="pa-row-control flex-none flex items-center gap-3 max-[820px]:justify-start">
-                  <label class="pa-switch relative inline-flex items-center w-9.5 h-5.5 cursor-pointer">
-                    <input type="checkbox" id="pref-dom-anchoring" class="absolute inset-0 w-full h-full m-0 opacity-0 cursor-pointer peer" checked />
-                    <span class="pa-switch-track pointer-events-none absolute inset-0 rounded-full bg-white/16 transition-colors duration-160 after:content-[''] after:absolute after:top-0.75 after:left-0.75 after:w-4 after:h-4 after:rounded-full after:bg-white after:transition-transform after:duration-160 peer-checked:bg-brand-accent peer-checked:after:translate-x-4 peer-focus-visible:outline-2 peer-focus-visible:outline-brand-ring peer-focus-visible:outline-offset-2" aria-hidden="true"></span>
-                  </label>
-                </div>
-              </div>
-              <div class="pa-row flex items-center justify-between gap-6 px-4.5 py-3.5 max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3">
-                <div class="pa-row-text flex-[1_1_auto] min-w-0">
-                  <label class="pa-row-title block text-[13px] font-medium text-brand-text" for="pref-orphan-mode">When the element is not found</label>
-                  <p class="pa-row-desc mt-0.5 text-xs leading-[1.45] text-brand-muted" id="pref-orphan-hint">Applies when an issue is closed, filtered out, or you move to another page.</p>
-                </div>
-                <div class="pa-row-control flex-none flex items-center gap-3 max-[820px]:justify-start">
-                  <div class="relative w-65 max-w-[46vw] max-[820px]:w-full max-[820px]:max-w-none">
-                    <select id="pref-orphan-mode" class="pa-select w-full appearance-none pl-2.75 pr-8 py-2 border border-white/10 rounded-[9px] bg-white/4 text-brand-text text-[12.5px] cursor-pointer transition-colors duration-130 hover:border-white/18" aria-describedby="pref-orphan-hint">
-                      <option value="hide">Hide until it returns (default)</option>
-                      <option value="dimmed">Keep visible, dimmed at original spot</option>
-                    </select>
-                    <svg class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>
-                  </div>
-                </div>
-              </div>
-            </div>
+        <section role="tabpanel" id="tab-saved-pages" class="pa-tab-pane hidden flex-col gap-7" aria-labelledby="tab-btn-saved-pages" tabindex="0" hidden>
+          <div class="pa-pane-head">
+            <h2>Saved pages</h2>
+            <p>Every page that has your drawings, newest first.</p>
           </div>
-
-          <div class="pa-card border border-white/[0.07] rounded-[14px] bg-white/[0.022] overflow-hidden">
-            <div class="pa-card-head px-4.5 pt-3.75 pb-3.25 border-b border-white/6">
-              <h3 class="text-[13.5px] font-semibold text-brand-text">Performance</h3>
-              <p class="mt-0.75 text-[12.5px] text-brand-muted max-w-[62ch]">Trade a little precision for a lighter memory footprint.</p>
-            </div>
-            <div class="pa-rows flex flex-col [&>*+*]:border-t [&>*+*]:border-white/6">
-              <div class="pa-row flex items-center justify-between gap-6 px-4.5 py-3.5 max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3">
-                <div class="pa-row-text flex-[1_1_auto] min-w-0">
-                  <label class="pa-row-title block text-[13px] font-medium text-brand-text" for="pref-stroke-simplification">Simplify stroke points</label>
-                  <p class="pa-row-desc mt-0.5 text-xs leading-[1.45] text-brand-muted">Compresses freehand strokes with point reduction. May soften very precise lines. Viewport culling always runs.</p>
-                </div>
-                <div class="pa-row-control flex-none flex items-center gap-3 max-[820px]:justify-start">
-                  <label class="pa-switch relative inline-flex items-center w-9.5 h-5.5 cursor-pointer">
-                    <input type="checkbox" id="pref-stroke-simplification" class="absolute inset-0 w-full h-full m-0 opacity-0 cursor-pointer peer" checked />
-                    <span class="pa-switch-track pointer-events-none absolute inset-0 rounded-full bg-white/16 transition-colors duration-160 after:content-[''] after:absolute after:top-0.75 after:left-0.75 after:w-4 after:h-4 after:rounded-full after:bg-white after:transition-transform after:duration-160 peer-checked:bg-brand-accent peer-checked:after:translate-x-4 peer-focus-visible:outline-2 peer-focus-visible:outline-brand-ring peer-focus-visible:outline-offset-2" aria-hidden="true"></span>
-                  </label>
-                </div>
-              </div>
-            </div>
+          <div class="pa-card">
+            <div id="saved-pages-list" class="pa-rows flex flex-col"></div>
           </div>
         </section>
 
-        <section role="tabpanel" id="tab-saved-pages" class="pa-tab-pane hidden" aria-labelledby="tab-btn-saved-pages" tabindex="0" hidden>
+        <section role="tabpanel" id="tab-backup" class="pa-tab-pane hidden flex-col gap-7" aria-labelledby="tab-btn-backup" tabindex="0" hidden>
           <div class="pa-pane-head">
-            <h2 class="text-[17px] font-semibold tracking-[-0.015em] text-brand-text">Saved pages</h2>
-            <p class="mt-1 text-[13px] text-brand-muted max-w-[60ch]">Every page that currently holds your drawings and annotations.</p>
-          </div>
-          <div class="pa-card border border-white/[0.07] rounded-[14px] bg-white/[0.022] overflow-hidden">
-            <div id="saved-pages-list" class="pa-rows flex flex-col [&>*+*]:border-t [&>*+*]:border-white/6"></div>
-          </div>
-        </section>
-
-        <section role="tabpanel" id="tab-backup" class="pa-tab-pane hidden" aria-labelledby="tab-btn-backup" tabindex="0" hidden>
-          <div class="pa-pane-head">
-            <h2 class="text-[17px] font-semibold tracking-[-0.015em] text-brand-text">Backup &amp; restore</h2>
-            <p class="mt-1 text-[13px] text-brand-muted max-w-[60ch]">Move your drawings and settings between browsers or keep a safety copy.</p>
+            <h2>Backup &amp; restore</h2>
+            <p>Move your drawings and settings to another browser, or keep a copy somewhere safe.</p>
           </div>
 
-          <div class="pa-card border border-white/[0.07] rounded-[14px] bg-white/[0.022] overflow-hidden">
-            <div class="pa-card-head px-4.5 pt-3.75 pb-3.25 border-b border-white/6">
-              <h3 class="text-[13.5px] font-semibold text-brand-text">Export</h3>
-              <p class="mt-0.75 text-[12.5px] text-brand-muted max-w-[62ch]">Download a single JSON file with all drawings across every site plus your settings and shortcuts.</p>
+          <div class="grid grid-cols-2 gap-5 max-[820px]:grid-cols-1">
+            <div class="pa-card flex flex-col p-5 gap-4">
+              <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-accent-tint text-brand-accent-soft" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+              </div>
+              <div>
+                <h3 class="text-[15px] font-semibold text-brand-text">Download a backup</h3>
+                <p class="mt-1 text-[13px] leading-relaxed text-brand-muted">One file with the drawings from every site, plus your settings and shortcuts.</p>
+              </div>
+              <div class="mt-auto">
+                <button id="btn-export-backup" class="pa-btn pa-btn-primary">Download backup</button>
+              </div>
             </div>
-            <div class="pa-row flex items-center justify-start gap-3 px-4.5 py-3.5 max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3">
-              <button id="btn-export-backup" class="pa-btn pa-btn-primary inline-flex items-center justify-center gap-1.75 px-3.5 py-2 rounded-[9px] border border-transparent bg-brand-accent text-white text-[12.5px] font-semibold cursor-pointer transition-colors duration-130 hover:bg-brand-accent-hover">Download backup (.json)</button>
-            </div>
-          </div>
 
-          <div class="pa-card border border-white/[0.07] rounded-[14px] bg-white/[0.022] overflow-hidden">
-            <div class="pa-card-head px-4.5 pt-3.75 pb-3.25 border-b border-white/6">
-              <h3 class="text-[13.5px] font-semibold text-brand-text">Restore</h3>
-              <p class="mt-0.75 text-[12.5px] text-brand-muted max-w-[62ch]">Replace your current drawings and settings with a previous Page Anchor export. This cannot be undone.</p>
-            </div>
-            <div class="pa-row flex items-center justify-start gap-3 px-4.5 py-3.5 max-[820px]:flex-col max-[820px]:items-stretch max-[820px]:gap-3">
-              <input type="file" id="backup-file-input" accept=".json" hidden aria-label="Upload a JSON backup file to restore" />
-              <button id="btn-import-backup" class="pa-btn inline-flex items-center justify-center gap-1.75 px-3.5 py-2 rounded-[9px] border border-white/10 bg-white/6 text-brand-text text-[12.5px] font-semibold cursor-pointer transition-colors duration-130 hover:bg-white/10 hover:border-white/18">Choose JSON file to restore</button>
-              <span id="import-status" role="status" aria-live="polite" class="pa-import-status text-xs text-brand-accent-soft"></span>
+            <div class="pa-card flex flex-col p-5 gap-4">
+              <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-hover text-brand-muted" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg>
+              </div>
+              <div>
+                <h3 class="text-[15px] font-semibold text-brand-text">Restore from a backup</h3>
+                <p class="mt-1 text-[13px] leading-relaxed text-brand-muted">Replaces your current drawings and settings with the ones in the file.</p>
+              </div>
+              <div class="mt-auto flex flex-wrap items-center gap-3">
+                <input type="file" id="backup-file-input" accept=".json" hidden aria-label="Choose a backup file to restore" />
+                <button id="btn-import-backup" class="pa-btn pa-btn-secondary">Choose file</button>
+                <span id="import-status" role="status" aria-live="polite" class="pa-import-status text-[13px] font-medium text-brand-accent-soft"></span>
+              </div>
             </div>
           </div>
         </section>

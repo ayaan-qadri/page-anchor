@@ -42,13 +42,20 @@ export class TextEditorOverlay {
 
     const textarea = document.createElement('textarea');
     textarea.className = 'pa-text-textarea';
-    textarea.placeholder = 'Type note... (Enter to save, Esc to cancel)';
+    textarea.placeholder = 'Type a note';
+    textarea.rows = 1;
     textarea.setAttribute('aria-label', 'Annotation text note');
-    textarea.setAttribute('aria-description', 'Type note. Press Enter to save, Escape to cancel.');
+    textarea.setAttribute('aria-description', 'Press Enter to save, Shift+Enter for a new line, Escape to cancel.');
     textarea.style.fontSize = `${options.fontSize}px`;
     textarea.style.color = options.fontColor;
 
+    const hint = document.createElement('div');
+    hint.className = 'pa-text-hint';
+    hint.setAttribute('aria-hidden', 'true');
+    hint.textContent = 'Enter to save · Shift+Enter new line · Esc to cancel';
+
     wrapper.appendChild(textarea);
+    wrapper.appendChild(hint);
     this.container.appendChild(wrapper);
     this.currentWrapper = wrapper;
 
@@ -105,6 +112,10 @@ export class TextEditorOverlay {
     textarea.addEventListener('blur', () => {
       commit();
     });
+  }
+
+  public isOpen(): boolean {
+    return this.currentWrapper !== null;
   }
 
   public close(): void {

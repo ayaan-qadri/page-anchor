@@ -142,7 +142,7 @@ test.describe('Engine review fixes', () => {
     }
   });
 
-  test('opening a second note commits the text typed in the first', async ({ context }) => {
+  test('clicking away saves the open note, and the next click starts a new one', async ({ context }) => {
     const server = await startServer();
     try {
       const page = await openPage(context, `${server.origin}/engine-notes`);
@@ -154,6 +154,8 @@ test.describe('Engine review fixes', () => {
       await expect(textarea).toBeVisible();
       await textarea.fill('First note');
 
+      await page.mouse.click(600, 500);
+      await expect(textarea).toHaveCount(0);
       await page.mouse.click(600, 500);
       await expect(textarea).toHaveCount(1);
       await textarea.fill('Second note');

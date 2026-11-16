@@ -50,7 +50,6 @@ test.describe('UI review fixes', () => {
 
     await options.locator('#tab-btn-persistence').click();
     await options.locator('#pref-stroke-simplification').uncheck();
-    await options.locator('#btn-save').click();
     await expect(options.locator('#save-status')).toHaveAttribute('data-state', 'saved');
 
     await expect
@@ -237,7 +236,6 @@ test.describe('UI review fixes', () => {
     await expect(pen).toHaveText('P');
     await expect(pen).toHaveAttribute('aria-describedby', 'shortcut-error-tool-pen');
 
-    await options.locator('#btn-save').click();
     await options.waitForTimeout(300);
     const shortcuts = ((await storedSettings(context)).shortcuts ?? {}) as Record<string, string>;
     expect(shortcuts['tool-pen'] ?? 'p').toBe('p');
@@ -427,7 +425,6 @@ test.describe('UI review fixes', () => {
     await expect(pen).toHaveText('P');
 
     await pen.click();
-    options.once('dialog', (dialog) => dialog.accept());
     await options.locator('#btn-reset-shortcuts').click();
     await expect(options.locator('.pa-key-badge.recording')).toHaveCount(0);
     await options.keyboard.press('q');
@@ -463,5 +460,35 @@ test.describe('UI review fixes', () => {
     });
     await input.setInputFiles(backup);
     await expect(status).toHaveText('Backup restored successfully!');
+  });
+
+  test('a highlight already drawn can be recoloured by selecting it, and the new colour is saved', async ({ context }) => {
+    const server = await startServer();
+    try {
+      const page = await firstPage(context);
+      await page.goto(`${server.origin}/recolor`);
+      await waitForMount(page);
+      await openToolbar(page, context);
+
+      await pa(page, '[data-tool="highlighter"]').click();
+      await drawStroke(page, [120, 260], [420, 260], 12);
+      await expect.poll(() => storedElementCount(context, '/recolor')).toBe(1);
+
+      await pa(page, '[data-tool="select"]').click();
+      await page.mouse.click(270, 260);
+      await pa(page, '.pa-color-preview-btn').click();
+      await expect(pa(page, '.pa-popover-tool-name')).toHaveText('1 selected');
+      await pa(page, '.pa-color-swatch[data-color="#22c55e"]').click();
+
+      await expect
+        .poll(async () => {
+          const all = await readStorage(context);
+          const entry = Object.entries(all).find(([key]) => key.startsWith('page_anchor_data:') && key.includes('/recolor'));
+          return ((entry?.[1] as { elements?: Array<{ type: string; strokeColor: string }> })?.elements ?? []).map((el) => `${el.type}:${el.strokeColor}`);
+        })
+        .toEqual(['highlighter:#22c55e']);
+    } finally {
+      await server.close();
+    }
   });
 });
