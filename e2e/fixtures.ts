@@ -22,8 +22,8 @@ export const test = base.extend<{
       args: [
         `--disable-extensions-except=${pathToExtension}`,
         `--load-extension=${pathToExtension}`,
-        // Headless Chromium made timing-sensitive tests flaky, so the window stays real but opens off-screen; PA_HEADED=1 brings it on-screen for debugging.
-        ...(process.env.PA_HEADED ? [] : ['--window-position=-32000,-32000', '--disable-features=CalculateNativeWinOcclusion', '--disable-backgrounding-occluded-windows']),
+        // Locally the real window opens off-screen so it does not cover the desktop; CI runs on a virtual display and keeps its default placement. PA_HEADED=1 shows it.
+        ...(process.env.CI || process.env.PA_HEADED ? [] : ['--window-position=-32000,-32000', '--disable-features=CalculateNativeWinOcclusion', '--disable-backgrounding-occluded-windows']),
       ],
     });
 

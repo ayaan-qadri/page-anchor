@@ -50,7 +50,12 @@ export async function openToolbar(page: Page, context: BrowserContext): Promise<
   const toolbar = pa(page, '.pa-toolbar');
   if (await toolbar.isVisible()) return;
   await sendToggle(page, context);
-  if (!(await toolbar.isVisible())) await page.keyboard.press('Alt+Shift+D');
+  // The drawing app mounts a moment after the toggle reply; pressing the shortcut once it has mounted would close the toolbar again.
+  const opened = await toolbar.waitFor({ state: 'visible', timeout: 3000 }).then(
+    () => true,
+    () => false
+  );
+  if (!opened) await page.keyboard.press('Alt+Shift+D');
   await expect(toolbar).toBeVisible({ timeout: 10000 });
 }
 

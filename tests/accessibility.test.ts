@@ -98,6 +98,7 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
     let engine: CanvasEngine;
     let history: HistoryManager;
     let textEditor: TextEditorOverlay;
+    let toolbar: FloatingToolbar;
 
     beforeEach(() => {
       container = document.createElement('div');
@@ -105,10 +106,12 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       engine = new CanvasEngine(container);
       history = new HistoryManager([]);
       textEditor = new TextEditorOverlay(container);
-      new FloatingToolbar(container, engine, history, textEditor, DEFAULT_SETTINGS);
+      toolbar = new FloatingToolbar(container, engine, history, textEditor, DEFAULT_SETTINGS);
     });
 
     afterEach(() => {
+      toolbar.destroy();
+      engine.destroy();
       container.remove();
     });
 
@@ -215,13 +218,15 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
     it('should mark base and active canvas overlays with aria-hidden="true"', () => {
       const div = document.createElement('div');
       document.body.appendChild(div);
-      new CanvasEngine(div);
+      const engine = new CanvasEngine(div);
 
       const canvases = div.querySelectorAll('canvas');
       expect(canvases.length).toBe(2);
       canvases.forEach((c) => {
         expect(c.getAttribute('aria-hidden')).toBe('true');
       });
+      engine.destroy();
+      div.remove();
 
       div.remove();
     });
