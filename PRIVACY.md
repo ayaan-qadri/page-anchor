@@ -43,6 +43,8 @@ Page Anchor only requests browser permissions that are strictly necessary to pro
 
 Page Anchor can export your annotations to a `.json` file and restore them. Those files are created and read entirely on your device by you; the Extension does not upload them anywhere.
 
+When you choose "Save as PNG" or "Save as PDF", the Extension takes screenshots of the current tab, combines them with your drawings, and saves the result as a file on your device. Screenshots are taken only when you ask, only of that tab, and are never uploaded or kept anywhere else.
+
 ---
 
 ## 5. Third-Party Websites & Services

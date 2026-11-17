@@ -72,6 +72,7 @@ All of it is local. There's no account, no sync server, no upload, and no teleme
 - **Fully rebindable shortcuts**: every tool and action can be remapped with an interactive key recorder, with warnings when you pick something the browser has reserved.
 - **Shadow DOM isolation**: the overlay UI lives in its own shadow root, so Tailwind resets, Bootstrap, and styled-components on the host page can't break it, and its styles can't leak out.
 - **Backup and restore**: export every page's annotations as a JSON file and import it again later.
+- **Save as PNG or PDF**: capture the whole page with your drawings on it, as one tall image or A4 pages, entirely on your device.
 - **Bounded undo/redo**: 50 steps per page, so a long session doesn't grow memory without limit. One action is one step: an eraser sweep undoes as a whole, and a click that only selects something doesn't cost a step.
 - **Cheap on weak hardware**: the renderer is built to stay smooth on budget laptops and Chromebooks. Details in [How It Works](#how-it-works).
 - **Cross-browser**: one codebase, builds for Chrome/Edge/Brave (MV3), Firefox (MV2), and Safari.
@@ -253,6 +254,8 @@ pnpm build && pnpm test:edge   # persistence, large storage, backups, SPAs, orph
 pnpm build && pnpm perf        # 1,000 anchored elements at 1x / 4x / 6x CPU, slow 3G
 pnpm build && pnpm perf:quick  # 300 elements, for a faster loop
 pnpm build && pnpm stress      # 5,000 drawings, multi-tab edits, SPA/DOM/resize storms, re-injection, imports
+pnpm build && pnpm stress:export   # Save as PNG/PDF: long pages, leaks, cancel, edge pages, desktop and phone
+pnpm build:firefox && pnpm test:firefox   # Save as PNG/PDF in real Firefox (needs Firefox installed)
 ```
 
 Both harnesses launch Chromium with the built extension installed, drive the real UI, and write `edge-results.json`, `perf-results.json` and `stress-results.json`. `pnpm perf` reports main-thread task time, frame-time percentiles, long tasks, and storage timings per phase, so performance changes can be compared rather than guessed at.
@@ -313,6 +316,12 @@ page-anchor/
 │   │   ├── storage.ts           # URL normalisation, per-page persistence
 │   │   ├── format.ts            # Element labels and display formatting
 │   │   └── inject.ts            # Idempotent script injection
+│   ├── export/
+│   │   ├── capture.ts           # Scroll-and-capture of the full page with drawings
+│   │   ├── png.ts               # Streaming PNG encoder
+│   │   ├── pdf.ts               # Minimal image-only A4 PDF writer
+│   │   ├── rows.ts              # Shared PNG row filter
+│   │   └── zlib.ts              # Native CompressionStream wrapper
 │   ├── ui/
 │   │   ├── toolbar.ts           # Floating toolbar, show/hide
 │   │   ├── text-editor.ts       # In-page text annotation overlay

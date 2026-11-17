@@ -76,6 +76,14 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       }
     });
 
+    it('keeps every toolbar control on screen on narrow phones by wrapping instead of overflowing (WCAG 1.4.10)', async () => {
+      const { SHADOW_STYLES } = await import('../src/ui/styles');
+      const bar = SHADOW_STYLES.match(/@media \(max-width: 760px\)\s*\{\s*\.pa-toolbar\s*\{([^}]*)\}/)?.[1] ?? '';
+      for (const decl of ['flex-wrap: wrap', 'width: max-content', 'max-width: calc(100vw - 16px)']) {
+        expect(bar).toContain(decl);
+      }
+    });
+
     it('should respect prefers-reduced-motion media query across all styles (WCAG 2.3.3)', () => {
       const optionsCss = fs.readFileSync(path.resolve(__dirname, '../entrypoints/options/options.css'), 'utf-8');
       const shadowStyles = fs.readFileSync(path.resolve(__dirname, '../src/ui/styles.ts'), 'utf-8');

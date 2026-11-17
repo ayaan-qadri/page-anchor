@@ -8,6 +8,7 @@ export interface ToolbarCallbacks {
   onToggleDomAnchoring?: (enabled: boolean) => void;
   /** Opens the extension's options page, where settings and backup live. */
   onOpenOptions?: () => void;
+  onExport?: (format: 'png' | 'pdf') => void;
 }
 
 export interface TextEditorCallbacks {

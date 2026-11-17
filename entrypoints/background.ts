@@ -1,6 +1,19 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { APP_SCRIPT_PATH, LOAD_APP_MESSAGE, getExtensionApi, injectContentScript } from '../src/core/inject';
 import { STORAGE_CHANGED_MESSAGE, rekeySavedPages, setStorageChangeRelay, type StorageChangedMessage } from '../src/core/storage';
+import { CAPTURE_VIEWPORT_MESSAGE, type CaptureViewportRequest, type CaptureViewportResponse } from '../src/export/messages';
+
+const CAPTURE_RETRY_MS = 550;
+
+/** How Chrome and Firefox word a refusal to screenshot a protected page (browser pages, add-on stores, other extensions). */
+const BLOCKED_CAPTURE = /permission|cannot access|cannot be scripted|not allowed|restricted|extensions gallery|missing host/i;
+
+function isValidRegion(region: CaptureViewportRequest['region']): region is NonNullable<CaptureViewportRequest['region']> {
+  if (!region) return false;
+  const { rect, scale } = region;
+  const values = [rect?.x, rect?.y, rect?.width, rect?.height, scale];
+  return values.every((v) => typeof v === 'number' && Number.isFinite(v)) && rect.width > 0 && rect.height > 0 && scale > 0;
+}
 
 export default defineBackground(() => {
   const maybeExt = getExtensionApi();
@@ -55,6 +68,12 @@ export default defineBackground(() => {
       // Keeps the channel open for the asynchronous injection result.
       return true;
     }
+    if (type === CAPTURE_VIEWPORT_MESSAGE) {
+      const tabId = sender.tab?.id;
+      if (tabId === undefined) return false;
+      void captureViewport(tabId, (msg as CaptureViewportRequest).region).then(sendResponse);
+      return true;
+    }
     if (type === 'PAGE_ANCHOR_OPEN_OPTIONS') {
       ext.runtime.openOptionsPage?.();
     } else if (type === STORAGE_CHANGED_MESSAGE) {
@@ -62,6 +81,28 @@ export default defineBackground(() => {
     }
     return false;
   });
+
+  /** captureVisibleTab shoots whatever tab is showing, so refuse once the user switches away mid-export. */
+  async function captureViewport(tabId: number, region: CaptureViewportRequest['region']): Promise<CaptureViewportResponse> {
+    try {
+      const tab = await ext.tabs.get(tabId);
+      if (!tab.active) return { error: 'tab-inactive' };
+      const options = isValidRegion(region) ? { format: 'png' as const, rect: region.rect, scale: region.scale } : { format: 'png' as const };
+      const capture = ext.tabs.captureVisibleTab.bind(ext.tabs) as (windowId: number | undefined, options: object) => Promise<string>;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return { dataUrl: await capture(tab.windowId, options) };
+        } catch (error) {
+          // Chrome allows two captures per second and rejects the rest.
+          if (attempt >= 5 || !/MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND/.test(String(error))) throw error;
+          await new Promise((resolve) => setTimeout(resolve, CAPTURE_RETRY_MS));
+        }
+      }
+    } catch (error) {
+      const detail = String(error);
+      return { error: BLOCKED_CAPTURE.test(detail) ? 'blocked' : 'capture-failed', detail };
+    }
+  }
 
   setStorageChangeRelay((keys) => void relayStorageChange({ type: STORAGE_CHANGED_MESSAGE, keys }, undefined));
 

@@ -12,4 +12,5 @@ playwright-report/
 perf-results.json
 edge-results.json
 stress-results*.json
+export-stress-results*.json
 perf-results.*.json

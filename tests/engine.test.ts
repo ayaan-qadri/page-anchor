@@ -29,6 +29,38 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
     container.remove();
   });
 
+  it('claims touch gestures on its canvases so a pen stroke on a phone never scrolls or swipes back', () => {
+    const canvases = [...container.querySelectorAll('canvas')];
+    expect(canvases).toHaveLength(2);
+    expect(canvases.every((c) => c.style.touchAction === 'none')).toBe(true);
+  });
+
+  it('keeps a drawing attached to a fixed element at its starting place in an export, while others follow the page', () => {
+    const pinned = { id: 'pinned', type: 'rect', bbox: { minX: 10, minY: 10, maxX: 50, maxY: 50 } } as unknown as AnchorElement;
+    const normal = { id: 'normal', type: 'rect', bbox: { minX: 10, minY: 900, maxX: 50, maxY: 950 } } as unknown as AnchorElement;
+    (engine as unknown as { elements: AnchorElement[] }).elements = [pinned, normal];
+    let scrollY = 0;
+    const scrollSpy = vi.spyOn(window, 'scrollY', 'get').mockImplementation(() => scrollY);
+    // The pinned drawing's anchor is a fixed element, so its document position grows with the scroll.
+    vi.spyOn(engine, 'getElementEffectiveBBox').mockImplementation((el) => {
+      const dy = el === pinned ? scrollY : 0;
+      const b = el.bbox;
+      return { bbox: { minX: b.minX, minY: b.minY + dy, maxX: b.maxX, maxY: b.maxY + dy }, deltaX: 0, deltaY: dy, isOrphaned: false };
+    });
+    const drawn = vi.spyOn(engine as unknown as { renderSingleElementWithOffset: (...a: unknown[]) => void }, 'renderSingleElementWithOffset').mockImplementation(() => {});
+    const ctx = { save: vi.fn(), restore: vi.fn(), setTransform: vi.fn() } as unknown as CanvasRenderingContext2D;
+
+    const baseline = engine.measurePlacement();
+    scrollY = 800;
+    engine.renderRegion(ctx, { minX: 0, minY: 800, maxX: 1000, maxY: 1600 }, 1, baseline);
+    expect(drawn.mock.calls.map((c) => (c[1] as AnchorElement).id)).toEqual(['normal']);
+
+    drawn.mockClear();
+    engine.renderRegion(ctx, { minX: 0, minY: 0, maxX: 1000, maxY: 800 }, 1, baseline);
+    expect(drawn.mock.calls.map((c) => (c[1] as AnchorElement).id)).toEqual(['pinned']);
+    scrollSpy.mockRestore();
+  });
+
   describe('Tool Configuration and Styles', () => {
     it('updates tools, stroke widths, colors, font sizes, and annotation visibility', () => {
       engine.setTool('rect');

@@ -72,6 +72,75 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
     expect(sendResponse).toHaveBeenCalledWith({ ok: true });
   });
 
+  describe('page screenshots for export', () => {
+    const capture = async (tabId = 5) => {
+      const sendResponse = vi.fn();
+      const keepOpen = listeners.message?.({ type: 'PAGE_ANCHOR_CAPTURE_VIEWPORT' }, { tab: { id: tabId } }, sendResponse);
+      expect(keepOpen).toBe(true);
+      await vi.waitFor(() => expect(sendResponse).toHaveBeenCalled());
+      return sendResponse.mock.calls[0][0];
+    };
+
+    beforeEach(() => {
+      mockChrome.tabs.get = vi.fn().mockResolvedValue({ id: 5, windowId: 3, active: true });
+      mockChrome.tabs.captureVisibleTab = vi.fn().mockResolvedValue('data:image/png;base64,AAAA');
+      backgroundDefinition.main();
+    });
+
+    it("captures the asking tab's window as PNG", async () => {
+      expect(await capture()).toEqual({ dataUrl: 'data:image/png;base64,AAAA' });
+      expect(mockChrome.tabs.get).toHaveBeenCalledWith(5);
+      expect(mockChrome.tabs.captureVisibleTab).toHaveBeenCalledWith(3, { format: 'png' });
+    });
+
+    it('refuses once the asking tab is no longer the one on screen', async () => {
+      mockChrome.tabs.get.mockResolvedValue({ id: 5, windowId: 3, active: false });
+      expect(await capture()).toEqual({ error: 'tab-inactive' });
+      expect(mockChrome.tabs.captureVisibleTab).not.toHaveBeenCalled();
+    });
+
+    it("waits out Chrome's capture rate limit and retries", async () => {
+      mockChrome.tabs.captureVisibleTab
+        .mockRejectedValueOnce(new Error('This request exceeds the MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND quota.'))
+        .mockResolvedValueOnce('data:image/png;base64,BBBB');
+      expect(await capture()).toEqual({ dataUrl: 'data:image/png;base64,BBBB' });
+      expect(mockChrome.tabs.captureVisibleTab).toHaveBeenCalledTimes(2);
+    });
+
+    it('tells a page that refuses screenshots apart from a failed screenshot', async () => {
+      mockChrome.tabs.captureVisibleTab.mockRejectedValueOnce(new Error('The extensions gallery cannot be scripted.'));
+      expect((await capture()).error).toBe('blocked');
+      mockChrome.tabs.captureVisibleTab.mockRejectedValueOnce(new Error('Missing host permission for the tab'));
+      expect((await capture()).error).toBe('blocked');
+    });
+
+    it('reports other capture failures without retrying', async () => {
+      mockChrome.tabs.captureVisibleTab.mockRejectedValue(new Error('Failed to capture tab: unknown error'));
+      const response = await capture();
+      expect(response.error).toBe('capture-failed');
+      expect(response.detail).toMatch(/unknown error/);
+      expect(mockChrome.tabs.captureVisibleTab).toHaveBeenCalledTimes(1);
+    });
+
+    it('forwards a page area and scale for off-screen capture, and drops malformed ones', async () => {
+      const region = { rect: { x: 0, y: 2048, width: 414, height: 2048 }, scale: 2.625 };
+      let sendResponse = vi.fn();
+      listeners.message?.({ type: 'PAGE_ANCHOR_CAPTURE_VIEWPORT', region }, { tab: { id: 5 } }, sendResponse);
+      await vi.waitFor(() => expect(sendResponse).toHaveBeenCalled());
+      expect(mockChrome.tabs.captureVisibleTab).toHaveBeenLastCalledWith(3, { format: 'png', rect: region.rect, scale: 2.625 });
+
+      sendResponse = vi.fn();
+      const bad = { rect: { x: 0, y: 0, width: -1, height: Number.NaN }, scale: 0 };
+      listeners.message?.({ type: 'PAGE_ANCHOR_CAPTURE_VIEWPORT', region: bad }, { tab: { id: 5 } }, sendResponse);
+      await vi.waitFor(() => expect(sendResponse).toHaveBeenCalled());
+      expect(mockChrome.tabs.captureVisibleTab).toHaveBeenLastCalledWith(3, { format: 'png' });
+    });
+
+    it('ignores capture requests that do not come from a tab', () => {
+      expect(listeners.message?.({ type: 'PAGE_ANCHOR_CAPTURE_VIEWPORT' }, {}, vi.fn())).toBe(false);
+    });
+  });
+
   it('relays storage change notices to every other tab, key names only', async () => {
     backgroundDefinition.main();
     mockChrome.tabs.query.mockResolvedValue([{ id: 1 }, { id: 2 }, { id: 3 }]);

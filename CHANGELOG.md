@@ -5,6 +5,24 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Save the whole page, drawings included, as a PNG image or an A4 PDF from the
+  toolbar's "More" menu. Works on desktop and phones. A progress panel shows
+  how far the save is and what stops it: scrolling, clicking, pressing a key
+  or switching tabs, or touching the page on a phone, plus a Stop button.
+  Firefox captures the page without moving it; other browsers scroll through
+  it briefly. Everything happens on your device, and no extra libraries or
+  permissions were added. Thanks to @Ishayahu for the original idea and
+  implementation.
+
+### Fixed
+
+- On phones the toolbar no longer runs off the edge of the screen. It wraps
+  onto a second row, so every tool and the "More" menu stay reachable.
+- Drawing with a finger no longer scrolls the page or swipes back to the
+  previous page. Thanks to @Ishayahu for finding both on Android.
+
 ## [1.1.0] - 2026-11-16
 
 ### Changed

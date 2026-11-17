@@ -48,6 +48,12 @@ interface EffectiveBBox {
   isOrphaned: boolean;
 }
 
+export interface RegionPlacement {
+  scrollX: number;
+  scrollY: number;
+  boxes: Map<AnchorElement, EffectiveBBox>;
+}
+
 function strokeRenderOptions(type: StrokeElement['type'], width: number): FreehandStrokeRenderOptions {
   const isHighlighter = type === 'highlighter';
   return {
@@ -167,6 +173,8 @@ export class CanvasEngine {
     canvas.style.top = '0';
     canvas.style.left = '0';
     canvas.style.pointerEvents = 'none';
+    // Without this, touch screens turn a pen stroke into a page scroll or a swipe back to the previous page.
+    canvas.style.touchAction = 'none';
     canvas.style.zIndex = zIndex;
     return canvas;
   }
@@ -980,6 +988,43 @@ export class CanvasEngine {
     this.renderSelection(ctx, viewportBox);
     ctx.restore();
     this.reportSelectionChange();
+  }
+
+  /** Where every drawing sits right now; an export takes it before scrolling so drawings on fixed elements stay put. */
+  public measurePlacement(): RegionPlacement {
+    this.anchorManager.syncScroll();
+    return {
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+      boxes: new Map(this.elements.map((el) => [el, this.getElementEffectiveBBox(el)])),
+    };
+  }
+
+  /** Draws the visible drawings inside `region` (document CSS pixels) onto `ctx`, whose origin is the region's top-left at `scale` pixels per CSS pixel. */
+  public renderRegion(ctx: CanvasRenderingContext2D, region: BoundingBox, scale: number, baseline?: RegionPlacement): void {
+    if (!this.getAnnotationsVisible()) return;
+    this.anchorManager.syncScroll();
+    const padded: BoundingBox = {
+      minX: region.minX - 20,
+      minY: region.minY - 20,
+      maxX: region.maxX + 20,
+      maxY: region.maxY + 20,
+    };
+    const scrolledX = baseline ? window.scrollX - baseline.scrollX : 0;
+    const scrolledY = baseline ? window.scrollY - baseline.scrollY : 0;
+    ctx.save();
+    ctx.setTransform(scale, 0, 0, scale, -region.minX * scale, -region.minY * scale);
+    for (const el of this.elements) {
+      let eff = this.getElementEffectiveBBox(el);
+      const before = baseline?.boxes.get(el);
+      // A drawing that moved exactly as far as the page scrolled is attached to a fixed element; keep it where it was, or it repeats in every strip.
+      if (before && (scrolledX || scrolledY) && Math.abs(eff.bbox.minX - before.bbox.minX - scrolledX) < 1 && Math.abs(eff.bbox.minY - before.bbox.minY - scrolledY) < 1) {
+        eff = before;
+      }
+      if (this.isHidden(eff) || !intersectsBoundingBox(eff.bbox, padded)) continue;
+      this.renderSingleElementWithOffset(ctx, el, eff);
+    }
+    ctx.restore();
   }
 
   private reportSelectionChange(): void {
