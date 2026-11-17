@@ -5,6 +5,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-17
+
 ### Added
 
 - Save the whole page, drawings included, as a PNG image or an A4 PDF from the
