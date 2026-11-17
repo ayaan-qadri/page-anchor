@@ -95,7 +95,20 @@ pnpm test:e2e
 
 # Regenerate extension icons
 pnpm icons
+
+# Other browsers, and store-ready zips
+pnpm build:edge
+pnpm build:safari
+pnpm zip
+pnpm zip:firefox
 ```
+
+### Loading Your Build
+
+- **Chrome, Edge, Brave**: open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick `.output/chrome-mv3`.
+- **Firefox**: open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and pick `.output/firefox-mv2/manifest.json`. Firefox removes it when it closes.
+
+The `typescript` dev dependency is aliased to `@typescript/typescript6`, because `typescript-eslint` still needs the TypeScript 6 compiler API. `@typescript/native` provides the TypeScript 7 `tsc` used by `pnpm compile` and `pnpm build`.
 
 ---
 
@@ -131,5 +144,7 @@ We use [Vitest](https://vitest.dev/) for unit and integration tests, [Playwright
 - `pnpm test:edge` checks persistence, large-storage, backup, SPA-navigation, and orphan cases.
 - `pnpm perf` measures main-thread cost under CPU throttling and a slow network.
 - `pnpm stress` drives heavy and adversarial scenarios (thousands of drawings, concurrent tabs, navigation and DOM storms) with pass/fail budgets.
+- `pnpm stress:export` checks Save as PNG/PDF on long and unusual pages, on desktop and phone sizes, including cancelling and memory use.
+- `pnpm test:firefox` checks Save as PNG/PDF in a real Firefox (run `pnpm build:firefox` first).
 - Add test coverage for any new tools, geometry helpers, or storage behaviours.
 - Run `pnpm check` before committing.
