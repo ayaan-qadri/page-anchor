@@ -1,6 +1,6 @@
 import { defineUnlistedScript } from 'wxt/utils/define-unlisted-script';
 import { takeBootHandoff } from '../src/core/boot-handoff';
-import { CanvasEngine } from '../src/core/engine';
+import { CanvasEngine, type RegionPlacement } from '../src/core/engine';
 import { HistoryManager } from '../src/core/history';
 import { getExtensionApi, isExtensionContextValid } from '../src/core/inject';
 import { ShortcutManager, isEditableTarget } from '../src/core/shortcuts';
@@ -18,7 +18,20 @@ import {
 import { AnchorElement, ExtensionSettings, PageAnchorData, ShortcutAction, ToolType } from '../src/types';
 import { SHADOW_STYLES } from '../src/ui/styles';
 import { TextEditorOverlay } from '../src/ui/text-editor';
+import { ExportStatus } from '../src/ui/export-status';
 import { FloatingToolbar } from '../src/ui/toolbar';
+import {
+  ExportError,
+  capturePage,
+  toExportError,
+  decodeCapture,
+  downloadBlob,
+  exportFileName,
+  type CaptureImage,
+  type ExportErrorCode,
+  type ExportFormat,
+} from '../src/export/capture';
+import { CAPTURE_VIEWPORT_MESSAGE, type CaptureViewportRequest, type CaptureViewportResponse } from '../src/export/messages';
 
 /** Messages this content script acts on; anything else is ignored. */
 const HANDLED_MESSAGE_TYPES = new Set([
@@ -77,6 +90,23 @@ const TOOL_SHORTCUTS: Partial<Record<ShortcutAction, ToolType>> = {
 };
 
 type NavigationTarget = Window & { navigation?: EventTarget };
+
+/** Chrome allows two screenshots per second; pacing to it means the progress panel is hidden only while a shot is taken. */
+const CHROME_SHOT_INTERVAL_MS = 550;
+
+/** Pressed alone these change nothing on the page, so they do not stop a save. */
+const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta']);
+
+const EXPORT_ERROR_TEXT: Record<ExportErrorCode, string> = {
+  zoomed: 'Zoom out to save the whole page',
+  cancelled: 'Save cancelled',
+  'tab-inactive': 'Stay on this tab while the page is saving',
+  blocked: "This page doesn't allow screenshots",
+  'capture-failed': "Couldn't take a screenshot of the page. Try again.",
+  'too-large': 'This page is too large to save',
+  unsupported: "This browser can't save pages",
+  unexpected: 'Something went wrong while saving the page',
+};
 
 /** The drawing app. The boot content script injects it only once a page has drawings or the user opens the toolbar. */
 export default defineUnlistedScript({
@@ -171,6 +201,82 @@ export default defineUnlistedScript({
         toast.remove();
         saveErrorVisible = false;
       }, 8000);
+    };
+
+    let exportAbort: AbortController | null = null;
+
+    const requestCapture = async (region?: CaptureViewportRequest['region']): Promise<CaptureImage> => {
+      const request: CaptureViewportRequest = { type: CAPTURE_VIEWPORT_MESSAGE, region };
+      let response: CaptureViewportResponse | undefined;
+      try {
+        response = (await getExtensionApi()?.runtime.sendMessage(request)) as CaptureViewportResponse | undefined;
+      } catch (error) {
+        throw new ExportError('capture-failed', String(error));
+      }
+      if (!response) throw new ExportError('capture-failed', 'No response');
+      if ('error' in response) throw new ExportError(response.error, response.detail);
+      return decodeCapture(response.dataUrl);
+    };
+
+    const exportPage = async (format: ExportFormat) => {
+      if (exportAbort || !mounted) return;
+      const controller = new AbortController();
+      exportAbort = controller;
+      const cancel = () => controller.abort();
+      // Any of these would move or cover the page mid-screenshot, so they stop the save; they are listened to only while screenshots are taken.
+      const interrupts = new AbortController();
+      const listen = { capture: true, passive: true, signal: interrupts.signal };
+      const onKey = (e: KeyboardEvent) => {
+        if (MODIFIER_KEYS.has(e.key)) return;
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        cancel();
+      };
+      window.addEventListener('keydown', onKey, { capture: true, signal: interrupts.signal });
+      window.addEventListener('pointerdown', cancel, listen);
+      window.addEventListener('wheel', cancel, listen);
+      window.addEventListener('touchstart', cancel, listen);
+      document.addEventListener('visibilitychange', () => document.hidden && cancel(), { signal: interrupts.signal });
+      const status = new ExportStatus(uiContainer.getRootNode(), format, cancel);
+      const label = format.toUpperCase();
+      let placement: RegionPlacement | undefined;
+      try {
+        const { blob, truncated } = await capturePage(format, {
+          captureViewport: () => requestCapture(),
+          captureRegion: import.meta.env.FIREFOX ? (rect, scale) => requestCapture({ rect, scale }) : undefined,
+          onLayoutReady: () => {
+            placement = engine.measurePlacement();
+          },
+          drawAnnotations: (ctx, region, scale) => engine.renderRegion(ctx, region, scale, placement),
+          hideOverlay: () => {
+            uiContainer.style.setProperty('opacity', '0', 'important');
+            return () => uiContainer.style.removeProperty('opacity');
+          },
+          signal: controller.signal,
+          onProgress: (fraction) => status.setProgress(fraction),
+          beforeShot: () => status.hide(),
+          onCaptured: () => {
+            interrupts.abort();
+            status.setFinishing();
+          },
+          minShotIntervalMs: import.meta.env.FIREFOX ? 0 : CHROME_SHOT_INTERVAL_MS,
+        });
+        if (torn) return;
+        downloadBlob(blob, exportFileName(format, document.title, window.location.href));
+        toolbar.showToast(truncated ? `Saved part of the page as ${label}` : `Page saved as ${label}`);
+      } catch (error) {
+        if (torn) return;
+        const failure = toExportError(error);
+        if (failure.code !== 'cancelled') console.warn(`[Page Anchor] Save as ${label} failed (${failure.code}):`, error);
+        toolbar.showToast(EXPORT_ERROR_TEXT[failure.code]);
+      } finally {
+        interrupts.abort();
+        status.destroy();
+        controller.abort();
+        if (exportAbort === controller) exportAbort = null;
+      }
     };
 
     const handleSaveError = (error: unknown) => {
@@ -362,6 +468,7 @@ export default defineUnlistedScript({
             // through the browser's extension management UI either way.
           }
         },
+        onExport: (format) => exportPage(format),
       });
       applySettings(settings);
 
@@ -576,6 +683,7 @@ export default defineUnlistedScript({
       if (torn) return;
       torn = true;
       if (saveTimeout !== null) clearTimeout(saveTimeout);
+      exportAbort?.abort();
       lifetime.abort();
       const safely = (fn: () => void) => {
         try {

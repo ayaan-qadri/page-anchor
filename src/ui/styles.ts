@@ -127,6 +127,18 @@ export const SHADOW_STYLES = `
   box-shadow: var(--pa-panel-shadow);
 }
 
+/* Phones are narrower than the full bar; wrapping keeps every control, including the More menu, on screen. Wider screens skip it to keep restyles cheap. */
+@media (max-width: 760px) {
+  .pa-toolbar {
+    flex-wrap: wrap;
+    justify-content: center;
+    /* Sized from its own content: centred at left 50%, shrink-to-fit would only offer it half the screen before wrapping. */
+    width: max-content;
+    max-width: calc(100vw - 16px);
+    box-sizing: border-box;
+  }
+}
+
 .pa-toolbar-close-btn {
   position: absolute;
   top: -8px;
@@ -883,6 +895,96 @@ export const SHADOW_STYLES = `
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.pa-export-status {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  width: min(380px, calc(100vw - 24px));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--pa-pop-bg);
+  border: 1px solid var(--pa-line-strong);
+  box-shadow: var(--pa-panel-shadow);
+  color: var(--pa-text);
+  font-size: 13px;
+  z-index: 2147483647;
+  pointer-events: auto;
+  animation: pa-toast-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Screenshots are taken while hidden; no transition, so the panel is fully gone before the shot. */
+.pa-export-status-hidden {
+  visibility: hidden !important;
+  animation: none !important;
+}
+
+.pa-export-status-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-weight: 600;
+}
+
+.pa-export-status-percent {
+  color: var(--pa-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pa-export-status-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--pa-track);
+  overflow: hidden;
+}
+
+.pa-export-status-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--pa-accent);
+  transition: width 0.2s var(--pa-ease);
+}
+
+.pa-export-status-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pa-export-status-hint {
+  color: var(--pa-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.pa-export-status-stop {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--pa-line-strong);
+  background: var(--pa-surface-2);
+  color: var(--pa-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pa-export-status-stop:hover {
+  background: var(--pa-hover-strong);
+}
+
+.pa-export-status-stop:focus-visible {
+  outline: 2px solid var(--pa-ring);
+  outline-offset: 2px;
 }
 
 .pa-toast {

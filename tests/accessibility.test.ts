@@ -76,6 +76,14 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       }
     });
 
+    it('keeps every toolbar control on screen on narrow phones by wrapping instead of overflowing (WCAG 1.4.10)', async () => {
+      const { SHADOW_STYLES } = await import('../src/ui/styles');
+      const bar = SHADOW_STYLES.match(/@media \(max-width: 760px\)\s*\{\s*\.pa-toolbar\s*\{([^}]*)\}/)?.[1] ?? '';
+      for (const decl of ['flex-wrap: wrap', 'width: max-content', 'max-width: calc(100vw - 16px)']) {
+        expect(bar).toContain(decl);
+      }
+    });
+
     it('should respect prefers-reduced-motion media query across all styles (WCAG 2.3.3)', () => {
       const optionsCss = fs.readFileSync(path.resolve(__dirname, '../entrypoints/options/options.css'), 'utf-8');
       const shadowStyles = fs.readFileSync(path.resolve(__dirname, '../src/ui/styles.ts'), 'utf-8');
@@ -90,6 +98,7 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
     let engine: CanvasEngine;
     let history: HistoryManager;
     let textEditor: TextEditorOverlay;
+    let toolbar: FloatingToolbar;
 
     beforeEach(() => {
       container = document.createElement('div');
@@ -97,10 +106,12 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       engine = new CanvasEngine(container);
       history = new HistoryManager([]);
       textEditor = new TextEditorOverlay(container);
-      new FloatingToolbar(container, engine, history, textEditor, DEFAULT_SETTINGS);
+      toolbar = new FloatingToolbar(container, engine, history, textEditor, DEFAULT_SETTINGS);
     });
 
     afterEach(() => {
+      toolbar.destroy();
+      engine.destroy();
       container.remove();
     });
 
@@ -207,13 +218,15 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
     it('should mark base and active canvas overlays with aria-hidden="true"', () => {
       const div = document.createElement('div');
       document.body.appendChild(div);
-      new CanvasEngine(div);
+      const engine = new CanvasEngine(div);
 
       const canvases = div.querySelectorAll('canvas');
       expect(canvases.length).toBe(2);
       canvases.forEach((c) => {
         expect(c.getAttribute('aria-hidden')).toBe('true');
       });
+      engine.destroy();
+      div.remove();
 
       div.remove();
     });

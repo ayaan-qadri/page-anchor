@@ -24,7 +24,9 @@
     "perf": "node scripts/perf-throttle.mjs",
     "perf:quick": "node scripts/perf-throttle.mjs --quick",
     "test:edge": "node scripts/edge-cases.mjs",
-    "stress": "node scripts/stress.mjs"
+    "stress": "node scripts/stress.mjs",
+    "stress:export": "node scripts/export-stress.mjs",
+    "test:firefox": "node scripts/firefox-export.mjs"
   },
   "keywords": [
     "browser-extension",

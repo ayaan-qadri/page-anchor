@@ -519,6 +519,20 @@ export class FloatingToolbar {
       this.anchorItem,
       this.createMenuItem({
         role: 'menuitem',
+        icon: 'saveImage',
+        label: 'Save as PNG',
+        action: 'export-png',
+        onSelect: () => this.callbacks.onExport?.('png'),
+      }),
+      this.createMenuItem({
+        role: 'menuitem',
+        icon: 'savePdf',
+        label: 'Save as PDF',
+        action: 'export-pdf',
+        onSelect: () => this.callbacks.onExport?.('pdf'),
+      }),
+      this.createMenuItem({
+        role: 'menuitem',
         icon: 'settings',
         label: 'Settings & Backup',
         action: 'open-options',

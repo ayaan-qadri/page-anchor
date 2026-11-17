@@ -22,6 +22,8 @@ export const test = base.extend<{
       args: [
         `--disable-extensions-except=${pathToExtension}`,
         `--load-extension=${pathToExtension}`,
+        // Locally the real window opens off-screen so it does not cover the desktop; CI runs on a virtual display and keeps its default placement. PA_HEADED=1 shows it.
+        ...(process.env.CI || process.env.PA_HEADED ? [] : ['--window-position=-32000,-32000', '--disable-features=CalculateNativeWinOcclusion', '--disable-backgrounding-occluded-windows']),
       ],
     });
 
