@@ -38,4 +38,6 @@ export interface ExtensionSettings {
   areAnnotationsVisible: boolean;
   domAnchoringEnabled: boolean;
   orphanedAnchorMode: OrphanedAnchorMode;
+  /** Set once the user asks to stop seeing the two-finger scroll hint on touch screens. */
+  scrollHintDismissed: boolean;
 }

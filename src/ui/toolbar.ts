@@ -5,7 +5,7 @@ import { ExtensionSettings } from '../types/storage.types';
 import { ShortcutAction } from '../types/shortcuts.types';
 import { ToolbarCallbacks } from '../types/ui.types';
 import { ICONS, IconName } from '../icons/svg-icons';
-import { buildTooltip, markupToNodes, setMarkup } from './dom';
+import { buildTooltip, isTouchFirst, markupToNodes, setMarkup } from './dom';
 import { TextEditorOverlay } from './text-editor';
 import { formatShortcutForDisplay } from '../core/shortcuts';
 import { DEFAULT_SETTINGS, saveSettings } from '../core/storage';
@@ -169,6 +169,8 @@ export class FloatingToolbar {
   private readonly shortcutOf = new Map<HTMLElement, ShortcutAction>();
 
   private toast: ToastState | null = null;
+  private scrollHint: ToastState | null = null;
+  private scrollHintTimer: number | null = null;
   private announceTimer: number | null = null;
   private positionSaveTimer: number | null = null;
 
@@ -253,6 +255,7 @@ export class FloatingToolbar {
     this.engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
     this.engine.setStrokeSimplification(settings.strokeSimplification);
     this.renderMenuToggles();
+    if (settings.scrollHintDismissed && this.toast && this.toast === this.scrollHint) this.dismissToast(true);
 
     if (this.isOpen && !pendingPosition) this.applyRestingPosition();
   }
@@ -267,6 +270,7 @@ export class FloatingToolbar {
       saveSettings({ toolbarPosition: this.settings.toolbarPosition }).catch(() => {});
     }
     this.dismissToast(true);
+    this.cancelScrollHint();
     if (this.announceTimer !== null) clearTimeout(this.announceTimer);
     this.announceTimer = null;
     this.wrapper.remove();
@@ -308,6 +312,33 @@ export class FloatingToolbar {
     this.wrapper.style.display = 'block';
     this.applyRestingPosition();
     this.callbacks.onToggleActive?.(true);
+    this.showScrollHint();
+  }
+
+  /** Touch screens draw with one finger, so scrolling needs two; nothing on screen says so otherwise. */
+  private showScrollHint(): void {
+    this.cancelScrollHint();
+    if (this.settings.scrollHintDismissed || !isTouchFirst()) return;
+    // Opening the toolbar can mount the app before saved settings arrive; waiting lets a stored "Don't show again" apply.
+    this.scrollHintTimer = window.setTimeout(() => {
+      this.scrollHintTimer = null;
+      if (!this.isOpen || this.settings.scrollHintDismissed) return;
+      this.showToast(
+        'Use two fingers to scroll',
+        "Don't show again",
+        () => {
+          this.settings.scrollHintDismissed = true;
+          saveSettings({ scrollHintDismissed: true }).catch(() => {});
+        },
+        6000
+      );
+      this.scrollHint = this.toast;
+    }, 500);
+  }
+
+  private cancelScrollHint(): void {
+    if (this.scrollHintTimer !== null) clearTimeout(this.scrollHintTimer);
+    this.scrollHintTimer = null;
   }
 
   public toggleDrawingMode(): void {
@@ -317,6 +348,7 @@ export class FloatingToolbar {
   /** Removes the toolbar from the page. Use the extension icon or a shortcut to bring it back. */
   private hideToolbar(): void {
     if (!this.isOpen) return;
+    this.cancelScrollHint();
     this.moveFocusOutOfToolbar();
     this.isOpen = false;
     this.closeColorPopover();

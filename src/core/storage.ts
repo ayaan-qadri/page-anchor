@@ -38,6 +38,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   areAnnotationsVisible: true,
   domAnchoringEnabled: true,
   orphanedAnchorMode: 'hide',
+  scrollHintDismissed: false,
 };
 
 const SETTINGS_KEY = SETTINGS_STORAGE_KEY;

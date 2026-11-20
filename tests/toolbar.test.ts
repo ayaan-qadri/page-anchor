@@ -1040,3 +1040,79 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     });
   });
 });
+
+describe('FloatingToolbar: two-finger scroll hint on touch screens', () => {
+  let container: HTMLElement;
+  let engine: CanvasEngine;
+  let toolbar: FloatingToolbar | null = null;
+
+  const hint = () => container.querySelector<HTMLElement>('.pa-toast');
+
+  function open(touch: boolean, patch: Partial<ExtensionSettings> = {}): FloatingToolbar {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: touch && query === '(pointer: coarse)' }));
+    toolbar = new FloatingToolbar(container, engine, new HistoryManager([]), new TextEditorOverlay(container), settingsWith(patch), makeCallbacks());
+    toolbar.setDrawingMode(true);
+    vi.advanceTimersByTime(500);
+    return toolbar;
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    engine = new CanvasEngine(container);
+  });
+
+  afterEach(() => {
+    toolbar?.destroy();
+    toolbar = null;
+    engine.destroy();
+    container.remove();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('tells touch users to scroll with two fingers when the toolbar opens', () => {
+    open(true);
+    expect(hint()?.textContent).toContain('Use two fingers to scroll');
+    expect(hint()?.querySelector('.pa-toast-btn')?.textContent).toBe("Don't show again");
+  });
+
+  it('never shows the hint with a mouse', () => {
+    open(false);
+    expect(hint()).toBeNull();
+  });
+
+  it('stops showing the hint once the user asks', () => {
+    const bar = open(true);
+    hint()!.querySelector<HTMLButtonElement>('.pa-toast-btn')!.click();
+    expect(settingsOf(bar).scrollHintDismissed).toBe(true);
+
+    bar.setDrawingMode(false);
+    container.querySelectorAll('.pa-toast').forEach((el) => el.remove());
+    bar.setDrawingMode(true);
+    vi.advanceTimersByTime(500);
+    expect(hint()).toBeNull();
+  });
+
+  it('respects a saved choice', () => {
+    open(true, { scrollHintDismissed: true });
+    expect(hint()).toBeNull();
+  });
+
+  it('stays hidden when the saved choice arrives just after the toolbar opens', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(pointer: coarse)' }));
+    toolbar = new FloatingToolbar(container, engine, new HistoryManager([]), new TextEditorOverlay(container), settingsWith({}), makeCallbacks());
+    toolbar.setDrawingMode(true);
+    toolbar.setSettings(settingsWith({ scrollHintDismissed: true }));
+    vi.advanceTimersByTime(500);
+    expect(hint()).toBeNull();
+  });
+
+  it('closes a showing hint once the saved choice arrives', () => {
+    const bar = open(true);
+    expect(hint()).not.toBeNull();
+    bar.setSettings(settingsWith({ scrollHintDismissed: true }));
+    expect(hint()).toBeNull();
+  });
+});
