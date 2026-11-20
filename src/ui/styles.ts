@@ -1166,7 +1166,10 @@ export const SHADOW_STYLES = `
   position: absolute;
   top: calc(100% + 10px);
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(calc(-50% + var(--pa-toast-shift, 0px)));
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1178,7 +1181,6 @@ export const SHADOW_STYLES = `
   color: var(--pa-text);
   font-size: 13px;
   font-weight: 500;
-  white-space: nowrap;
   z-index: 2147483647;
   pointer-events: auto;
   animation: pa-toast-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
@@ -1191,15 +1193,19 @@ export const SHADOW_STYLES = `
 
 .pa-toast.pa-toast-hiding {
   opacity: 0;
-  transform: translateX(-50%) translateY(4px);
+  transform: translateX(calc(-50% + var(--pa-toast-shift, 0px))) translateY(4px);
   transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
 .pa-toast-text {
+  min-width: 0;
   color: var(--pa-text);
+  line-height: 1.35;
 }
 
 .pa-toast-btn {
+  flex: none;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1226,11 +1232,11 @@ export const SHADOW_STYLES = `
 @keyframes pa-toast-in {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(-6px);
+    transform: translateX(calc(-50% + var(--pa-toast-shift, 0px))) translateY(-6px);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateX(calc(-50% + var(--pa-toast-shift, 0px))) translateY(0);
   }
 }
 

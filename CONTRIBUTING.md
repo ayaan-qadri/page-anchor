@@ -84,7 +84,7 @@ pnpm dev
 # Build for Chrome MV3
 pnpm build
 
-# Build for Firefox MV2
+# Build for Firefox MV3
 pnpm build:firefox
 
 # Type-check, lint, and run unit tests
@@ -106,7 +106,7 @@ pnpm zip:firefox
 ### Loading Your Build
 
 - **Chrome, Edge, Brave**: open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick `.output/chrome-mv3`.
-- **Firefox**: open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and pick `.output/firefox-mv2/manifest.json`. Firefox removes it when it closes.
+- **Firefox**: open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and pick `.output/firefox-mv3/manifest.json`. Firefox removes it when it closes.
 
 The `typescript` dev dependency is aliased to `@typescript/typescript6`, because `typescript-eslint` still needs the TypeScript 6 compiler API. `@typescript/native` provides the TypeScript 7 `tsc` used by `pnpm compile` and `pnpm build`.
 

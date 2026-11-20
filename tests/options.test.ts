@@ -436,3 +436,191 @@ describe('Options Page: Configuration, Shortcuts Recorder, Persistence, & Backup
     expect(urlEl.textContent).toBe('javascript:alert(document.domain)');
   });
 });
+
+describe('Options Page: access to websites', () => {
+  let store: Store;
+  let granted: Set<string>;
+  let storageListener: ((changes: Record<string, { newValue?: unknown }>) => void) | undefined;
+  let permissionListeners: Array<() => void>;
+  let answerRequest: boolean;
+  let mockChrome: Record<string, unknown> & { permissions: Record<string, unknown> & { request: ReturnType<typeof vi.fn> } };
+
+  const notice = () => document.getElementById('site-access-notice') as HTMLElement;
+  const byId = (id: string) => document.getElementById(id) as HTMLElement;
+  const toastText = () => document.querySelector('.pa-toast span')?.textContent ?? '';
+  const permissionsChanged = async () => {
+    permissionListeners.forEach((fn) => fn());
+    await flush();
+  };
+  /** What the background does when the toolbar's Set up button is pressed. */
+  const toolbarAsksFor = async (url: string) => {
+    store.site_access_request = { url };
+    storageListener?.({ site_access_request: { newValue: { url } } });
+    await flush();
+  };
+
+  beforeEach(() => {
+    store = {};
+    granted = new Set();
+    permissionListeners = [];
+    answerRequest = true;
+    let html = fs.readFileSync(path.resolve(__dirname, '../entrypoints/options/index.html'), 'utf-8');
+    html = html.replace(/<link[^>]*>/gi, '').replace(/<script[^>]*>.*?<\/script>/gi, '');
+    document.body.innerHTML = html;
+
+    mockChrome = {
+      runtime: { openOptionsPage: vi.fn() },
+      storage: {
+        sync: makeArea({}),
+        local: makeArea(store),
+        onChanged: { addListener: vi.fn((fn) => (storageListener = fn)) },
+      },
+      permissions: {
+        contains: vi.fn(async ({ origins }: { origins: string[] }) => granted.has('<all_urls>') || origins.every((o) => granted.has(o))),
+        request: vi.fn(async ({ origins }: { origins: string[] }) => {
+          if (answerRequest) origins.forEach((o) => granted.add(o));
+          return answerRequest;
+        }),
+        onAdded: { addListener: vi.fn((fn) => permissionListeners.push(fn)) },
+        onRemoved: { addListener: vi.fn((fn) => permissionListeners.push(fn)) },
+      },
+    };
+    vi.stubGlobal('chrome', mockChrome);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+  });
+
+  it('shows nothing extra and says "All websites" when access is granted', async () => {
+    granted.add('<all_urls>');
+    await initOptions();
+    await flush();
+    expect(notice().hidden).toBe(true);
+    expect(byId('site-access-status').textContent).toBe('All websites');
+    expect(byId('btn-allow-all-sites-row').hidden).toBe(true);
+  });
+
+  it('asks for every website, explains why, and allowing it says so and moves focus out of the closed notice', async () => {
+    await initOptions();
+    await flush();
+    expect(notice().hidden).toBe(false);
+    expect(byId('site-access-title').textContent).toBe('Let Page Anchor work on every website');
+    expect(byId('site-access-desc').textContent).toContain('nothing is sent anywhere');
+    expect(byId('btn-keep-limited').hidden).toBe(false);
+    expect(byId('btn-allow-one-site').hidden).toBe(true);
+    expect(byId('btn-not-now').hidden).toBe(true);
+    expect(byId('site-access-status').textContent).toBe('Limited');
+    expect(byId('btn-allow-all-sites-row').hidden).toBe(false);
+
+    byId('btn-allow-all-sites').focus();
+    byId('btn-allow-all-sites').click();
+    await flush();
+    expect(mockChrome.permissions.request).toHaveBeenCalledWith({ origins: ['<all_urls>'] });
+    expect(notice().hidden).toBe(true);
+    expect(document.activeElement?.id).toBe('main-settings-content');
+    expect(toastText()).toBe('Access allowed. Your drawings will reappear on their own.');
+    expect(byId('site-access-status').textContent).toBe('All websites');
+  });
+
+  it('keeps the notice and says so when the browser prompt is refused', async () => {
+    answerRequest = false;
+    await initOptions();
+    await flush();
+    byId('btn-allow-all-sites').click();
+    await flush();
+    expect(notice().hidden).toBe(false);
+    expect(toastText()).toBe("Access wasn't allowed");
+  });
+
+  it('remembers "Keep it limited", and Undo asks again', async () => {
+    await initOptions();
+    await flush();
+    byId('btn-keep-limited').click();
+    await flush();
+    expect(store.site_access_choice).toBe('limited');
+    expect(notice().hidden).toBe(true);
+    expect(toastText()).toBe('Kept limited. You can change this in Drawings & pages.');
+    expect(byId('site-access-status').textContent).toBe('Limited');
+
+    (document.querySelector('.pa-toast-btn') as HTMLButtonElement).click();
+    await flush();
+    expect(store.site_access_choice).toBeUndefined();
+    expect(notice().hidden).toBe(false);
+  });
+
+  it('a later visit after keeping it limited shows no notice, but the row still offers every website', async () => {
+    store.site_access_choice = 'limited';
+    await initOptions();
+    await flush();
+    expect(notice().hidden).toBe(true);
+    byId('btn-allow-all-sites-row').click();
+    await flush();
+    expect(mockChrome.permissions.request).toHaveBeenCalledWith({ origins: ['<all_urls>'] });
+    expect(byId('site-access-status').textContent).toBe('All websites');
+  });
+
+  it('opened from the toolbar, asks about that one site, focuses the question, and "Only" allows just that site', async () => {
+    store.site_access_choice = 'limited';
+    store.site_access_request = { url: 'https://docs.example.com/guide?x=1' };
+    await initOptions();
+    await flush();
+    expect(store.site_access_request).toBeUndefined();
+    expect(notice().hidden).toBe(false);
+    expect(document.activeElement).toBe(notice());
+    expect(byId('site-access-title').textContent).toBe('Allow Page Anchor on docs.example.com?');
+    expect(byId('btn-allow-one-site').textContent).toBe('Only docs.example.com');
+    expect(byId('btn-keep-limited').hidden).toBe(true);
+    expect(byId('btn-not-now').hidden).toBe(false);
+
+    byId('btn-allow-one-site').click();
+    await flush();
+    expect(mockChrome.permissions.request).toHaveBeenCalledWith({ origins: ['https://docs.example.com/*'] });
+    expect(notice().hidden).toBe(true);
+    expect(toastText()).toBe('Access allowed on docs.example.com');
+    expect(store.site_access_choice).toBe('limited');
+  });
+
+  it('a request arriving while settings are already open switches the notice to that site', async () => {
+    await initOptions();
+    await flush();
+    expect(byId('site-access-title').textContent).toBe('Let Page Anchor work on every website');
+    await toolbarAsksFor('https://news.example.org/');
+    expect(byId('site-access-title').textContent).toBe('Allow Page Anchor on news.example.org?');
+    expect(document.activeElement).toBe(notice());
+  });
+
+  it('"Not now" closes the question for this visit only', async () => {
+    store.site_access_request = { url: 'https://docs.example.com/' };
+    await initOptions();
+    await flush();
+    byId('btn-not-now').click();
+    await flush();
+    expect(notice().hidden).toBe(true);
+    await toolbarAsksFor('https://docs.example.com/');
+    expect(notice().hidden).toBe(false);
+  });
+
+  it('ignores a request for a page that is not a website, and one for a site that already has access', async () => {
+    store.site_access_choice = 'limited';
+    granted.add('https://ok.example/*');
+    store.site_access_request = { url: 'file:///C:/notes.html' };
+    await initOptions();
+    await flush();
+    expect(notice().hidden).toBe(true);
+    await toolbarAsksFor('https://ok.example/page');
+    expect(notice().hidden).toBe(true);
+  });
+
+  it('follows access granted or removed elsewhere, such as the browser add-ons page', async () => {
+    await initOptions();
+    await flush();
+    granted.add('<all_urls>');
+    await permissionsChanged();
+    expect(notice().hidden).toBe(true);
+    granted.clear();
+    await permissionsChanged();
+    expect(notice().hidden).toBe(false);
+  });
+});

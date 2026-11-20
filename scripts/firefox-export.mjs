@@ -15,7 +15,7 @@ import { fileURLToPath } from 'url';
 import { inflateSync } from 'zlib';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const EXT = process.env.PA_EXT_DIR ? path.resolve(process.env.PA_EXT_DIR) : path.join(ROOT, '.output', 'firefox-mv2');
+const EXT = process.env.PA_EXT_DIR ? path.resolve(process.env.PA_EXT_DIR) : path.join(ROOT, '.output', 'firefox-mv3');
 const FIREFOX = process.env.FIREFOX_BIN ?? (process.platform === 'win32' ? 'C:\\Program Files\\Mozilla Firefox\\firefox.exe' : 'firefox');
 const PORT = 9300 + Math.floor(Math.random() * 600);
 

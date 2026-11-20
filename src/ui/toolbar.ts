@@ -322,7 +322,8 @@ export class FloatingToolbar {
     // Opening the toolbar can mount the app before saved settings arrive; waiting lets a stored "Don't show again" apply.
     this.scrollHintTimer = window.setTimeout(() => {
       this.scrollHintTimer = null;
-      if (!this.isOpen || this.settings.scrollHintDismissed) return;
+      // Another message takes priority; the hint comes back the next time the toolbar opens.
+      if (!this.isOpen || this.settings.scrollHintDismissed || this.toast) return;
       this.showToast(
         'Use two fingers to scroll',
         "Don't show again",
@@ -876,9 +877,21 @@ export class FloatingToolbar {
     el.classList.toggle('above', roomBelow < 48);
 
     this.wrapper.appendChild(el);
+    this.keepToastOnScreen(el);
     this.toast = state;
     resume();
     this.announce(message);
+  }
+
+  /** The toast is centred under the toolbar, which can sit near a screen edge. */
+  private keepToastOnScreen(el: HTMLElement): void {
+    const margin = 8;
+    const rect = el.getBoundingClientRect();
+    const viewport = window.innerWidth || document.documentElement.clientWidth;
+    let shift = 0;
+    if (rect.left < margin) shift = margin - rect.left;
+    else if (rect.right > viewport - margin) shift = viewport - margin - rect.right;
+    if (shift) el.style.setProperty('--pa-toast-shift', `${Math.round(shift)}px`);
   }
 
   private dismissToast(immediate = false): void {

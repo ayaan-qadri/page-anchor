@@ -15,6 +15,18 @@ import {
   SHORTCUT_DEFINITIONS,
 } from '../../src/core/shortcuts';
 import { formatBytes } from '../../src/core/format';
+import { getExtensionApi } from '../../src/core/inject';
+import {
+  ALL_SITES,
+  SITE_ACCESS_CHOICE_KEY,
+  SITE_ACCESS_REQUEST_KEY,
+  hasSiteAccess,
+  keptLimited,
+  setKeptLimited,
+  siteName,
+  siteOrigins,
+  type SiteAccessRequest,
+} from '../../src/core/site-access';
 import { appendMarkup } from '../../src/ui/dom';
 import { ShortcutRecorder } from '../../src/ui/shortcut-recorder';
 
@@ -56,6 +68,7 @@ export async function initOptions() {
   currentSettings = await loadSettings();
   saveStatusEl = document.getElementById('save-status');
 
+  void setupSiteAccess();
   setupTabs();
   renderShortcuts();
   setupPersistenceForm();
@@ -523,6 +536,121 @@ async function deleteSavedPage(page: PageMetadataSummary): Promise<void> {
     },
     () => void commit()
   );
+}
+
+const SITE_ACCESS_WHY = 'It uses this only to show your drawings, and nothing is sent anywhere.';
+
+async function setupSiteAccess(): Promise<void> {
+  const ext = getExtensionApi();
+  const notice = document.getElementById('site-access-notice');
+  const title = document.getElementById('site-access-title');
+  const desc = document.getElementById('site-access-desc');
+  const allowAll = document.getElementById('btn-allow-all-sites');
+  const allowOne = document.getElementById('btn-allow-one-site');
+  const keepLimited = document.getElementById('btn-keep-limited');
+  const notNow = document.getElementById('btn-not-now');
+  const status = document.getElementById('site-access-status');
+  const statusDesc = document.getElementById('site-access-status-desc');
+  const allowAllRow = document.getElementById('btn-allow-all-sites-row');
+  if (!ext || !notice || !title || !desc || !allowAll || !allowOne || !keepLimited || !notNow || !status || !statusDesc || !allowAllRow) return;
+
+  /** The site the toolbar sent the user here for, until it has access or the user says not now. */
+  let requestedUrl: string | null = null;
+  let dismissedForNow = false;
+
+  const takeRequest = async (): Promise<boolean> => {
+    const stored = (await ext.storage.local.get(SITE_ACCESS_REQUEST_KEY))[SITE_ACCESS_REQUEST_KEY] as Partial<SiteAccessRequest> | undefined;
+    if (!stored) return false;
+    await ext.storage.local.remove(SITE_ACCESS_REQUEST_KEY);
+    if (typeof stored.url !== 'string' || !siteOrigins(stored.url)) return false;
+    requestedUrl = stored.url;
+    dismissedForNow = false;
+    return true;
+  };
+
+  const render = async (focusNotice = false) => {
+    const all = await hasSiteAccess(ext);
+    const limited = await keptLimited(ext);
+    if (requestedUrl && (await hasSiteAccess(ext, requestedUrl))) requestedUrl = null;
+    const site = requestedUrl ? siteName(requestedUrl) : null;
+    const show = !all && !dismissedForNow && (site !== null || !limited);
+
+    if (show) {
+      title.textContent = site ? `Allow Page Anchor on ${site}?` : 'Let Page Anchor work on every website';
+      desc.textContent = site
+        ? `Drawings you make on ${site} will reappear on their own when you come back. ${SITE_ACCESS_WHY}`
+        : `Drawings only reappear on their own on websites Page Anchor can access. ${SITE_ACCESS_WHY}`;
+      allowOne.textContent = site ? `Only ${site}` : '';
+      allowOne.hidden = !site;
+      notNow.hidden = !site;
+      keepLimited.hidden = !!site;
+    }
+    const hadFocus = notice.contains(document.activeElement);
+    notice.hidden = !show;
+    if (!show && hadFocus) document.getElementById('main-settings-content')?.focus();
+    if (show && focusNotice) {
+      notice.scrollIntoView({ block: 'start' });
+      notice.focus();
+    }
+
+    status.textContent = all ? 'All websites' : 'Limited';
+    statusDesc.textContent = all ? 'Your drawings reappear on their own on every website.' : 'Drawings reappear on their own only on the websites you allowed.';
+    allowAllRow.hidden = all;
+  };
+
+  const requestAll = async () => {
+    let granted = false;
+    try {
+      granted = await ext.permissions.request(ALL_SITES);
+    } catch {}
+    if (granted) requestedUrl = null;
+    showToast(granted ? 'Access allowed. Your drawings will reappear on their own.' : "Access wasn't allowed");
+    await render();
+  };
+  allowAll.addEventListener('click', requestAll);
+  allowAllRow.addEventListener('click', requestAll);
+
+  allowOne.addEventListener('click', async () => {
+    const url = requestedUrl;
+    const origins = siteOrigins(url ?? undefined);
+    if (!url || !origins) return;
+    let granted = false;
+    try {
+      granted = await ext.permissions.request(origins);
+    } catch {}
+    if (granted) {
+      await setKeptLimited(ext, true);
+      requestedUrl = null;
+    }
+    showToast(granted ? `Access allowed on ${siteName(url)}` : "Access wasn't allowed");
+    await render();
+  });
+
+  keepLimited.addEventListener('click', async () => {
+    await setKeptLimited(ext, true);
+    await render();
+    showToast('Kept limited. You can change this in Drawings & pages.', 'Undo', async () => {
+      await setKeptLimited(ext, false);
+      await render();
+    });
+  });
+
+  notNow.addEventListener('click', async () => {
+    requestedUrl = null;
+    dismissedForNow = true;
+    await render();
+  });
+
+  ext.permissions?.onAdded?.addListener(() => void render());
+  ext.permissions?.onRemoved?.addListener(() => void render());
+  ext.storage.onChanged?.addListener((changes: Record<string, { newValue?: unknown }>) => {
+    if (changes[SITE_ACCESS_REQUEST_KEY]?.newValue) {
+      void takeRequest().then((taken) => render(taken));
+    } else if (SITE_ACCESS_CHOICE_KEY in changes) {
+      void render();
+    }
+  });
+  await render(await takeRequest());
 }
 
 function setupBackupRestore() {

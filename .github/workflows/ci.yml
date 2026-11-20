@@ -33,7 +33,7 @@ jobs:
       - name: Production build (Chrome MV3)
         run: pnpm build
 
-      - name: Production build (Firefox MV2)
+      - name: Production build (Firefox MV3)
         run: pnpm build:firefox
 
   e2e:
@@ -58,7 +58,7 @@ jobs:
         run: pnpm build
 
       # The Firefox end-to-end tests install this build into the runner's own Firefox.
-      - name: Production build (Firefox MV2)
+      - name: Production build (Firefox MV3)
         run: pnpm build:firefox
 
       - name: Cache Playwright browsers

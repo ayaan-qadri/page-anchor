@@ -9,18 +9,39 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
     tabUpdated?: (tabId: number, changeInfo: { url?: string; status?: string }) => void;
     actionClick?: (tab?: any) => Promise<void>;
     message?: (msg: unknown, sender: { tab?: { id?: number } }, sendResponse?: (r?: unknown) => void) => boolean;
+    permissionAdded?: () => void;
+    permissionRemoved?: () => void;
+    storageChanged?: (changes: Record<string, unknown>) => void;
   };
+  let stored: Record<string, unknown>;
 
   beforeEach(() => {
     listeners = {};
+    stored = {};
 
     mockChrome = {
       action: {
+        setBadgeText: vi.fn().mockResolvedValue(undefined),
+        setBadgeBackgroundColor: vi.fn().mockResolvedValue(undefined),
+        setTitle: vi.fn().mockResolvedValue(undefined),
         onClicked: {
           addListener: vi.fn((fn) => {
             listeners.actionClick = fn;
           }),
         },
+      },
+      storage: {
+        local: {
+          get: vi.fn(async (key: string) => (key in stored ? { [key]: stored[key] } : {})),
+          set: vi.fn(async (items: Record<string, unknown>) => void Object.assign(stored, items)),
+          remove: vi.fn(async (key: string) => void delete stored[key]),
+        },
+        onChanged: { addListener: vi.fn((fn) => (listeners.storageChanged = fn)) },
+      },
+      permissions: {
+        contains: vi.fn().mockResolvedValue(true),
+        onAdded: { addListener: vi.fn((fn) => (listeners.permissionAdded = fn)) },
+        onRemoved: { addListener: vi.fn((fn) => (listeners.permissionRemoved = fn)) },
       },
       scripting: {
         executeScript: vi.fn().mockResolvedValue([{ result: true }]),
@@ -42,6 +63,8 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
         },
       },
       runtime: {
+        getManifest: vi.fn(() => ({ action: { default_title: 'Page Anchor: toggle drawing toolbar' } })),
+        openOptionsPage: vi.fn(),
         onMessage: {
           addListener: vi.fn((fn) => {
             listeners.message = fn;
@@ -261,5 +284,110 @@ describe('Background Service Worker: Message Routing, Tab Management, & Script I
 
     listeners.tabUpdated?.(5, { url: 'https://example.com/app/route-2' });
     expect(mockChrome.tabs.sendMessage).toHaveBeenCalledWith(5, { type: 'PAGE_ANCHOR_URL_CHANGED' });
+  });
+
+  describe('access to websites', () => {
+    const NO_ACCESS = { title: 'Page Anchor needs access to websites' };
+    const DEFAULT = { title: 'Page Anchor: toggle drawing toolbar' };
+
+    it('marks the icon while access is missing and clears it once granted', async () => {
+      mockChrome.permissions.contains.mockResolvedValue(false);
+      backgroundDefinition.main();
+      await vi.waitFor(() => expect(mockChrome.action.setTitle).toHaveBeenCalledWith(NO_ACCESS));
+      expect(mockChrome.permissions.contains).toHaveBeenCalledWith({ origins: ['<all_urls>'] });
+      expect(mockChrome.action.setBadgeText).toHaveBeenCalledWith({ text: '!' });
+
+      mockChrome.permissions.contains.mockResolvedValue(true);
+      mockChrome.tabs.query.mockResolvedValue([{ id: 4, url: 'https://example.com' }]);
+      listeners.permissionAdded?.();
+      await vi.waitFor(() => expect(mockChrome.action.setTitle).toHaveBeenLastCalledWith(DEFAULT));
+      expect(mockChrome.action.setBadgeText).toHaveBeenLastCalledWith({ text: '' });
+      // Tabs that were already open get the extension without a reload.
+      await vi.waitFor(() => expect(mockChrome.scripting.executeScript).toHaveBeenCalledWith({ target: { tabId: 4 }, files: ['content-scripts/content.js'] }));
+    });
+
+    it('marks the icon again when access is taken away', async () => {
+      backgroundDefinition.main();
+      await vi.waitFor(() => expect(mockChrome.action.setBadgeText).toHaveBeenCalledWith({ text: '' }));
+      mockChrome.permissions.contains.mockResolvedValue(false);
+      listeners.permissionRemoved?.();
+      await vi.waitFor(() => expect(mockChrome.action.setBadgeText).toHaveBeenLastCalledWith({ text: '!' }));
+    });
+
+    it('stops marking the icon once the user keeps access limited, and marks it again if they undo that', async () => {
+      mockChrome.permissions.contains.mockResolvedValue(false);
+      backgroundDefinition.main();
+      await vi.waitFor(() => expect(mockChrome.action.setBadgeText).toHaveBeenLastCalledWith({ text: '!' }));
+
+      stored.site_access_choice = 'limited';
+      listeners.storageChanged?.({ site_access_choice: { newValue: 'limited' } });
+      await vi.waitFor(() => expect(mockChrome.action.setBadgeText).toHaveBeenLastCalledWith({ text: '' }));
+      expect(mockChrome.action.setTitle).toHaveBeenLastCalledWith(DEFAULT);
+
+      delete stored.site_access_choice;
+      listeners.storageChanged?.({ site_access_choice: {} });
+      await vi.waitFor(() => expect(mockChrome.action.setBadgeText).toHaveBeenLastCalledWith({ text: '!' }));
+    });
+
+    it('ignores storage changes that have nothing to do with access', async () => {
+      backgroundDefinition.main();
+      await vi.waitFor(() => expect(mockChrome.action.setBadgeText).toHaveBeenCalledTimes(1));
+      listeners.storageChanged?.({ page_anchor_settings: {} });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mockChrome.action.setBadgeText).toHaveBeenCalledTimes(1);
+    });
+
+    it("answers the page app about the asking page's own site", async () => {
+      mockChrome.permissions.contains.mockImplementation(async ({ origins }: { origins: string[] }) => origins[0] === 'https://allowed.example/*');
+      backgroundDefinition.main();
+      const ask = async (url: string) => {
+        const sendResponse = vi.fn();
+        expect(listeners.message?.({ type: 'PAGE_ANCHOR_SITE_ACCESS' }, { tab: { id: 2 }, url } as never, sendResponse)).toBe(true);
+        await vi.waitFor(() => expect(sendResponse).toHaveBeenCalled());
+        return sendResponse.mock.calls[0][0];
+      };
+      expect(await ask('https://allowed.example/a/b?c=1')).toEqual({ granted: true });
+      expect(await ask('http://blocked.example:8080/x')).toEqual({ granted: false });
+      expect(mockChrome.permissions.contains).toHaveBeenCalledWith({ origins: ['http://blocked.example/*'] });
+      // Pages that are not websites have nothing to ask for.
+      expect(await ask('file:///C:/notes.html')).toEqual({ granted: true });
+    });
+
+    it('opens settings on the question of one site when the toolbar asks for it', async () => {
+      backgroundDefinition.main();
+      listeners.message?.({ type: 'PAGE_ANCHOR_OPEN_OPTIONS', site: 'https://example.com/page' }, { tab: { id: 2 } });
+      await vi.waitFor(() => expect(mockChrome.runtime.openOptionsPage).toHaveBeenCalled());
+      expect(stored.site_access_request).toEqual({ url: 'https://example.com/page' });
+    });
+
+    it('opens plain settings from the More menu', async () => {
+      backgroundDefinition.main();
+      listeners.message?.({ type: 'PAGE_ANCHOR_OPEN_OPTIONS' }, { tab: { id: 2 } });
+      await vi.waitFor(() => expect(mockChrome.runtime.openOptionsPage).toHaveBeenCalled());
+      expect(stored.site_access_request).toBeUndefined();
+    });
+
+    it('opens the settings page on install when access was not granted', async () => {
+      mockChrome.permissions.contains.mockResolvedValue(false);
+      backgroundDefinition.main();
+      await listeners.onInstalled?.({ reason: 'install' });
+      expect(mockChrome.runtime.openOptionsPage).toHaveBeenCalled();
+      expect(mockChrome.scripting.executeScript).not.toHaveBeenCalled();
+    });
+
+    it('does not open the settings page on install when access was granted', async () => {
+      mockChrome.tabs.query.mockResolvedValue([]);
+      backgroundDefinition.main();
+      await listeners.onInstalled?.({ reason: 'install' });
+      expect(mockChrome.runtime.openOptionsPage).not.toHaveBeenCalled();
+    });
+
+    it('does not open the settings page on an update, even without access', async () => {
+      mockChrome.permissions.contains.mockResolvedValue(false);
+      mockChrome.tabs.query.mockResolvedValue([]);
+      backgroundDefinition.main();
+      await listeners.onInstalled?.({ reason: 'update' });
+      expect(mockChrome.runtime.openOptionsPage).not.toHaveBeenCalled();
+    });
   });
 });

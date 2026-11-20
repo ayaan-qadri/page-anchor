@@ -54,6 +54,36 @@
     @apply mt-1.5 text-[14px] leading-relaxed text-brand-muted max-w-[62ch];
   }
 
+  .pa-access-notice {
+    @apply flex flex-col items-start gap-4 mb-8 px-5 py-4.5 rounded-2xl border border-brand-accent/40 bg-brand-accent/10 outline-none scroll-mt-28;
+    @apply focus-visible:ring-2 focus-visible:ring-brand-ring;
+  }
+
+  .pa-access-text {
+    @apply min-w-0 max-w-[62ch];
+  }
+
+  .pa-access-actions {
+    @apply flex flex-wrap items-center gap-2;
+    @apply max-[520px]:flex-col max-[520px]:items-stretch max-[520px]:self-stretch;
+  }
+
+  .pa-btn[hidden] {
+    @apply hidden;
+  }
+
+  .pa-access-notice[hidden] {
+    @apply hidden;
+  }
+
+  .pa-access-notice h2 {
+    @apply text-[15px] font-semibold tracking-[-0.01em] text-brand-text;
+  }
+
+  .pa-access-notice p {
+    @apply mt-1 text-[13px] leading-relaxed text-brand-muted;
+  }
+
   .pa-card {
     @apply rounded-2xl border border-brand-line bg-brand-surface overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.05)];
   }
@@ -120,6 +150,10 @@
 
   .pa-btn-secondary {
     @apply border-brand-line-strong bg-brand-surface text-brand-text hover:bg-brand-hover;
+  }
+
+  .pa-btn-ghost {
+    @apply border-transparent bg-transparent text-brand-muted hover:bg-brand-hover hover:text-brand-text;
   }
 
   .pa-btn-danger {

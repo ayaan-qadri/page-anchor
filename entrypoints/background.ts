@@ -1,9 +1,20 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { APP_SCRIPT_PATH, LOAD_APP_MESSAGE, getExtensionApi, injectContentScript } from '../src/core/inject';
+import {
+  SITE_ACCESS_CHOICE_KEY,
+  SITE_ACCESS_MESSAGE,
+  SITE_ACCESS_REQUEST_KEY,
+  hasSiteAccess,
+  keptLimited,
+  type SiteAccessRequest,
+  type SiteAccessResponse,
+} from '../src/core/site-access';
 import { STORAGE_CHANGED_MESSAGE, rekeySavedPages, setStorageChangeRelay, type StorageChangedMessage } from '../src/core/storage';
 import { CAPTURE_VIEWPORT_MESSAGE, type CaptureViewportRequest, type CaptureViewportResponse } from '../src/export/messages';
 
 const CAPTURE_RETRY_MS = 550;
+const NO_ACCESS_TITLE = 'Page Anchor needs access to websites';
+const NO_ACCESS_BADGE_COLOR = '#d97706';
 
 /** How Chrome and Firefox word a refusal to screenshot a protected page (browser pages, add-on stores, other extensions). */
 const BLOCKED_CAPTURE = /permission|cannot access|cannot be scripted|not allowed|restricted|extensions gallery|missing host/i;
@@ -40,8 +51,51 @@ export default defineBackground(() => {
     return activeTab?.id;
   }
 
-  const actionApi = ext.action ?? (ext as unknown as { browserAction?: typeof ext.action }).browserAction;
-  actionApi?.onClicked?.addListener(async (tab?: { id?: number }) => {
+  const defaultTitle = ext.runtime.getManifest?.()?.action?.default_title ?? 'Page Anchor';
+
+  /** Asking on the icon stops once the user chose to keep access limited. */
+  async function needsToAsk(): Promise<boolean> {
+    return !(await hasSiteAccess(ext)) && !(await keptLimited(ext));
+  }
+
+  async function showSiteAccess(): Promise<void> {
+    const ask = await needsToAsk();
+    try {
+      await ext.action.setBadgeText({ text: ask ? '!' : '' });
+      if (ask) await ext.action.setBadgeBackgroundColor({ color: NO_ACCESS_BADGE_COLOR });
+      await ext.action.setTitle({ title: ask ? NO_ACCESS_TITLE : defaultTitle });
+    } catch {}
+  }
+
+  async function openOptions(siteUrl?: unknown): Promise<void> {
+    if (typeof siteUrl === 'string') {
+      await ext.storage.local.set({ [SITE_ACCESS_REQUEST_KEY]: { url: siteUrl } satisfies SiteAccessRequest }).catch(() => {});
+    }
+    await ext.runtime.openOptionsPage?.();
+  }
+
+  async function injectIntoOpenTabs(): Promise<void> {
+    try {
+      const tabs = await ext.tabs.query({ url: ['http://*/*', 'https://*/*'] });
+      for (const tab of tabs) {
+        if (tab.id) {
+          injectContentScript(ext, tab.id).catch(() => {});
+        }
+      }
+    } catch {}
+  }
+
+  void showSiteAccess();
+  ext.permissions?.onAdded?.addListener(() => {
+    void showSiteAccess();
+    void injectIntoOpenTabs();
+  });
+  ext.permissions?.onRemoved?.addListener(() => void showSiteAccess());
+  ext.storage?.onChanged?.addListener((changes: Record<string, unknown>) => {
+    if (SITE_ACCESS_CHOICE_KEY in changes) void showSiteAccess();
+  });
+
+  ext.action.onClicked.addListener(async (tab?: { id?: number }) => {
     const tabId = tab?.id ?? (await activeTabId());
     if (tabId) {
       await safeToggleTab(tabId);
@@ -59,13 +113,17 @@ export default defineBackground(() => {
 
   // The in-page toolbar's "Settings & Backup" item routes through the
   // background, because only an extension context can open the options page.
-  ext.runtime?.onMessage?.addListener((msg: unknown, sender: { tab?: { id?: number } }, sendResponse: (response?: unknown) => void) => {
+  ext.runtime?.onMessage?.addListener((msg: unknown, sender: { tab?: { id?: number; url?: string }; url?: string }, sendResponse: (response?: unknown) => void) => {
     const type = (msg as { type?: unknown } | null)?.type;
     if (type === LOAD_APP_MESSAGE) {
       const tabId = sender.tab?.id;
       if (tabId === undefined) return false;
       void injectContentScript(ext, tabId, APP_SCRIPT_PATH).then((ok) => sendResponse({ ok }));
       // Keeps the channel open for the asynchronous injection result.
+      return true;
+    }
+    if (type === SITE_ACCESS_MESSAGE) {
+      void hasSiteAccess(ext, sender.url ?? sender.tab?.url ?? '').then((granted) => sendResponse({ granted } satisfies SiteAccessResponse));
       return true;
     }
     if (type === CAPTURE_VIEWPORT_MESSAGE) {
@@ -75,7 +133,7 @@ export default defineBackground(() => {
       return true;
     }
     if (type === 'PAGE_ANCHOR_OPEN_OPTIONS') {
-      ext.runtime.openOptionsPage?.();
+      void openOptions((msg as { site?: unknown }).site);
     } else if (type === STORAGE_CHANGED_MESSAGE) {
       void relayStorageChange(msg as StorageChangedMessage, sender.tab?.id);
     }
@@ -137,14 +195,10 @@ export default defineBackground(() => {
     if (reason === 'update') {
       await rekeySavedPages().catch(() => {});
     }
-
-    try {
-      const tabs = await ext.tabs.query({ url: ['http://*/*', 'https://*/*'] });
-      for (const tab of tabs) {
-        if (tab.id) {
-          injectContentScript(ext, tab.id).catch(() => {});
-        }
-      }
-    } catch {}
+    if (reason === 'install' && (await needsToAsk())) {
+      await openOptions();
+      return;
+    }
+    await injectIntoOpenTabs();
   });
 });

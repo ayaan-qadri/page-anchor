@@ -54,6 +54,19 @@
       </nav>
 
       <main id="main-settings-content" class="pa-content min-w-0 outline-none" tabindex="-1">
+        <section id="site-access-notice" class="pa-access-notice" aria-labelledby="site-access-title" aria-describedby="site-access-desc" tabindex="-1" hidden>
+          <div class="pa-access-text">
+            <h2 id="site-access-title"></h2>
+            <p id="site-access-desc"></p>
+          </div>
+          <div class="pa-access-actions">
+            <button type="button" id="btn-allow-all-sites" class="pa-btn pa-btn-primary">Allow on all websites</button>
+            <button type="button" id="btn-allow-one-site" class="pa-btn pa-btn-secondary" hidden></button>
+            <button type="button" id="btn-keep-limited" class="pa-btn pa-btn-secondary">Keep it limited</button>
+            <button type="button" id="btn-not-now" class="pa-btn pa-btn-ghost" hidden>Not now</button>
+          </div>
+        </section>
+
         <section role="tabpanel" id="tab-shortcuts" class="pa-tab-pane flex flex-col gap-7" aria-labelledby="tab-btn-shortcuts" tabindex="0">
           <div class="pa-pane-head">
             <h2>Keyboard shortcuts</h2>
@@ -72,6 +85,23 @@
           </div>
 
           <div class="flex flex-col gap-5">
+            <div class="pa-card">
+              <div class="pa-card-head">
+                <h3>Access to websites</h3>
+              </div>
+              <div class="pa-rows">
+                <div class="pa-row">
+                  <div class="pa-row-text">
+                    <span class="pa-row-title" id="site-access-status"></span>
+                    <p class="pa-row-desc" id="site-access-status-desc"></p>
+                  </div>
+                  <div class="pa-row-control">
+                    <button type="button" id="btn-allow-all-sites-row" class="pa-btn pa-btn-secondary" aria-describedby="site-access-status-desc" hidden>Allow on all websites</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="pa-card">
               <div class="pa-card-head">
                 <h3>Which pages share drawings</h3>

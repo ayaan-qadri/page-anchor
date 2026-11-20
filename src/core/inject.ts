@@ -30,26 +30,11 @@ export function isExtensionContextValid(): boolean {
   }
 }
 
-interface LegacyTabsApi {
-  executeScript?: (tabId: number, details: { file: string }) => Promise<unknown>;
-}
-
 export async function injectContentScript(ext: ExtensionApi, tabId: number, file = CONTENT_SCRIPT_PATH): Promise<boolean> {
   try {
-    if (ext.scripting?.executeScript) {
-      await ext.scripting.executeScript({
-        target: { tabId },
-        files: [file],
-      });
-      return true;
-    }
-    const legacyTabs = ext.tabs as unknown as LegacyTabsApi | undefined;
-    if (legacyTabs?.executeScript) {
-      await legacyTabs.executeScript(tabId, { file });
-      return true;
-    }
+    await ext.scripting.executeScript({ target: { tabId }, files: [file] });
+    return true;
   } catch {
     return false;
   }
-  return false;
 }

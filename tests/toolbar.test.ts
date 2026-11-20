@@ -1109,6 +1109,23 @@ describe('FloatingToolbar: two-finger scroll hint on touch screens', () => {
     expect(hint()).toBeNull();
   });
 
+  it('waits for the next opening instead of replacing a message that is already showing', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(pointer: coarse)' }));
+    const bar = new FloatingToolbar(container, engine, new HistoryManager([]), new TextEditorOverlay(container), settingsWith({}), makeCallbacks());
+    toolbar = bar;
+    bar.setDrawingMode(true);
+    bar.showToast('Something more important', 'Act', () => {}, 10000);
+    vi.advanceTimersByTime(500);
+    expect(hint()?.textContent).toContain('Something more important');
+
+    bar.setDrawingMode(false);
+    container.querySelectorAll('.pa-toast').forEach((el) => el.remove());
+    vi.advanceTimersByTime(10000);
+    bar.setDrawingMode(true);
+    vi.advanceTimersByTime(500);
+    expect(hint()?.textContent).toContain('Use two fingers to scroll');
+  });
+
   it('closes a showing hint once the saved choice arrives', () => {
     const bar = open(true);
     expect(hint()).not.toBeNull();

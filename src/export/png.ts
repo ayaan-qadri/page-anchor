@@ -52,7 +52,7 @@ export class PngEncoder {
 
   async finish(): Promise<Blob> {
     if (this.rowsWritten === 0) throw new Error('No rows were added');
-    const compressed = new Uint8Array(await (await this.zlib.close()).arrayBuffer());
+    const compressed = await this.zlib.closeToBytes();
 
     const header = new Uint8Array(13);
     const view = new DataView(header.buffer);

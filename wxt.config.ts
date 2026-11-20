@@ -2,6 +2,7 @@ import { defineConfig } from 'wxt';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
+  manifestVersion: 3,
   vite: () => ({
     plugins: [tailwindcss()],
   }),
@@ -11,12 +12,7 @@ export default defineConfig({
   manifest: ({ browser }) => ({
     name: 'Page Anchor - Web Annotation & Drawing',
     description: 'Freehand drawing, shapes, and text annotations directly on web pages with persistent storage and customizable shortcuts.',
-    permissions: [
-      'storage',
-      'unlimitedStorage',
-      'activeTab',
-      ...(browser === 'firefox' || browser === 'safari' ? [] : ['scripting']),
-    ],
+    permissions: ['storage', 'unlimitedStorage', 'activeTab', 'scripting'],
     // Content script matches alone don't let the background read tab URLs or re-inject into tabs open before an install or update.
     host_permissions: ['<all_urls>'],
     ...(browser === 'firefox'

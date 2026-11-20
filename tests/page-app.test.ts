@@ -75,6 +75,58 @@ describe('Content Script: Shadow DOM Isolation, Route Observer, & Extension Mess
     expect(uiRoot).not.toBeNull();
   });
 
+  describe('access to websites', () => {
+    const toastText = () => document.getElementById('page-anchor-host')?.shadowRoot?.querySelector('.pa-toast:not(.pa-toast-hiding) .pa-toast-text')?.textContent ?? '';
+    const toggle = () => messageListener?.({ type: 'PAGE_ANCHOR_TOGGLE' }, {}, vi.fn());
+    const answerAccess = (granted: boolean) =>
+      mockChrome.runtime.sendMessage.mockImplementation((msg: { type: string }) => Promise.resolve(msg.type === 'PAGE_ANCHOR_SITE_ACCESS' ? { granted } : undefined));
+
+    it('says so once when the toolbar opens on a site without access, and Set up opens settings for that site', async () => {
+      answerAccess(false);
+      contentDefinition.main();
+      toggle();
+      await vi.waitFor(() => expect(toastText()).toBe("Drawings on this site won't reappear on their own"));
+      expect(mockChrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'PAGE_ANCHOR_SITE_ACCESS' });
+
+      const button = document.getElementById('page-anchor-host')!.shadowRoot!.querySelector('.pa-toast-btn') as HTMLButtonElement;
+      expect(button.textContent).toBe('Set up');
+      button.click();
+      expect(mockChrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'PAGE_ANCHOR_OPEN_OPTIONS', site: window.location.href });
+
+      // Closing and reopening the toolbar on the same page does not repeat it.
+      toggle();
+      toggle();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(toastText()).toBe('');
+    });
+
+    it('stays quiet when the site has access', async () => {
+      answerAccess(true);
+      contentDefinition.main();
+      toggle();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(mockChrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'PAGE_ANCHOR_SITE_ACCESS' });
+      expect(toastText()).toBe('');
+    });
+
+    it('stays quiet when the background cannot answer', async () => {
+      mockChrome.runtime.sendMessage.mockImplementation(() => Promise.reject(new Error('no receiver')));
+      contentDefinition.main();
+      toggle();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(toastText()).toBe('');
+    });
+
+    it('the More menu opens plain settings', async () => {
+      answerAccess(true);
+      contentDefinition.main();
+      toggle();
+      const shadow = document.getElementById('page-anchor-host')!.shadowRoot!;
+      (shadow.querySelector('[data-action="open-options"]') as HTMLButtonElement).click();
+      expect(mockChrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'PAGE_ANCHOR_OPEN_OPTIONS', site: undefined });
+    });
+  });
+
   it('prevents redundant duplicate host mount if already connected', () => {
     contentDefinition.main();
     messageListener?.({ type: 'PAGE_ANCHOR_TOGGLE' }, {}, vi.fn());

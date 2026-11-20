@@ -4,6 +4,7 @@ import { CanvasEngine, type RegionPlacement } from '../src/core/engine';
 import { HistoryManager } from '../src/core/history';
 import { getExtensionApi, isExtensionContextValid } from '../src/core/inject';
 import { ShortcutManager, isEditableTarget } from '../src/core/shortcuts';
+import { SITE_ACCESS_MESSAGE, type SiteAccessResponse } from '../src/core/site-access';
 import {
   DEFAULT_SETTINGS,
   SETTINGS_STORAGE_KEY,
@@ -45,6 +46,7 @@ const HANDLED_MESSAGE_TYPES = new Set([
 ]);
 
 const HOST_ID = 'page-anchor-host';
+const SITE_ACCESS_TOAST_MS = 10000;
 
 /** A freshly injected copy (e.g. after an extension update) asks any older copy on the page to tear down. */
 const TAKEOVER_EVENT = 'page-anchor:takeover';
@@ -491,8 +493,9 @@ export default defineUnlistedScript({
       });
 
       toolbar = new FloatingToolbar(uiContainer, engine, history, textEditor, settings, {
-        onToggleActive: () => {
+        onToggleActive: (active) => {
           ensureHostAttached();
+          if (active) void askForSiteAccess();
         },
         onClear: () => {
           markDirty();
@@ -506,15 +509,7 @@ export default defineUnlistedScript({
           engine.setOrphanedAnchorMode(settings.orphanedAnchorMode);
           engine.setStrokeSimplification(settings.strokeSimplification);
         },
-        onOpenOptions: () => {
-          try {
-            const sent = getExtensionApi()?.runtime.sendMessage({ type: 'PAGE_ANCHOR_OPEN_OPTIONS' });
-            if (sent && typeof sent.catch === 'function') sent.catch(() => {});
-          } catch {
-            // The background may be asleep; the options page stays reachable
-            // through the browser's extension management UI either way.
-          }
-        },
+        onOpenOptions: () => openOptions(),
         onExport: (format) => exportPage(format),
         onCaptureArea: selectArea,
       });
@@ -540,6 +535,34 @@ export default defineUnlistedScript({
       mount();
       if (!loaded && !loadInFlight) void loadPage(currentLoadedUrl);
     };
+
+    /** With `site`, the settings page opens on the question of access for that site. */
+    function openOptions(site?: string): void {
+      try {
+        const sent = getExtensionApi()?.runtime.sendMessage({ type: 'PAGE_ANCHOR_OPEN_OPTIONS', site });
+        if (sent && typeof sent.catch === 'function') sent.catch(() => {});
+      } catch {
+        // The background may be asleep; the options page stays reachable
+        // through the browser's extension management UI either way.
+      }
+    }
+
+    let askedForSiteAccess = false;
+
+    /** Only the settings page can show the browser's permission prompt, so the toolbar points there, once per page and only for a site that is really missing out. */
+    async function askForSiteAccess(): Promise<void> {
+      if (askedForSiteAccess) return;
+      let response: SiteAccessResponse | undefined;
+      try {
+        response = (await getExtensionApi()?.runtime.sendMessage({ type: SITE_ACCESS_MESSAGE })) as SiteAccessResponse | undefined;
+      } catch {
+        return;
+      }
+      if (response?.granted === false && !torn && !askedForSiteAccess) {
+        askedForSiteAccess = true;
+        toolbar.showToast("Drawings on this site won't reappear on their own", 'Set up', () => openOptions(window.location.href), SITE_ACCESS_TOAST_MS);
+      }
+    }
 
     async function loadPage(url: string, preloaded?: PageAnchorData | null): Promise<void> {
       const token = ++navToken;
