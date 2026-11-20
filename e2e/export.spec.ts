@@ -13,6 +13,17 @@ const STROKE: Rgb = [239, 68, 68];
 
 type Rgb = [number, number, number];
 
+/** A sticky red header and a fixed yellow footer over blue, green and black bands. */
+const STICKY_PAGE = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Sticky</title></head>
+<body style="margin:0">
+  <div style="position:sticky;top:0;height:60px;background:rgb(255,0,0)"></div>
+  <div style="height:1000px;background:rgb(0,0,255)"></div>
+  <div style="height:1000px;background:rgb(0,255,0)"></div>
+  <div style="height:1000px;background:rgb(0,0,0)"></div>
+  <div style="position:fixed;bottom:0;left:0;right:0;height:30px;background:rgb(255,255,0)"></div>
+</body></html>`;
+
 /** 3500px tall: a fixed red bar, colored bands, and a yellow stripe near the bottom to check the clamped last tile lines up. */
 const BANDS_PAGE = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><title>Export: Bands / Test</title></head>
@@ -102,7 +113,7 @@ test.describe('Save page as PNG / PDF', () => {
   let server: TestServer;
 
   test.beforeAll(async () => {
-    server = await startServer({ '/bands': BANDS_PAGE });
+    server = await startServer({ '/bands': BANDS_PAGE, '/sticky': STICKY_PAGE, '/phone': BANDS_PAGE.replace('<head>', '<head><meta name="viewport" content="width=device-width">') });
   });
 
   test.afterAll(async () => {
@@ -236,5 +247,275 @@ test.describe('Save page as PNG / PDF', () => {
     await pa(page, '[data-action="export-png"]').click();
     expect((await download).suggestedFilename()).toMatch(/\.png$/);
     await expect(pa(page, '.pa-toast-text')).toHaveText('Page saved as PNG');
+  });
+
+  test.describe('Capture area', () => {
+    async function selectArea(page: Page, from: [number, number], to: [number, number]) {
+      await pa(page, '[data-action="more"]').click();
+      await pa(page, '[data-action="capture-area"]').click();
+      await expect(pa(page, '.pa-area-hint')).toBeVisible();
+      await drawStroke(page, from, to, 8);
+      await expect(pa(page, '.pa-area-actions')).toBeVisible();
+    }
+
+    test('saves only the selected part of the screen, with drawings, as PNG or PDF', async ({ context }) => {
+      test.setTimeout(90000);
+      const page = context.pages()[0] ?? (await context.newPage());
+      await page.goto(`${server.origin}/bands`);
+      await waitForContentScript(page);
+      await openToolbar(page, context);
+      await pa(page, '[data-tool="pen"]').click();
+      await drawStroke(page, [400, 300], [700, 300], 12);
+
+      await selectArea(page, [300, 250], [800, 350]);
+      let download = page.waitForEvent('download', { timeout: 30000 });
+      await pa(page, '[data-action="area-png"]').click();
+      const file = await download;
+      expect(file.suggestedFilename()).toMatch(/^Export Bands Test \d{4}-\d{2}-\d{2}\.png$/);
+      const bytes = fs.readFileSync((await file.path())!);
+      const decoded = decodePng(bytes);
+      const dpr = decoded.width / 500;
+      expect(dpr).toBeGreaterThanOrEqual(1);
+      expect(Math.abs(decoded.height - 100 * dpr)).toBeLessThanOrEqual(1);
+      const png = { pixel: (x: number, y: number) => decoded.pixel(Math.round(x * dpr), Math.round(y * dpr)) };
+      expectColor(png.pixel(5, 5), BLUE, 'page under the area, not dimmed');
+      expectColor(png.pixel(250, 50), STROKE, 'drawing');
+      await expect(pa(page, '.pa-toast-text')).toHaveText('Area saved as PNG');
+      await expect(pa(page, '.pa-area')).toHaveCount(0);
+
+      await selectArea(page, [300, 250], [800, 350]);
+      download = page.waitForEvent('download', { timeout: 30000 });
+      await pa(page, '[data-action="area-pdf"]').click();
+      const pdf = fs.readFileSync((await (await download).path())!).toString('latin1');
+      expect(pdf.startsWith('%PDF-1.4\n')).toBe(true);
+      expect(Number(/\/Width (\d+)/.exec(pdf)![1])).toBe(decoded.width);
+      // One page the size of the area on screen (0.75pt per CSS pixel), not an A4 sheet.
+      expect(pdf).toContain('/Count 1');
+      expect(pdf).toContain('/MediaBox [0 0 375 75]');
+      await expect(pa(page, '.pa-toast-text')).toHaveText('Area saved as PDF');
+    });
+
+    test('copies the selected area to the clipboard', async ({ context }) => {
+      test.setTimeout(60000);
+      await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: server.origin });
+      const page = context.pages()[0] ?? (await context.newPage());
+      await page.goto(`${server.origin}/bands`);
+      await waitForContentScript(page);
+      await openToolbar(page, context);
+
+      await selectArea(page, [100, 50], [300, 150]);
+      await pa(page, '[data-action="area-copy"]').click();
+      await expect(pa(page, '.pa-toast-text')).toHaveText('Copied to clipboard');
+      const copied = await page.evaluate(async () => {
+        const [item] = await navigator.clipboard.read();
+        const bitmap = await createImageBitmap(await item.getType('image/png'));
+        return { width: bitmap.width, height: bitmap.height };
+      });
+      expect(copied.width / copied.height).toBeCloseTo(2, 1);
+    });
+
+    async function savedPng(page: Page) {
+      const download = page.waitForEvent('download', { timeout: 30000 });
+      await pa(page, '[data-action="area-png"]').click();
+      return decodePng(fs.readFileSync((await (await download).path())!));
+    }
+
+    test('on a scrolled page, saves what is on screen, sticky header and fixed footer included', async ({ context }) => {
+      test.setTimeout(60000);
+      const page = context.pages()[0] ?? (await context.newPage());
+      await page.goto(`${server.origin}/sticky`);
+      await waitForContentScript(page);
+      await openToolbar(page, context);
+      await page.evaluate(() => window.scrollTo(0, 900));
+      await pa(page, '[data-tool="pen"]').click();
+      await drawStroke(page, [400, 300], [700, 300], 12);
+      const viewH = await page.evaluate(() => window.innerHeight);
+
+      await selectArea(page, [300, 10], [800, viewH - 10]);
+      const decoded = await savedPng(page);
+      const dpr = decoded.width / 500;
+      expect(Math.abs(decoded.height - (viewH - 20) * dpr)).toBeLessThanOrEqual(1);
+      // Checks are in CSS pixels of the area, whose top is at screen y 10, i.e. document y 910.
+      const png = { pixel: (x: number, y: number) => decoded.pixel(Math.round(x * dpr), Math.round(y * dpr)) };
+      expectColor(png.pixel(5, 20), RED, 'sticky header where it sits on screen');
+      expectColor(png.pixel(5, 100), BLUE, 'first band below the header');
+      expectColor(png.pixel(5, 250), GREEN, 'second band');
+      expectColor(png.pixel(250, 290), STROKE, 'drawing made after scrolling');
+      expectColor(png.pixel(5, 210), GREEN, 'left of the drawing');
+      expectColor(png.pixel(5, viewH - 20 - 10), YELLOW, 'fixed footer');
+      expect(await page.evaluate(() => window.scrollY)).toBe(900);
+    });
+
+    test('Enter selects the whole visible screen', async ({ context }) => {
+      test.setTimeout(60000);
+      const page = context.pages()[0] ?? (await context.newPage());
+      await page.goto(`${server.origin}/bands`);
+      await waitForContentScript(page);
+      await openToolbar(page, context);
+      const view = await page.evaluate(() => ({ w: document.documentElement.clientWidth, h: document.documentElement.clientHeight }));
+
+      await pa(page, '[data-action="more"]').click();
+      await pa(page, '[data-action="capture-area"]').click();
+      await expect(pa(page, '.pa-area-hint')).toBeVisible();
+      await page.keyboard.press('Enter');
+      await expect(pa(page, '.pa-area-actions')).toBeVisible();
+      await expect(pa(page, '[data-action="area-copy"]')).toBeFocused();
+      const decoded = await savedPng(page);
+      const dpr = decoded.width / view.w;
+      expect(dpr).toBeGreaterThanOrEqual(1);
+      expect(Math.abs(decoded.height - view.h * dpr)).toBeLessThanOrEqual(1);
+      const png = { pixel: (x: number, y: number) => decoded.pixel(Math.round(x * dpr), Math.round(y * dpr)) };
+      expectColor(png.pixel(5, 10), RED, 'fixed bar');
+      expectColor(png.pixel(view.w - 5, view.h - 5), BLUE, 'bottom right corner');
+      // No sliver of the scrollbar or the area outside, even where the screen density makes edges fall between pixels.
+      expectColor(decoded.pixel(decoded.width - 1, Math.round(decoded.height / 2)), BLUE, 'last column');
+      expectColor(decoded.pixel(Math.round(decoded.width / 2), decoded.height - 1), BLUE, 'last row');
+    });
+
+    test.describe('on a 2x screen', () => {
+      test.use({ deviceScale: 2 });
+
+      test('saves the area at full screen sharpness, and the PDF page at its on-screen size', async ({ context }) => {
+        test.setTimeout(60000);
+        const page = context.pages()[0] ?? (await context.newPage());
+        await page.goto(`${server.origin}/bands`);
+        await waitForContentScript(page);
+        await openToolbar(page, context);
+        expect(await page.evaluate(() => window.devicePixelRatio)).toBe(2);
+        await pa(page, '[data-tool="pen"]').click();
+        await drawStroke(page, [400, 300], [700, 300], 12);
+
+        await selectArea(page, [300, 250], [800, 350]);
+        const decoded = await savedPng(page);
+        expect([decoded.width, decoded.height]).toEqual([1000, 200]);
+        expectColor(decoded.pixel(10, 10), BLUE, 'page');
+        expectColor(decoded.pixel(500, 100), STROKE, 'drawing');
+
+        await selectArea(page, [300, 250], [800, 350]);
+        const download = page.waitForEvent('download', { timeout: 30000 });
+        await pa(page, '[data-action="area-pdf"]').click();
+        const pdf = fs.readFileSync((await (await download).path())!).toString('latin1');
+        expect(pdf).toContain('/Width 1000');
+        expect(pdf).toContain('/MediaBox [0 0 375 75]');
+      });
+    });
+
+    test.describe('on a touch phone', () => {
+      test.use({ phone: true });
+
+      test('a finger drag selects and saves an area, and Cancel leaves without a keyboard', async ({ context }) => {
+        test.setTimeout(60000);
+        const page = context.pages()[0] ?? (await context.newPage());
+        await page.goto(`${server.origin}/phone`);
+        await waitForContentScript(page);
+        await openToolbar(page, context);
+        const cdp = await context.newCDPSession(page);
+        const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', x = 0, y = 0) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+
+        const openArea = async () => {
+          await pa(page, '[data-action="more"]').tap();
+          await pa(page, '[data-action="capture-area"]').tap();
+          await expect(pa(page, '.pa-area-hint')).toBeVisible();
+        };
+        await openArea();
+        await pa(page, '[data-action="area-close"]').tap();
+        await expect(pa(page, '.pa-area')).toHaveCount(0);
+
+        await openArea();
+        await touch('touchStart', 40, 200);
+        // Lifted mid-move, so the browser sees a fling; the next tap must still reach the button.
+        for (let i = 1; i <= 6; i++) await touch('touchMove', 40 + i * 50, 200 + i * 50);
+        await touch('touchEnd');
+        await expect(pa(page, '.pa-area-actions')).toBeVisible();
+        for (const button of await pa(page, '.pa-area-actions .pa-area-btn').all()) {
+          const box = (await button.boundingBox())!;
+          expect(box.height).toBeGreaterThanOrEqual(44);
+          expect(box.x).toBeGreaterThanOrEqual(0);
+          expect(box.x + box.width).toBeLessThanOrEqual(390);
+        }
+        const download = page.waitForEvent('download', { timeout: 30000 });
+        await pa(page, '[data-action="area-png"]').tap();
+        const decoded = decodePng(fs.readFileSync((await (await download).path())!));
+        expect(decoded.width).toBe(900);
+        expect(Math.abs(decoded.height - 900)).toBeLessThanOrEqual(1);
+        expectColor(decoded.pixel(450, 450), BLUE, 'page under the area');
+        await expect(pa(page, '.pa-toast-text')).toHaveText('Area saved as PNG');
+
+        // Copying needs the tap to count as the user's action, which a finger lift does.
+        await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: server.origin });
+        await openArea();
+        await touch('touchStart', 40, 200);
+        for (let i = 1; i <= 6; i++) await touch('touchMove', 40 + i * 50, 200 + i * 50);
+        await touch('touchEnd');
+        await pa(page, '[data-action="area-copy"]').tap();
+        await expect(pa(page, '.pa-toast-text')).toHaveText('Copied to clipboard');
+      });
+
+      test('pinch-zoomed, the controls fit the screen and Whole screen saves just what is shown, without the tap flash', async ({ context }) => {
+        test.setTimeout(60000);
+        const page = context.pages()[0] ?? (await context.newPage());
+        await page.goto(`${server.origin}/phone`);
+        await waitForContentScript(page);
+        await openToolbar(page, context);
+        const cdp = await context.newCDPSession(page);
+        await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2 });
+        await expect.poll(() => page.evaluate(() => window.visualViewport!.scale)).toBe(2);
+        // The toolbar's More button is off screen while pinched; the menu item is opened directly.
+        await page.evaluate(() => (document.getElementById('page-anchor-host')!.shadowRoot!.querySelector('[data-action="capture-area"]') as HTMLElement).click());
+        const hint = (await pa(page, '.pa-area-hint').boundingBox())!;
+        // Visible part of the layout is 195 CSS pixels wide at 2x.
+        expect(hint.x).toBeGreaterThanOrEqual(0);
+        expect(hint.x + hint.width).toBeLessThanOrEqual(195);
+        await pa(page, '[data-action="area-whole"]').tap();
+        const download = page.waitForEvent('download', { timeout: 30000 });
+        await pa(page, '[data-action="area-png"]').tap();
+        const decoded = decodePng(fs.readFileSync((await (await download).path())!));
+        expect([decoded.width, decoded.height]).toEqual([1170, 2340]);
+        // Shown at 2x on a 3x screen: 6 image pixels per CSS pixel; the fixed bar is 40px tall.
+        expectColor(decoded.pixel(300, 100), RED, 'fixed bar');
+        expectColor(decoded.pixel(300, 1000), BLUE, 'first band');
+        // The action bar, and the button just tapped, sat across the bottom of the screen.
+        for (let x = 10; x < decoded.width; x += 40) expectColor(decoded.pixel(x, 2250), BLUE, `under the tapped bar at x=${x}`);
+      });
+    });
+
+    test('leaves drawings out while they are hidden, and Esc during a save cancels it cleanly', async ({ context }) => {
+      test.setTimeout(60000);
+      const page = context.pages()[0] ?? (await context.newPage());
+      await page.goto(`${server.origin}/bands`);
+      await waitForContentScript(page);
+      await openToolbar(page, context);
+      await pa(page, '[data-tool="pen"]').click();
+      await drawStroke(page, [400, 300], [700, 300], 12);
+      await pa(page, '[data-action="more"]').click();
+      await pa(page, '[data-action="visibility"]').click();
+      await expect(pa(page, '[data-action="visibility"]')).toHaveAttribute('aria-checked', 'false');
+
+      await selectArea(page, [300, 250], [800, 350]);
+      const decoded = await savedPng(page);
+      const dpr = decoded.width / 500;
+      expectColor(decoded.pixel(Math.round(250 * dpr), Math.round(50 * dpr)), BLUE, 'hidden drawing left out');
+
+      let downloads = 0;
+      page.on('download', () => downloads++);
+      await selectArea(page, [300, 250], [800, 350]);
+      await pa(page, '[data-action="area-png"]').click();
+      await page.keyboard.press('Escape');
+      await expect(pa(page, '.pa-area')).toHaveCount(0);
+      await page.waitForTimeout(1500);
+      expect(downloads).toBe(0);
+      await expect(pa(page, '.pa-toolbar')).toBeVisible();
+    });
+
+    test('Escape leaves without saving anything', async ({ context }) => {
+      const page = context.pages()[0] ?? (await context.newPage());
+      await page.goto(`${server.origin}/bands`);
+      await waitForContentScript(page);
+      await openToolbar(page, context);
+      await selectArea(page, [100, 100], [300, 200]);
+      await page.keyboard.press('Escape');
+      await expect(pa(page, '.pa-area')).toHaveCount(0);
+      await expect(pa(page, '.pa-toolbar')).toBeVisible();
+    });
   });
 });

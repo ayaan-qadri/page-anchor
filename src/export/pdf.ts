@@ -40,6 +40,11 @@ function changedPixels(a: Uint8Array, b: Uint8Array): number {
   return changed;
 }
 
+/** One page exactly the image's size instead of A4 pages, at `pointsPerPixel` PDF points per image pixel. */
+export interface ImageSizedPage {
+  pointsPerPixel: number;
+}
+
 /** Each A4 page is a lossless slice of one tall image, reusing the PNG row predictor so no image codec is needed. */
 export class PdfEncoder {
   private readonly pageRows: number;
@@ -49,8 +54,11 @@ export class PdfEncoder {
   /** The newest rows of the current page, kept uncompressed so the page can end at a gap between lines. */
   private held: Uint8Array[] = [];
 
-  constructor(readonly width: number) {
-    this.pageRows = rowsPerA4Page(width);
+  constructor(
+    readonly width: number,
+    private readonly imageSized?: ImageSizedPage
+  ) {
+    this.pageRows = imageSized ? Infinity : rowsPerA4Page(width);
     this.searchRows = Math.max(1, Math.min(Math.floor(this.pageRows * BREAK_SEARCH_SHARE), Math.floor(BREAK_SEARCH_PIXELS / width)));
   }
 
@@ -145,12 +153,14 @@ export class PdfEncoder {
         '\nendstream',
       ]);
 
-      const drawHeight = (A4.width * page.height) / this.width;
-      const content = `q ${num(A4.width)} 0 0 ${num(drawHeight)} 0 ${num(A4.height - drawHeight)} cm /Im0 Do Q`;
+      const pageW = this.imageSized ? this.width * this.imageSized.pointsPerPixel : A4.width;
+      const drawHeight = (pageW * page.height) / this.width;
+      const pageH = this.imageSized ? drawHeight : A4.height;
+      const content = `q ${num(pageW)} 0 0 ${num(drawHeight)} 0 ${num(pageH - drawHeight)} cm /Im0 Do Q`;
       object(contentId, `<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
       object(
         pageId,
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(A4.width)} ${num(A4.height)}] ` +
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(pageW)} ${num(pageH)}] ` +
           `/Resources << /XObject << /Im0 ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`
       );
     }

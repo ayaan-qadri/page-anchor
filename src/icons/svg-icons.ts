@@ -23,6 +23,8 @@ import {
   Ellipsis,
   ImageDown,
   FileDown,
+  Crop,
+  Copy,
   type IconNode,
 } from 'lucide';
 
@@ -99,6 +101,8 @@ export const ICONS = {
   more: toSvg(Ellipsis),
   saveImage: toSvg(ImageDown),
   savePdf: toSvg(FileDown),
+  captureArea: toSvg(Crop),
+  copy: toSvg(Copy),
 } as const satisfies Record<string, string>;
 
 export type IconName = keyof typeof ICONS;

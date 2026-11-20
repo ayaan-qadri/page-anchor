@@ -48,6 +48,8 @@ fs.writeFileSync(
     'user_pref("browser.download.folderList", 2);',
     `user_pref("browser.download.dir", ${JSON.stringify(profile)});`,
     'user_pref("browser.download.always_ask_before_handling_new_types", false);',
+    // Lets the check read the clipboard back without Firefox's paste prompt.
+    'user_pref("dom.events.testing.asyncClipboard", true);',
   ].join('\n')
 );
 const firefox = spawn(FIREFOX, [...(process.env.PA_HEADED ? [] : ['--headless']), '--no-remote', '--profile', profile, `--remote-debugging-port=${PORT}`, '--width=1280', '--height=800'], {
@@ -174,6 +176,77 @@ try {
     } else {
       const text = bytes?.toString('latin1') ?? '';
       record('Firefox saves the page as PDF', toast === 'Page saved as PDF' && text.startsWith('%PDF-1.4') && text.endsWith('%%EOF\n'), { toast, bytes: bytes?.length ?? 0 });
+    }
+  }
+
+  const shadow = `document.getElementById('page-anchor-host').shadowRoot`;
+  const lastToast = () => evaluate(`(() => { const t = ${shadow}.querySelectorAll('.pa-toast-text'); return t.length ? t[t.length - 1].textContent : '' })()`);
+  // Each input gets its own pointer source; a touch source sends touch pointer events, as a phone does.
+  const source = (input) => ({ type: 'pointer', id: input, parameters: { pointerType: input } });
+  const clickAt = (input, x, y) => send('input.performActions', { context, actions: [{ ...source(input), actions: [{ type: 'pointerMove', x, y }, { type: 'pointerDown', button: 0 }, { type: 'pointerUp', button: 0 }] }] });
+  // The page is scrolled so the area sits across the blue and green bands, where the stroke is at y=400.
+  await evaluate('window.scrollTo(0, 300)');
+  for (const [input, action] of ['mouse', 'touch'].flatMap((i) => ['area-png', 'area-pdf', 'area-copy'].map((a) => [i, a]))) {
+    const label = input === 'touch' ? ' by touch' : '';
+    // Firefox opens each saved PDF in a new tab, which would leave the test page in the background.
+    await send('browsingContext.activate', { context });
+    const before = new Set(fs.readdirSync(profile));
+    await evaluate(`${shadow}.querySelectorAll('.pa-toast-text').forEach((e) => e.remove())`);
+    await evaluate(`${shadow}.querySelector('[data-action="capture-area"]').click()`);
+    await sleep(300);
+    await send('input.performActions', {
+      context,
+      // Lifted mid-move, as a quick finger does.
+      actions: [{ ...source(input), actions: [{ type: 'pointerMove', x: 200, y: 50 }, { type: 'pointerDown', button: 0 }, ...Array.from({ length: 6 }, (_, i) => ({ type: 'pointerMove', x: 200 + (i + 1) * 50, y: 50 + (i + 1) * 100, duration: 16 })), { type: 'pointerUp', button: 0 }] }],
+    });
+    await sleep(300);
+    const btn = JSON.parse(await evaluate(`(() => { const r = ${shadow}.querySelector('[data-action="${action}"]')?.getBoundingClientRect(); return JSON.stringify(r && r.width ? [r.x + r.width / 2, r.y + r.height / 2] : null) })()`));
+    if (!btn) {
+      record(`Capture area shows the ${action} button${label}`, false, {});
+      continue;
+    }
+    const started = Date.now();
+    await clickAt(input, Math.round(btn[0]), Math.round(btn[1]));
+    let toast = '';
+    for (let i = 0; i < 40 && !toast; i++) {
+      await sleep(250);
+      toast = await lastToast();
+    }
+    // Polled every 250ms, so this is an upper bound.
+    const ms = Date.now() - started;
+    if (action === 'area-copy') {
+      const copied = JSON.parse(
+        await evaluate(`(async () => { try { const [item] = await navigator.clipboard.read(); const b = await createImageBitmap(await item.getType('image/png')); return JSON.stringify([b.width, b.height]); } catch (e) { return JSON.stringify(String(e)); } })()`)
+      );
+      record(`Firefox copies a selected area${label}`, toast === 'Copied to clipboard' && Array.isArray(copied) && copied[1] === copied[0] * 2, { toast, copied, ms });
+      continue;
+    }
+    const format = action === 'area-png' ? 'png' : 'pdf';
+    let file = null;
+    for (let i = 0; i < 20 && !file; i++) {
+      file = fs.readdirSync(profile).find((f) => !before.has(f) && f.endsWith(`.${format}`)) ?? null;
+      if (!file) await sleep(250);
+    }
+    const bytes = file ? fs.readFileSync(path.join(profile, file)) : null;
+    if (bytes && process.env.PA_KEEP_DIR) fs.writeFileSync(path.join(process.env.PA_KEEP_DIR, `firefox-area.${format}`), bytes);
+    if (format === 'png') {
+      const img = bytes ? pngPixels(bytes) : null;
+      const scale = img ? img.width / 300 : 1;
+      // Area is x 200..500, y 50..650 on screen, so document y 350..950; the stroke runs x 300..660 at document y 400.
+      const at = (x, y) => img.at(Math.round(x * scale), Math.round(y * scale));
+      const checks = img && {
+        size: [img.width, img.height],
+        ratio: Math.abs(img.height / img.width - 2) < 0.02,
+        blue: near(at(5, 5), [0, 0, 255]),
+        stroke: [45, 50, 55].some((y) => !near(at(150, y), [0, 0, 255])),
+        noStrokeLeftOfIt: near(at(50, 50), [0, 0, 255]),
+      };
+      record(`Firefox saves a selected area as PNG${label}`, toast === 'Area saved as PNG' && !!checks && checks.ratio && checks.blue && checks.stroke && checks.noStrokeLeftOfIt, { toast, ...checks, ms });
+    } else {
+      const text = bytes?.toString('latin1') ?? '';
+      const mediaBox = /\/MediaBox \[[^\]]*\]/.exec(text)?.[0];
+      // One page the size of the 300x600 area on screen, at 0.75pt per CSS pixel.
+      record(`Firefox saves a selected area as PDF${label}`, toast === 'Area saved as PDF' && text.startsWith('%PDF-1.4') && text.includes('/Count 1') && mediaBox === '/MediaBox [0 0 225 450]', { toast, mediaBox, ms });
     }
   }
 } catch (error) {

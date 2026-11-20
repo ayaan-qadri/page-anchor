@@ -565,6 +565,13 @@ export class FloatingToolbar {
       }),
       this.createMenuItem({
         role: 'menuitem',
+        icon: 'captureArea',
+        label: 'Capture area',
+        action: 'capture-area',
+        onSelect: () => this.callbacks.onCaptureArea?.(),
+      }),
+      this.createMenuItem({
+        role: 'menuitem',
         icon: 'settings',
         label: 'Settings & Backup',
         action: 'open-options',

@@ -497,6 +497,62 @@ export async function capturePage(format: ExportFormat, deps: PageCaptureDeps): 
   return { blob, truncated: !captured.complete || captured.capturedH < fullH };
 }
 
+export type AreaCaptureDeps = Pick<PageCaptureDeps, 'captureViewport' | 'drawAnnotations' | 'hideOverlay'>;
+
+/** Crops one screenshot of the visible page to `rect` (viewport CSS pixels) and paints the drawings in it on top. */
+export async function captureArea(format: ExportFormat, rect: CaptureRect, deps: AreaCaptureDeps): Promise<Blob> {
+  if (typeof CompressionStream === 'undefined') throw new ExportError('unsupported');
+  let area: ReturnType<typeof visibleArea>;
+  let shot: CaptureImage;
+  const showOverlay = deps.hideOverlay();
+  try {
+    await settle();
+    area = visibleArea();
+    shot = await deps.captureViewport();
+  } finally {
+    showOverlay();
+  }
+
+  const canvas = document.createElement('canvas');
+  try {
+    const scale = shot.width / area.shotWidth;
+    if (!(scale > 0)) throw new ExportError('capture-failed', 'Empty screenshot');
+    const region: BoundingBox = {
+      minX: rect.x + window.scrollX,
+      minY: rect.y + window.scrollY,
+      maxX: rect.x + window.scrollX + rect.width,
+      maxY: rect.y + window.scrollY + rect.height,
+    };
+    // Cut on whole screenshot pixels and copy them 1:1: a fractional edge would blend in a sliver of whatever lies outside, like the scrollbar.
+    const left = Math.round((region.minX - area.left) * scale);
+    const top = Math.round((region.minY - area.top) * scale);
+    const width = Math.max(1, Math.round((region.maxX - area.left) * scale) - left);
+    const height = Math.max(1, Math.round((region.maxY - area.top) * scale) - top);
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new ExportError('too-large', 'Canvas is unavailable');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(shot, left, top, width, height, 0, 0, width, height);
+    deps.drawAnnotations(ctx, region, scale);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // A CSS pixel is 0.75pt, so the page prints at the size the area had on screen.
+    const encoder = format === 'png' ? new PngEncoder(width) : new PdfEncoder(width, { pointsPerPixel: 0.75 / scale });
+    try {
+      await encoder.addRows(ctx.getImageData(0, 0, width, height));
+      return await encoder.finish();
+    } catch (error) {
+      await encoder.abort();
+      throw error;
+    }
+  } finally {
+    shot.close();
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+}
+
 /** Decodes the data URL the background returns without fetch(), which page CSP can block in content scripts. */
 export async function decodeCapture(dataUrl: string): Promise<CaptureImage> {
   const comma = dataUrl.indexOf(',');

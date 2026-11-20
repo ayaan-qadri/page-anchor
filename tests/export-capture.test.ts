@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { ExportError, capturePage, exportFileName, toExportError, type PageCaptureDeps } from '../src/export/capture';
+import { ExportError, captureArea, capturePage, exportFileName, toExportError, type PageCaptureDeps } from '../src/export/capture';
 
 describe('toExportError', () => {
   it('keeps known failures and sorts the rest into causes a user can act on', () => {
@@ -181,6 +181,49 @@ describe('capturePage with a fake canvas', () => {
     } finally {
       delete (window as { visualViewport?: unknown }).visualViewport;
     }
+  });
+
+  it('crops one screenshot to the selected area, with the overlay hidden only for the shot', async () => {
+    define(window, 'scrollX', () => 0);
+    define(window, 'scrollY', () => 1000);
+    const events: string[] = [];
+    const shot = bitmap(W * 2, VIEW_H * 2);
+    const captureViewport = vi.fn(async () => {
+      events.push('shot');
+      return shot;
+    });
+    const drawAnnotations = vi.fn(() => events.push('draw'));
+    const hideOverlay = () => {
+      events.push('hide');
+      return () => events.push('show');
+    };
+
+    const blob = await captureArea('png', { x: 10, y: 20, width: 100, height: 50 }, { captureViewport, drawAnnotations, hideOverlay });
+    expect(events).toEqual(['hide', 'shot', 'show', 'draw']);
+    expect(drawImage).toHaveBeenCalledWith(shot, 20, 40, 200, 100, 0, 0, 200, 100);
+    expect(drawAnnotations).toHaveBeenCalledWith(expect.anything(), { minX: 10, minY: 1020, maxX: 110, maxY: 1070 }, 2);
+    expect(await pngHeight(blob)).toBe(100);
+    expect(shot.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('cuts on whole screenshot pixels when the screen density puts the edges between them', async () => {
+    const shot = bitmap(W * 1.25, VIEW_H * 1.25);
+    await captureArea('png', { x: 10.3, y: 0, width: 100.5, height: 50 }, { captureViewport: async () => shot, drawAnnotations: vi.fn(), hideOverlay: noOverlay });
+    expect(drawImage).toHaveBeenCalledWith(shot, 13, 0, 126, 63, 0, 0, 126, 63);
+  });
+
+  it('saves a selected area as PDF and shows the overlay again when the shot fails', async () => {
+    const pdf = await captureArea('pdf', { x: 0, y: 0, width: 50, height: 50 }, { captureViewport: async () => bitmap(W, VIEW_H), drawAnnotations: vi.fn(), hideOverlay: noOverlay });
+    expect(pdf.type).toBe('application/pdf');
+
+    const showOverlay = vi.fn();
+    const failing = captureArea('png', { x: 0, y: 0, width: 50, height: 50 }, {
+      captureViewport: vi.fn().mockRejectedValue(new ExportError('blocked')),
+      drawAnnotations: vi.fn(),
+      hideOverlay: () => showOverlay,
+    });
+    await expect(failing).rejects.toMatchObject({ code: 'blocked' });
+    expect(showOverlay).toHaveBeenCalledTimes(1);
   });
 
   /** Fakes a window that scrolls up to `maxScroll` and a viewport whose height follows `heights`, one per screenshot. */

@@ -18,10 +18,12 @@ import {
 import { AnchorElement, ExtensionSettings, PageAnchorData, ShortcutAction, ToolType } from '../src/types';
 import { SHADOW_STYLES } from '../src/ui/styles';
 import { TextEditorOverlay } from '../src/ui/text-editor';
+import { AreaSelector } from '../src/ui/area-select';
 import { ExportStatus } from '../src/ui/export-status';
 import { FloatingToolbar } from '../src/ui/toolbar';
 import {
   ExportError,
+  captureArea,
   capturePage,
   toExportError,
   decodeCapture,
@@ -279,6 +281,51 @@ export default defineUnlistedScript({
       }
     };
 
+    let areaSelector: AreaSelector | null = null;
+
+    const canCopyImages = () => window.isSecureContext && typeof ClipboardItem !== 'undefined' && typeof navigator.clipboard?.write === 'function';
+
+    const selectArea = () => {
+      if (exportAbort || areaSelector || !mounted) return;
+      areaSelector = new AreaSelector(uiContainer, {
+        capture: (format, rect) =>
+          captureArea(format, rect, {
+            captureViewport: () => requestCapture(),
+            drawAnnotations: (ctx, region, scale) => engine.renderRegion(ctx, region, scale),
+            hideOverlay: () => {
+              uiContainer.style.setProperty('opacity', '0', 'important');
+              return () => uiContainer.style.removeProperty('opacity');
+            },
+          }),
+        onSave: (format, blob) => {
+          downloadBlob(blob, exportFileName(format, document.title, window.location.href));
+          toolbar.showToast(`Area saved as ${format.toUpperCase()}`);
+        },
+        onCopy: canCopyImages()
+          ? async (blob) => {
+              const written = navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(
+                () => true,
+                (error: unknown) => {
+                  console.warn('[Page Anchor] Copy failed:', error);
+                  return false;
+                }
+              );
+              // A failed screenshot is reported by its own cause, not as a clipboard failure.
+              await blob;
+              toolbar.showToast((await written) ? 'Copied to clipboard' : "Couldn't copy the image");
+            }
+          : undefined,
+        onError: (error) => {
+          const failure = toExportError(error);
+          console.warn(`[Page Anchor] Capture area failed (${failure.code}):`, error);
+          toolbar.showToast(EXPORT_ERROR_TEXT[failure.code]);
+        },
+        onClose: () => {
+          areaSelector = null;
+        },
+      });
+    };
+
     const handleSaveError = (error: unknown) => {
       // An updated or reloaded extension orphans this script; a newer copy owns the page now.
       if (!isExtensionContextValid()) {
@@ -469,6 +516,7 @@ export default defineUnlistedScript({
           }
         },
         onExport: (format) => exportPage(format),
+        onCaptureArea: selectArea,
       });
       applySettings(settings);
 
@@ -684,6 +732,7 @@ export default defineUnlistedScript({
       torn = true;
       if (saveTimeout !== null) clearTimeout(saveTimeout);
       exportAbort?.abort();
+      areaSelector?.close();
       lifetime.abort();
       const safely = (fn: () => void) => {
         try {

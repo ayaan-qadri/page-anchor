@@ -159,6 +159,15 @@ describe('PdfEncoder', () => {
     expect(text).toContain(`q ${A4.width} 0 0 ${drawHeight} 0 ${Number((A4.height - drawHeight).toFixed(2))} cm /Im0 Do Q`);
   });
 
+  it('can make one page the size of the image, however tall, instead of A4 pages', async () => {
+    const pdf = new PdfEncoder(200, { pointsPerPixel: 0.5 });
+    await pdf.addRows(gradient(200, 2000));
+    const text = Buffer.from(await bytesOf(await pdf.finish())).toString('latin1');
+    expect(text).toContain('/Count 1');
+    expect(text).toContain('/MediaBox [0 0 100 1000]');
+    expect(text).toContain('q 100 0 0 1000 0 0 cm /Im0 Do Q');
+  });
+
   it('ends pages in the gap between lines of text instead of cutting a line in half, losing no rows', async () => {
     const width = 20;
     const pageRows = rowsPerA4Page(width);

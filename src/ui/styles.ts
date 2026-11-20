@@ -1049,6 +1049,119 @@ export const SHADOW_STYLES = `
   outline-offset: 2px;
 }
 
+.pa-area {
+  position: fixed;
+  inset: 0;
+  transform-origin: 0 0;
+  /* The browser paints its tap flash outside our styles, so it would show up in the screenshot taken right after the tap. */
+  -webkit-tap-highlight-color: transparent;
+  z-index: 2147483646;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+  background: rgba(0, 0, 0, 0.35);
+  outline: none;
+}
+
+.page-anchor-ui-root:has(> .pa-area) .pa-toolbar-wrapper {
+  visibility: hidden;
+}
+
+.pa-area.pa-area-selecting {
+  background: transparent;
+}
+
+.pa-area-hint {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  padding: 4px 4px 4px 14px;
+  border-radius: 12px;
+  background: var(--pa-pop-bg);
+  border: 1px solid var(--pa-line-strong);
+  box-shadow: var(--pa-panel-shadow);
+  color: var(--pa-text);
+  font-size: 13px;
+  cursor: default;
+}
+
+.pa-area-hint-text {
+  margin-right: 6px;
+}
+
+.pa-area-selecting .pa-area-hint {
+  display: none;
+}
+
+.pa-area-box {
+  position: absolute;
+  outline: 2px solid var(--pa-accent);
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.pa-area-actions {
+  position: absolute;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--pa-pop-bg);
+  border: 1px solid var(--pa-line-strong);
+  box-shadow: var(--pa-panel-shadow);
+  cursor: default;
+}
+
+.pa-area-actions[hidden],
+.pa-area-box[hidden] {
+  display: none;
+}
+
+.pa-area-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--pa-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pa-area-btn span {
+  display: inline-flex;
+}
+
+.pa-area-btn:hover {
+  background: var(--pa-hover-strong);
+}
+
+.pa-area-btn:focus-visible {
+  outline: 2px solid var(--pa-ring);
+  outline-offset: 1px;
+}
+
+@media (pointer: coarse) {
+  .pa-area-btn {
+    min-height: 44px;
+    min-width: 44px;
+    justify-content: center;
+  }
+}
+
 .pa-toast {
   position: absolute;
   top: calc(100% + 10px);
