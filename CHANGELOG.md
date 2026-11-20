@@ -5,6 +5,30 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-11-21
+
+### Added
+
+- Capture just part of the page. Choose "Capture area" from the toolbar's
+  "More" menu, drag over the part you want, then save it as a PNG or PDF or
+  copy it to the clipboard.
+- On phones, a one-time hint explains that two fingers scroll the page while
+  the toolbar is open.
+
+### Changed
+
+- Every browser, Firefox and Safari included, now runs the same Manifest V3
+  build. If access to websites is limited, the Options page explains why
+  drawings may not reappear on their own and lets you allow all websites,
+  allow just the current site, or keep it limited.
+
+### Fixed
+
+- Drawings stay attached to the right content more reliably when a page
+  changes its layout or content after loading.
+- Scrolling with two fingers while drawing on a phone no longer leaves a
+  stray mark, and scrolls the page as far as the fingers move.
+
 ## [1.1.1] - 2026-11-17
 
 ### Added
