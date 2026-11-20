@@ -55,3 +55,8 @@ export function setIconWithTooltip(
 ): void {
   target.replaceChildren(...markupToNodes(iconMarkup), buildTooltip(label, shortcut));
 }
+
+/** Whether the main pointer is a finger, so hints name the actions this device actually has. */
+export function isTouchFirst(): boolean {
+  return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+}

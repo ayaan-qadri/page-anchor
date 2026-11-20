@@ -321,6 +321,91 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
     });
   });
 
+  describe('Touch Scrolling', () => {
+    const touch = (type: string, pointerId: number, clientX: number, clientY: number) =>
+      new PointerEvent(type, { clientX, clientY, button: 0, pointerId, pointerType: 'touch' });
+
+    let canvas: HTMLCanvasElement;
+    let scrollBy: Mock;
+
+    beforeEach(() => {
+      canvas = container.querySelector('.page-anchor-active-canvas') as HTMLCanvasElement;
+      scrollBy = vi.fn();
+      vi.spyOn(window, 'scrollBy').mockImplementation(scrollBy as typeof window.scrollBy);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('scrolls with two fingers and drops the stroke the first finger began', () => {
+      engine.setTool('pen');
+      canvas.dispatchEvent(touch('pointerdown', 1, 100, 400));
+      window.dispatchEvent(touch('pointermove', 1, 100, 390));
+      canvas.dispatchEvent(touch('pointerdown', 2, 200, 400));
+      window.dispatchEvent(touch('pointermove', 1, 100, 300));
+      window.dispatchEvent(touch('pointermove', 2, 200, 300));
+      window.dispatchEvent(touch('pointerup', 1, 100, 300));
+      window.dispatchEvent(touch('pointerup', 2, 200, 300));
+
+      expect(engine.getElements()).toHaveLength(0);
+      expect(mockChange).not.toHaveBeenCalled();
+      const scrolledY = scrollBy.mock.calls.reduce((sum, [, dy]) => sum + (dy as number), 0);
+      expect(scrolledY).toBe(95);
+    });
+
+    it('still draws with a single finger', () => {
+      engine.setTool('pen');
+      canvas.dispatchEvent(touch('pointerdown', 1, 10, 10));
+      window.dispatchEvent(touch('pointermove', 1, 60, 60));
+      window.dispatchEvent(touch('pointerup', 1, 60, 60));
+
+      expect(engine.getElements()).toHaveLength(1);
+      expect(scrollBy).not.toHaveBeenCalled();
+    });
+
+    it('scrolls with one finger on empty space when selecting, but drags a drawing it lands on', () => {
+      const stroke: StrokeElement = {
+        id: 'stroke-1',
+        type: 'pen',
+        points: [{ x: 50, y: 50 }, { x: 60, y: 60 }],
+        strokeColor: '#000',
+        strokeWidth: 4,
+        opacity: 1,
+        createdAt: 0,
+        bbox: { minX: 50, minY: 50, maxX: 60, maxY: 60 },
+      };
+      engine.setElements([stroke]);
+      engine.setTool('select');
+
+      canvas.dispatchEvent(touch('pointerdown', 1, 300, 400));
+      window.dispatchEvent(touch('pointermove', 1, 300, 350));
+      window.dispatchEvent(touch('pointerup', 1, 300, 350));
+      expect(scrollBy.mock.calls.map(([, dy]) => dy)).toEqual([50]);
+
+      scrollBy.mockClear();
+      canvas.dispatchEvent(touch('pointerdown', 1, 55, 55));
+      window.dispatchEvent(touch('pointermove', 1, 85, 55));
+      window.dispatchEvent(touch('pointerup', 1, 85, 55));
+      expect(scrollBy).not.toHaveBeenCalled();
+      expect(engine.getElements()[0].bbox.minX).toBeGreaterThan(50);
+    });
+
+    it('opens a text note on finger lift, not when a second finger turns the touch into a scroll', () => {
+      engine.setTool('text');
+      canvas.dispatchEvent(touch('pointerdown', 1, 150, 250));
+      expect(mockTextRequest).not.toHaveBeenCalled();
+      canvas.dispatchEvent(touch('pointerdown', 2, 250, 250));
+      window.dispatchEvent(touch('pointerup', 1, 150, 250));
+      window.dispatchEvent(touch('pointerup', 2, 250, 250));
+      expect(mockTextRequest).not.toHaveBeenCalled();
+
+      canvas.dispatchEvent(touch('pointerdown', 1, 150, 250));
+      window.dispatchEvent(touch('pointerup', 1, 150, 250));
+      expect(mockTextRequest).toHaveBeenCalledWith({ x: 150, y: 250 });
+    });
+  });
+
   describe('Marquee Selection & Multi-Item Interactions', () => {
     it('selects elements within marquee rectangle drag', () => {
       const rect1: ShapeElement = {

@@ -718,7 +718,7 @@ export class FloatingToolbar {
   }
 
   private positionMenu(entry: Menu): void {
-    this.placeFloating(entry.menu, entry.wrapper, {
+    this.placeFloating(entry.menu, this.toolbar, {
       preferred: 'below',
       flipClass: 'above',
       fallbackSize: 220,
@@ -1477,11 +1477,13 @@ export class FloatingToolbar {
     this.wrapper.addEventListener('focusin', (e) => handleTooltipTarget(e.target), true);
     // A pressed button has done its job; its tooltip would only cover the menu, popover or toast it opened.
     this.wrapper.addEventListener('pointerdown', (e) => {
-      if (e.target instanceof Element) e.target.closest('.pa-btn, .pa-color-preview-btn')?.classList.add('pa-tip-hidden');
+      if (e.target instanceof Element) e.target.closest('.pa-btn, .pa-color-preview-btn, .pa-drag-handle')?.classList.add('pa-tip-hidden');
     });
     this.wrapper.addEventListener(
       'pointerleave',
       (e) => {
+        // A finger leaves on lift while the browser keeps the button hovered, which would bring the tooltip straight back.
+        if (e.pointerType === 'touch') return;
         if (e.target instanceof Element) e.target.classList.remove('pa-tip-hidden');
       },
       true

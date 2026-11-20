@@ -1,5 +1,6 @@
 import { Point, TextElement } from '../types/engine.types';
 import { computeBoundingBox } from '../core/geometry';
+import { isTouchFirst } from './dom';
 
 export interface TextEditorOptions {
   fontSize: number;
@@ -52,12 +53,17 @@ export class TextEditorOverlay {
     const hint = document.createElement('div');
     hint.className = 'pa-text-hint';
     hint.setAttribute('aria-hidden', 'true');
-    hint.textContent = 'Enter to save · Shift+Enter new line · Esc to cancel';
+    hint.textContent = isTouchFirst() ? 'Tap outside to save' : 'Enter to save · Shift+Enter new line · Esc to cancel';
 
     wrapper.appendChild(textarea);
     wrapper.appendChild(hint);
     this.container.appendChild(wrapper);
     this.currentWrapper = wrapper;
+
+    // An editor running past the right edge widens the page, and phones then zoom out and shift every fixed control, the toolbar included.
+    const viewRight = window.scrollX + (document.documentElement.clientWidth || window.innerWidth) - 8;
+    const x = Math.min(pt.x, Math.max(window.scrollX + 8, viewRight - wrapper.offsetWidth));
+    wrapper.style.left = `${x}px`;
 
     setTimeout(() => {
       textarea.focus();
@@ -72,7 +78,7 @@ export class TextEditorOverlay {
         const textElement: TextElement = {
           id: `text_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
           type: 'text',
-          x: pt.x,
+          x,
           y: pt.y,
           text,
           fontSize: options.fontSize,
@@ -82,7 +88,7 @@ export class TextEditorOverlay {
           strokeWidth: 1,
           opacity: 1,
           createdAt: Date.now(),
-          bbox: { minX: pt.x, minY: pt.y, maxX: pt.x + 120, maxY: pt.y + 40 },
+          bbox: { minX: x, minY: pt.y, maxX: x + 120, maxY: pt.y + 40 },
         };
         textElement.bbox = computeBoundingBox(textElement);
         this.onCommitCallback?.(textElement);

@@ -1,11 +1,7 @@
 import type { ExportFormat } from '../export/capture';
+import { isTouchFirst } from './dom';
 
 const FORMAT_NAME: Record<ExportFormat, string> = { png: 'PNG image', pdf: 'PDF' };
-
-/** Whether the main pointer is a finger, so the stop hint names the actions this device actually has. */
-function isTouchFirst(): boolean {
-  return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-}
 
 /** Progress panel shown while a page is saved: what is being saved, how far it is, and which actions stop it. */
 export class ExportStatus {

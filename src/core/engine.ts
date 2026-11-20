@@ -127,6 +127,12 @@ export class CanvasEngine {
   private shapeStartPoint: Point | null = null;
   private currentShape: ShapeElement | null = null;
 
+  /** Last position of every finger on the canvas; two fingers, or one on empty space with Select, scroll the page instead of drawing. */
+  private touches = new Map<number, { x: number; y: number }>();
+  private isPanning = false;
+  /** A finger tap with the Text tool opens the editor on lift, so a second finger landing turns it into a scroll instead. */
+  private pendingTextPoint: Point | null = null;
+
   /** True only once a select-drag actually displaced an element. */
   private hasMovedElements = false;
 
@@ -538,6 +544,9 @@ export class CanvasEngine {
     }
     this.isPointerDown = false;
     this.pointerId = null;
+    this.isPanning = false;
+    this.touches.clear();
+    this.pendingTextPoint = null;
 
     this.currentStrokePoints = [];
     this.shapeStartPoint = null;
@@ -560,6 +569,7 @@ export class CanvasEngine {
   private readonly onPointerDown = (e: PointerEvent): void => {
     if (!this.isActiveMode) return;
     if (e.button !== 0) return;
+    if (e.pointerType === 'touch' && this.beginTouch(e)) return;
     if (this.isPointerDown) {
       // A second finger or pen must not hijack the gesture already in progress.
       if (e.pointerId !== this.pointerId) return;
@@ -580,7 +590,8 @@ export class CanvasEngine {
     }
 
     if (tool === 'text') {
-      this.callbacks.onTextCreateRequested?.(docPt);
+      if (e.pointerType === 'touch') this.pendingTextPoint = docPt;
+      else this.callbacks.onTextCreateRequested?.(docPt);
       return;
     }
 
@@ -650,7 +661,48 @@ export class CanvasEngine {
     this.renderBase();
   }
 
+  /** Returns true when the finger scrolls the page rather than starting a drawing gesture. */
+  private beginTouch(e: PointerEvent): boolean {
+    if (!this.isPointerDown && !this.isPanning) this.touches.clear();
+    this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.isPanning) return true;
+
+    if (this.touches.size > 1) {
+      // The first finger's half-made gesture is dropped, so a two-finger scroll leaves no stray mark.
+      const fingers = new Map(this.touches);
+      this.resetGesture(true);
+      this.touches = fingers;
+      this.isPanning = true;
+      return true;
+    }
+
+    if (this.activeTool !== 'select') return false;
+    const docPt = this.clientToDoc(e.clientX, e.clientY);
+    const onSelection = this.selectedElements.length > 1 && this.isPointInsideUnionBBox(docPt);
+    if (this.hitTest(docPt) || onSelection) return false;
+    if (this.selectedElements.length > 0) {
+      this.selectedElements = [];
+      this.renderBase();
+    }
+    this.isPanning = true;
+    return true;
+  }
+
+  private panBy(e: PointerEvent): void {
+    const last = this.touches.get(e.pointerId);
+    if (!last) return;
+    this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // Each finger moves the page by its share, so two fingers moving together scroll as far as they travel.
+    const share = this.touches.size;
+    window.scrollBy(-(e.clientX - last.x) / share, -(e.clientY - last.y) / share);
+  }
+
   private readonly onPointerMove = (e: PointerEvent): void => {
+    if (this.isPanning && this.isActiveMode) {
+      this.panBy(e);
+      return;
+    }
+    if (this.touches.has(e.pointerId)) this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (!this.isPointerDown || !this.isActiveMode) return;
     if (e.pointerId !== this.pointerId) return;
 
@@ -724,9 +776,20 @@ export class CanvasEngine {
   }
 
   private readonly onPointerUp = (e: PointerEvent): void => {
+    this.touches.delete(e.pointerId);
+    if (this.isPanning) {
+      if (this.touches.size === 0) this.isPanning = false;
+      return;
+    }
     if (!this.isPointerDown || e.pointerId !== this.pointerId) return;
 
     const tool = this.activeTool;
+    if (tool === 'text') {
+      const pt = this.pendingTextPoint;
+      this.resetGesture(true);
+      if (pt && e.type === 'pointerup') this.callbacks.onTextCreateRequested?.(pt);
+      return;
+    }
     if (tool === 'select') {
       this.finishMarquee();
     } else if (tool === 'pen' || tool === 'highlighter') {

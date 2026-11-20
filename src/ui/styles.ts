@@ -139,6 +139,68 @@ export const SHADOW_STYLES = `
   }
 }
 
+/* Phones get a compact two-row grid as wide as its buttons: tools on top, colour and actions below, the handle down the side and Hide in the last cell. */
+@media (max-width: 540px) {
+  .pa-toolbar {
+    display: grid;
+    grid-template-columns: 20px repeat(6, 40px);
+    grid-template-rows: 40px 40px;
+    gap: 4px;
+    place-items: center;
+    position: relative;
+  }
+
+  /* Menus open from the whole bar, so the Shapes menu clears the second row instead of covering it. */
+  .pa-toolbar .pa-menu-anchor {
+    position: static;
+  }
+
+  .pa-toolbar .pa-separator {
+    display: none;
+  }
+
+  .pa-toolbar .pa-drag-handle {
+    grid-row: 1 / span 2;
+    height: 100%;
+  }
+
+  .pa-toolbar .pa-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .pa-toolbar-wrapper .pa-toolbar-close-btn {
+    top: auto;
+    left: auto;
+    right: 7px;
+    bottom: 7px;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--pa-icon);
+    box-shadow: none;
+  }
+
+  .pa-toolbar-wrapper .pa-toolbar-close-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+/* Touch screens have no keyboard shortcuts to advertise. */
+@media (hover: none) and (pointer: coarse) {
+  .pa-key-hint,
+  .pa-menu-item-key {
+    display: none !important;
+  }
+
+  .pa-btn.has-key-hint > svg {
+    transform: none;
+  }
+}
+
 .pa-toolbar-close-btn {
   position: absolute;
   top: -8px;
