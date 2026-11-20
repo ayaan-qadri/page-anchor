@@ -57,6 +57,10 @@ jobs:
       - name: Production build (Chrome MV3)
         run: pnpm build
 
+      # The Firefox end-to-end tests install this build into the runner's own Firefox.
+      - name: Production build (Firefox MV2)
+        run: pnpm build:firefox
+
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
@@ -65,8 +69,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-
 
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
+      # Chromium, Firefox and WebKit run the Smart Anchoring engine suite on desktop and phone profiles.
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
 
       - name: End-to-end tests
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" pnpm test:e2e --retries=1

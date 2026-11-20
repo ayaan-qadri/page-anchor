@@ -364,6 +364,35 @@ describe('Storage Engine: Persistence with Mocked Chrome Storage', () => {
       expect(ids).toContain('good');
       expect(loaded!.elements.find((e) => e.id === 'bad-anchor')!.anchor).toBeUndefined();
     });
+
+    it('keeps every Smart Anchoring field through a backup round trip', async () => {
+      const anchor = {
+        selector: 'body > ul > li:nth-of-type(3)',
+        fallbackSelectors: ['li.row'],
+        textQuote: { exact: 'Story 4 headline', prefix: 'Story 3 headline', suffix: 'Story 5 headline' },
+        initialRect: { left: 10, top: 200, width: 300, height: 40 },
+        tag: 'li',
+        attrs: { 'aria-label': 'Story 4', title: 7 },
+        keywords: ['4', 9],
+        range: { exact: 'headline', prefix: 'Story 4 ', suffix: '', left: 70, top: 204 },
+        scrollClip: true,
+      };
+      const backup = JSON.stringify({
+        'page_anchor_data:https://example.com/anchored': {
+          url: 'https://example.com/anchored',
+          normalizedUrl: 'https://example.com/anchored',
+          pageTitle: 'Anchored',
+          updatedAt: 1,
+          elements: [
+            { id: 'a', type: 'pen', points: [{ x: 1, y: 2 }], strokeColor: '#000', strokeWidth: 2, opacity: 1, createdAt: 1, bbox: { minX: 1, minY: 2, maxX: 3, maxY: 4 }, anchor },
+          ],
+        },
+      });
+
+      expect(await importDataFromJson(backup)).toBe(true);
+      const loaded = (await loadPageData('https://example.com/anchored'))!.elements[0].anchor;
+      expect(loaded).toEqual({ ...anchor, attrs: { 'aria-label': 'Story 4' }, keywords: ['4'] });
+    });
   });
   describe('Regression: writes, index and keying', () => {
     const el = (id: string) =>

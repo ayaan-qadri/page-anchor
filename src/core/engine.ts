@@ -46,6 +46,14 @@ interface EffectiveBBox {
   deltaX: number;
   deltaY: number;
   isOrphaned: boolean;
+  /** The anchored page element is not displayed (collapsed section, inactive tab), so neither is the drawing. */
+  isConcealed: boolean;
+  /** Visible box of the scrolling pane the drawing lives in; parts outside it are cut off like the pane's content. */
+  clip?: BoundingBox;
+}
+
+function containsPoint(box: BoundingBox, pt: Point): boolean {
+  return pt.x >= box.minX && pt.x <= box.maxX && pt.y >= box.minY && pt.y <= box.maxY;
 }
 
 export interface RegionPlacement {
@@ -205,14 +213,18 @@ export class CanvasEngine {
     let deltaX = 0;
     let deltaY = 0;
     let isOrphaned = false;
+    let isConcealed = false;
+    let clip: BoundingBox | undefined;
 
     if (this.isDomAnchoringEnabled && el.anchor) {
       const res = this.anchorManager.resolve(el.anchor);
       if (res.status === 'orphaned') {
         isOrphaned = true;
       } else {
+        isConcealed = res.status === 'hidden';
         deltaX = res.deltaX;
         deltaY = res.deltaY;
+        clip = res.clip;
       }
     }
     if (this.draggedSet?.has(el)) {
@@ -230,10 +242,14 @@ export class CanvasEngine {
       deltaX,
       deltaY,
       isOrphaned,
+      isConcealed,
+      ...(clip ? { clip } : {}),
     };
   }
 
   private isHidden(eff: EffectiveBBox): boolean {
+    if (eff.isConcealed) return true;
+    if (eff.clip && !intersectsBoundingBox(eff.bbox, eff.clip)) return true;
     return eff.isOrphaned && this.orphanedAnchorMode === 'hide';
   }
 
@@ -485,7 +501,8 @@ export class CanvasEngine {
 
   private bindEvents(): void {
     window.addEventListener('resize', this.onResize, { passive: true });
-    window.addEventListener('scroll', this.onScroll, { passive: true });
+    // Capturing on the document also catches scrolling panes, whose anchored drawings move with their content.
+    document.addEventListener('scroll', this.onScroll, { capture: true, passive: true });
     this.activeCanvas.addEventListener('pointerdown', this.onPointerDown);
     window.addEventListener('pointermove', this.onPointerMove);
     window.addEventListener('pointerup', this.onPointerUp);
@@ -814,7 +831,7 @@ export class CanvasEngine {
     this.elements = this.elements.filter((el) => {
       const local = this.toElementSpace(el);
       if (!local) return true;
-      return !points.some((pt) => isPointNearElement({ x: pt.x - local.x, y: pt.y - local.y }, el, 12));
+      return !points.some((pt) => (!local.clip || containsPoint(local.clip, pt)) && isPointNearElement({ x: pt.x - local.x, y: pt.y - local.y }, el, 12));
     });
     if (this.elements.length !== prevCount) {
       const remaining = new Set(this.elements);
@@ -835,18 +852,18 @@ export class CanvasEngine {
     this.emitChange();
   }
 
-  /** Live anchor offset of a rendered element, or null when it is hidden. */
-  private toElementSpace(el: AnchorElement): Point | null {
+  /** Live anchor offset (and pane clip) of a rendered element, or null when it is hidden. */
+  private toElementSpace(el: AnchorElement): (Point & { clip?: BoundingBox }) | null {
     const eff = this.getElementEffectiveBBox(el);
     if (this.isHidden(eff)) return null;
-    return { x: eff.deltaX, y: eff.deltaY };
+    return { x: eff.deltaX, y: eff.deltaY, clip: eff.clip };
   }
 
   private hitTest(pt: Point): AnchorElement | null {
     for (let i = this.elements.length - 1; i >= 0; i--) {
       const el = this.elements[i];
       const offset = this.toElementSpace(el);
-      if (offset && isPointNearElement({ x: pt.x - offset.x, y: pt.y - offset.y }, el, 8)) {
+      if (offset && (!offset.clip || containsPoint(offset.clip, pt)) && isPointNearElement({ x: pt.x - offset.x, y: pt.y - offset.y }, el, 8)) {
         return el;
       }
     }
@@ -1036,6 +1053,11 @@ export class CanvasEngine {
 
   private renderSingleElementWithOffset(ctx: CanvasRenderingContext2D, el: AnchorElement, eff: EffectiveBBox): void {
     ctx.save();
+    if (eff.clip) {
+      ctx.beginPath();
+      ctx.rect(eff.clip.minX, eff.clip.minY, eff.clip.maxX - eff.clip.minX, eff.clip.maxY - eff.clip.minY);
+      ctx.clip();
+    }
     if (eff.deltaX !== 0 || eff.deltaY !== 0) {
       ctx.translate(eff.deltaX, eff.deltaY);
     }
@@ -1337,7 +1359,7 @@ export class CanvasEngine {
   public destroy(): void {
     this.resetGesture(false);
     window.removeEventListener('resize', this.onResize);
-    window.removeEventListener('scroll', this.onScroll);
+    document.removeEventListener('scroll', this.onScroll, { capture: true });
     this.activeCanvas.removeEventListener('pointerdown', this.onPointerDown);
     window.removeEventListener('pointermove', this.onPointerMove);
     window.removeEventListener('pointerup', this.onPointerUp);

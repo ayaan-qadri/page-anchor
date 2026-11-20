@@ -1,4 +1,4 @@
-import { AnchorElement, DOMAnchor, ToolType } from '../types/engine.types';
+import { AnchorElement, DOMAnchor, TextQuote, ToolType } from '../types/engine.types';
 import {
   ExtensionSettings,
   PageAnchorData,
@@ -467,22 +467,38 @@ function sanitizeAnchor(raw: unknown): DOMAnchor | undefined {
     return undefined;
   }
   const rect = raw.initialRect;
-  const textQuote = raw.textQuote;
+  const range = sanitizeQuote(raw.range);
+  const attrs = isPlainObject(raw.attrs)
+    ? Object.fromEntries(Object.entries(raw.attrs).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+    : undefined;
   return {
     selector: raw.selector,
     fallbackSelectors: Array.isArray(raw.fallbackSelectors)
       ? raw.fallbackSelectors.filter((s): s is string => typeof s === 'string')
       : undefined,
-    textQuote:
-      isPlainObject(textQuote) && typeof textQuote.exact === 'string'
-        ? { exact: textQuote.exact }
-        : undefined,
+    textQuote: sanitizeQuote(raw.textQuote),
     initialRect: {
       left: num(rect.left),
       top: num(rect.top),
       width: num(rect.width),
       height: num(rect.height),
     },
+    ...(typeof raw.tag === 'string' ? { tag: raw.tag } : {}),
+    ...(attrs && Object.keys(attrs).length > 0 ? { attrs } : {}),
+    ...(Array.isArray(raw.keywords) ? { keywords: raw.keywords.filter((k): k is string => typeof k === 'string') } : {}),
+    ...(range && isPlainObject(raw.range) && isFiniteNumber(raw.range.left) && isFiniteNumber(raw.range.top)
+      ? { range: { ...range, left: raw.range.left, top: raw.range.top } }
+      : {}),
+    ...(raw.scrollClip === true ? { scrollClip: true } : {}),
+  };
+}
+
+function sanitizeQuote(raw: unknown): TextQuote | undefined {
+  if (!isPlainObject(raw) || typeof raw.exact !== 'string') return undefined;
+  return {
+    exact: raw.exact,
+    ...(typeof raw.prefix === 'string' ? { prefix: raw.prefix } : {}),
+    ...(typeof raw.suffix === 'string' ? { suffix: raw.suffix } : {}),
   };
 }
 

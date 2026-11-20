@@ -118,12 +118,13 @@ const DEFAULT_PAGE = `<!DOCTYPE html>
 </body>
 </html>`;
 
-/** Serves `routes[path]` as HTML (query string ignored), or a default fixture page for unknown paths. */
-export async function startServer(routes: Record<string, string> = {}): Promise<TestServer> {
+/** Serves `routes[path]` as HTML (query string ignored), or a default fixture page for unknown paths. A function route is called per request, so a page can change between loads. */
+export async function startServer(routes: Record<string, string | (() => string)> = {}): Promise<TestServer> {
   const server = http.createServer((req, res) => {
     const path = (req.url ?? '/').split('?')[0];
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(routes[path] ?? DEFAULT_PAGE);
+    const route = routes[path];
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end((typeof route === 'function' ? route() : route) ?? DEFAULT_PAGE);
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address() as AddressInfo;

@@ -45,7 +45,7 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
     vi.spyOn(engine, 'getElementEffectiveBBox').mockImplementation((el) => {
       const dy = el === pinned ? scrollY : 0;
       const b = el.bbox;
-      return { bbox: { minX: b.minX, minY: b.minY + dy, maxX: b.maxX, maxY: b.maxY + dy }, deltaX: 0, deltaY: dy, isOrphaned: false };
+      return { bbox: { minX: b.minX, minY: b.minY + dy, maxX: b.maxX, maxY: b.maxY + dy }, deltaX: 0, deltaY: dy, isOrphaned: false, isConcealed: false };
     });
     const drawn = vi.spyOn(engine as unknown as { renderSingleElementWithOffset: (...a: unknown[]) => void }, 'renderSingleElementWithOffset').mockImplementation(() => {});
     const ctx = { save: vi.fn(), restore: vi.fn(), setTransform: vi.fn() } as unknown as CanvasRenderingContext2D;
@@ -730,7 +730,6 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
       // Only the engine's own handlers; the anchor manager tears down its listeners separately.
       const own: [string, unknown][] = [
         ['resize', peek('onResize')],
-        ['scroll', peek('onScroll')],
         ['pointermove', peek('onPointerMove')],
         ['pointerup', peek('onPointerUp')],
         ['pointercancel', peek('onPointerUp')],
@@ -742,6 +741,22 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
         expect(removed.some(([t, f]) => t === type && f === fn), `removed ${type}`).toBe(true);
       }
       expect(container.querySelectorAll('canvas')).toHaveLength(0);
+    });
+
+    it('re-renders when a scrolling pane scrolls and stops after destroy()', async () => {
+      const pane = document.createElement('div');
+      document.body.appendChild(pane);
+      const render = vi.spyOn(engine, 'renderBase');
+      pane.dispatchEvent(new Event('scroll'));
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      expect(render).toHaveBeenCalled();
+
+      engine.destroy();
+      render.mockClear();
+      pane.dispatchEvent(new Event('scroll'));
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      expect(render).not.toHaveBeenCalled();
+      pane.remove();
     });
 
     it('destroy() stops reacting to pointer events', () => {

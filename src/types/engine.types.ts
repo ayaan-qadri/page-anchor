@@ -23,20 +23,37 @@ export interface BoundingBox {
   maxY: number;
 }
 
+export interface TextQuote {
+  exact: string;
+  prefix?: string;
+  suffix?: string;
+}
+
+/** The word under a small drawing, so the drawing follows that word when its paragraph reflows. */
+export interface RangeAnchor extends TextQuote {
+  left: number;
+  top: number;
+}
+
 export interface DOMAnchor {
   selector: string;
   fallbackSelectors?: string[];
-  textQuote?: {
-    exact: string;
-    prefix?: string;
-    suffix?: string;
-  };
+  textQuote?: TextQuote;
   initialRect: {
     left: number;
     top: number;
     width: number;
     height: number;
   };
+  /** Lowercase tag name of the anchored element. */
+  tag?: string;
+  /** Identifying attributes (href, src, aria-label...) used to tell look-alike elements apart. */
+  attrs?: Record<string, string>;
+  /** Words that set the element apart from its siblings (the "3" in "Comment 3"); an edited look-alike without them is not this element. */
+  keywords?: string[];
+  range?: RangeAnchor;
+  /** The drawing sat inside a scrolling pane, so it is clipped to that pane like the content it marks. */
+  scrollClip?: boolean;
 }
 
 export interface BaseElement {
