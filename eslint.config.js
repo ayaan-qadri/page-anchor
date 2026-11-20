@@ -5,7 +5,7 @@ import tsPlugin from '@typescript-eslint/eslint-plugin';
 export default [
   {
     // Generated output and vendored docs are not ours to lint.
-    ignores: ['.output/**', '.wxt/**', 'node_modules/**', 'coverage/**'],
+    ignores: ['.output/**', '.wxt/**', 'node_modules/**', 'coverage/**', '.claude/**'],
   },
   js.configs.recommended,
   {
