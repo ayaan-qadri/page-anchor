@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Page Anchor - Print</title>
+    <style>
+      /* No paper margin leaves the browser nowhere to print its date, title and link; each sheet brings its own white border instead. */
+      @page {
+        margin: 0;
+      }
+      html,
+      body {
+        margin: 0;
+        background: #fff;
+      }
+      .page {
+        box-sizing: border-box;
+        height: 100vh;
+        padding: 10mm;
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        break-after: page;
+      }
+      .page:last-child {
+        break-after: auto;
+      }
+      img {
+        display: block;
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+      }
+      /* Every sheet gets the width at which a full A4 slice fits inside the border, so a shorter last sheet prints at the same scale. */
+      img.sheet {
+        width: min(100%, (100vh - 20mm) * 595.28 / 841.89);
+        max-height: none;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

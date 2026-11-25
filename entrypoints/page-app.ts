@@ -26,14 +26,17 @@ import {
   ExportError,
   captureArea,
   capturePage,
+  capturePrintPages,
   toExportError,
   decodeCapture,
   downloadBlob,
   exportFileName,
   type CaptureImage,
   type ExportErrorCode,
-  type ExportFormat,
+  type ExportKind,
+  type PageCaptureDeps,
 } from '../src/export/capture';
+import { printImages } from '../src/export/print';
 import { CAPTURE_VIEWPORT_MESSAGE, type CaptureViewportRequest, type CaptureViewportResponse } from '../src/export/messages';
 
 /** Messages this content script acts on; anything else is ignored. */
@@ -109,8 +112,23 @@ const EXPORT_ERROR_TEXT: Record<ExportErrorCode, string> = {
   'capture-failed': "Couldn't take a screenshot of the page. Try again.",
   'too-large': 'This page is too large to save',
   unsupported: "This browser can't save pages",
+  'print-failed': "Couldn't open the print dialog",
   unexpected: 'Something went wrong while saving the page',
 };
+
+const PRINT_ERROR_TEXT: Partial<Record<ExportErrorCode, string>> = {
+  zoomed: 'Zoom out to print the whole page',
+  cancelled: 'Print cancelled',
+  'tab-inactive': 'Stay on this tab while the page is prepared',
+  'too-large': 'This page is too large to print',
+  unsupported: "This browser can't print pages",
+  unexpected: 'Something went wrong while printing',
+};
+
+const exportErrorText = (code: ExportErrorCode, kind: ExportKind) => (kind === 'print' ? PRINT_ERROR_TEXT[code] : undefined) ?? EXPORT_ERROR_TEXT[code];
+
+/** Printing from a frame is unreliable in Safari. */
+const CAN_PRINT = !import.meta.env.SAFARI;
 
 /** The drawing app. The boot content script injects it only once a page has drawings or the user opens the toolbar. */
 export default defineUnlistedScript({
@@ -231,7 +249,7 @@ export default defineUnlistedScript({
       };
     };
 
-    const exportPage = async (format: ExportFormat) => {
+    const exportPage = async (kind: ExportKind) => {
       if (exportAbort || !mounted) return;
       const controller = new AbortController();
       exportAbort = controller;
@@ -252,11 +270,11 @@ export default defineUnlistedScript({
       window.addEventListener('wheel', cancel, listen);
       window.addEventListener('touchstart', cancel, listen);
       document.addEventListener('visibilitychange', () => document.hidden && cancel(), { signal: interrupts.signal });
-      const status = new ExportStatus(uiContainer.getRootNode(), format, cancel);
-      const label = format.toUpperCase();
+      const status = new ExportStatus(uiContainer.getRootNode(), kind, cancel);
+      const label = kind.toUpperCase();
       let placement: RegionPlacement | undefined;
       try {
-        const { blob, truncated } = await capturePage(format, {
+        const deps: PageCaptureDeps = {
           captureViewport: () => requestCapture(),
           captureRegion: import.meta.env.FIREFOX ? (rect, scale) => requestCapture({ rect, scale }) : undefined,
           onLayoutReady: () => {
@@ -272,15 +290,24 @@ export default defineUnlistedScript({
             status.setFinishing();
           },
           minShotIntervalMs: import.meta.env.FIREFOX ? 0 : CHROME_SHOT_INTERVAL_MS,
-        });
+        };
+        if (kind === 'print') {
+          const { pages, truncated } = await capturePrintPages(deps);
+          if (torn) return;
+          status.destroy();
+          await printImages(uiContainer, pages);
+          if (truncated) toolbar.showToast('Printing only the top part of the page');
+          return;
+        }
+        const { blob, truncated } = await capturePage(kind, deps);
         if (torn) return;
-        downloadBlob(blob, exportFileName(format, document.title, window.location.href));
+        downloadBlob(blob, exportFileName(kind, document.title, window.location.href));
         toolbar.showToast(truncated ? `Saved part of the page as ${label}` : `Page saved as ${label}`);
       } catch (error) {
         if (torn) return;
         const failure = toExportError(error);
-        if (failure.code !== 'cancelled') console.warn(`[Page Anchor] Save as ${label} failed (${failure.code}):`, error);
-        toolbar.showToast(EXPORT_ERROR_TEXT[failure.code]);
+        if (failure.code !== 'cancelled') console.warn(`[Page Anchor] ${kind === 'print' ? 'Print' : `Save as ${label}`} failed (${failure.code}):`, error);
+        toolbar.showToast(exportErrorText(failure.code, kind));
       } finally {
         interrupts.abort();
         status.destroy();
@@ -306,6 +333,7 @@ export default defineUnlistedScript({
           downloadBlob(blob, exportFileName(format, document.title, window.location.href));
           toolbar.showToast(`Area saved as ${format.toUpperCase()}`);
         },
+        onPrint: CAN_PRINT ? (blob, width) => printImages(uiContainer, [blob], width) : undefined,
         onCopy: canCopyImages()
           ? async (blob) => {
               const written = navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(
@@ -514,6 +542,7 @@ export default defineUnlistedScript({
         },
         onOpenOptions: () => openOptions(),
         onExport: (format) => exportPage(format),
+        onPrint: CAN_PRINT ? () => exportPage('print') : undefined,
         onCaptureArea: selectArea,
       });
       applySettings(settings);

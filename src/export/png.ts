@@ -33,6 +33,23 @@ function chunk(type: string, data: Uint8Array): Uint8Array<ArrayBuffer> {
   return out;
 }
 
+/** Wraps zlib-compressed, Up-filtered RGB scanlines in a PNG file. */
+export function pngBlob(width: number, height: number, compressed: Uint8Array): Blob {
+  const header = new Uint8Array(13);
+  const view = new DataView(header.buffer);
+  view.setUint32(0, width);
+  view.setUint32(4, height);
+  header[8] = 8; // bit depth
+  header[9] = 2; // truecolor RGB
+
+  const parts: BlobPart[] = [SIGNATURE, chunk('IHDR', header)];
+  for (let i = 0; i < compressed.length; i += IDAT_CHUNK_BYTES) {
+    parts.push(chunk('IDAT', compressed.subarray(i, i + IDAT_CHUNK_BYTES)));
+  }
+  parts.push(chunk('IEND', new Uint8Array(0)));
+  return new Blob(parts, { type: 'image/png' });
+}
+
 /** Builds an RGB PNG row by row, so an image of any height never needs one canvas that large; the height is whatever was added. */
 export class PngEncoder {
   private readonly filter: ScanlineFilter;
@@ -52,21 +69,7 @@ export class PngEncoder {
 
   async finish(): Promise<Blob> {
     if (this.rowsWritten === 0) throw new Error('No rows were added');
-    const compressed = await this.zlib.closeToBytes();
-
-    const header = new Uint8Array(13);
-    const view = new DataView(header.buffer);
-    view.setUint32(0, this.width);
-    view.setUint32(4, this.rowsWritten);
-    header[8] = 8; // bit depth
-    header[9] = 2; // truecolor RGB
-
-    const parts: BlobPart[] = [SIGNATURE, chunk('IHDR', header)];
-    for (let i = 0; i < compressed.length; i += IDAT_CHUNK_BYTES) {
-      parts.push(chunk('IDAT', compressed.subarray(i, i + IDAT_CHUNK_BYTES)));
-    }
-    parts.push(chunk('IEND', new Uint8Array(0)));
-    return new Blob(parts, { type: 'image/png' });
+    return pngBlob(this.width, this.rowsWritten, await this.zlib.closeToBytes());
   }
 
   async abort(): Promise<void> {

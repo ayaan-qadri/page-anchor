@@ -1,7 +1,7 @@
-import type { ExportFormat } from '../export/capture';
+import type { ExportKind } from '../export/capture';
 import { isTouchFirst } from './dom';
 
-const FORMAT_NAME: Record<ExportFormat, string> = { png: 'PNG image', pdf: 'PDF' };
+const TITLE: Record<ExportKind, string> = { png: 'Saving page as PNG image', pdf: 'Saving page as PDF', print: 'Preparing page to print' };
 
 /** Progress panel shown while a page is saved: what is being saved, how far it is, and which actions stop it. */
 export class ExportStatus {
@@ -13,7 +13,7 @@ export class ExportStatus {
   private readonly hint: HTMLElement;
   private readonly stopBtn: HTMLButtonElement;
 
-  constructor(root: Node, format: ExportFormat, onStop: () => void) {
+  constructor(root: Node, kind: ExportKind, onStop: () => void) {
     this.el = document.createElement('div');
     this.el.className = 'pa-export-status';
     this.el.setAttribute('role', 'status');
@@ -23,7 +23,7 @@ export class ExportStatus {
     head.className = 'pa-export-status-head';
     this.title = document.createElement('span');
     this.title.className = 'pa-export-status-title';
-    this.title.textContent = `Saving page as ${FORMAT_NAME[format]}`;
+    this.title.textContent = TITLE[kind];
     this.percent = document.createElement('span');
     this.percent.className = 'pa-export-status-percent';
     this.percent.textContent = '0%';
@@ -32,7 +32,7 @@ export class ExportStatus {
     this.bar = document.createElement('div');
     this.bar.className = 'pa-export-status-bar';
     this.bar.setAttribute('role', 'progressbar');
-    this.bar.setAttribute('aria-label', 'Saving progress');
+    this.bar.setAttribute('aria-label', 'Progress');
     this.bar.setAttribute('aria-valuemin', '0');
     this.bar.setAttribute('aria-valuemax', '100');
     this.bar.setAttribute('aria-valuenow', '0');
@@ -44,9 +44,8 @@ export class ExportStatus {
     foot.className = 'pa-export-status-foot';
     this.hint = document.createElement('span');
     this.hint.className = 'pa-export-status-hint';
-    this.hint.textContent = isTouchFirst()
-      ? 'Touching the page or switching tabs stops saving.'
-      : 'Scrolling, clicking, pressing a key or switching tabs stops saving.';
+    const stops = kind === 'print' ? 'stops printing' : 'stops saving';
+    this.hint.textContent = isTouchFirst() ? `Touching the page or switching tabs ${stops}.` : `Scrolling, clicking, pressing a key or switching tabs ${stops}.`;
     this.stopBtn = document.createElement('button');
     this.stopBtn.type = 'button';
     this.stopBtn.className = 'pa-export-status-stop';

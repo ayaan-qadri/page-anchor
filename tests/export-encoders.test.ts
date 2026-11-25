@@ -198,4 +198,28 @@ describe('PdfEncoder', () => {
   it('refuses to write an empty document', async () => {
     await expect(new PdfEncoder(10).finish()).rejects.toThrow(/No rows/);
   });
+
+  it('gives each A4 page as its own PNG for printing, holding every row once', async () => {
+    const width = 20;
+    const image = gradient(width, rowsPerA4Page(width) * 2 + 5);
+    const encoder = new PdfEncoder(width);
+    await encoder.addRows(image);
+    const pages = await encoder.finishImages();
+    expect(pages.length).toBe(3);
+
+    let row = 0;
+    for (const page of pages) {
+      expect(page.type).toBe('image/png');
+      const chunks = readPng(await bytesOf(page));
+      const header = new DataView(chunks[0].data.buffer, chunks[0].data.byteOffset);
+      expect(header.getUint32(0)).toBe(width);
+      const height = header.getUint32(4);
+      expect(height).toBeLessThanOrEqual(rowsPerA4Page(width));
+      const idat = chunks.filter((c) => c.type === 'IDAT').map((c) => c.data);
+      const raw = inflateSync(Buffer.concat(idat));
+      expect(unfilterUp(raw, width, height)).toEqual(rgbOf(image, row, height));
+      row += height;
+    }
+    expect(row).toBe(image.height);
+  });
 });

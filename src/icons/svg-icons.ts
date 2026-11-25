@@ -25,6 +25,7 @@ import {
   FileDown,
   Crop,
   Copy,
+  Printer,
   type IconNode,
 } from 'lucide';
 
@@ -102,6 +103,7 @@ export const ICONS = {
   saveImage: toSvg(ImageDown),
   savePdf: toSvg(FileDown),
   captureArea: toSvg(Crop),
+  print: toSvg(Printer),
   copy: toSvg(Copy),
 } as const satisfies Record<string, string>;
 

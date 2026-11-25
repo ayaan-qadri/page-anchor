@@ -1,10 +1,13 @@
 import type { BoundingBox } from '../types';
 import { PdfEncoder } from './pdf';
 import { PngEncoder } from './png';
+import type { RgbaRows } from './rows';
 
 export type ExportFormat = 'png' | 'pdf';
 
-export type ExportErrorCode = 'zoomed' | 'cancelled' | 'tab-inactive' | 'blocked' | 'capture-failed' | 'too-large' | 'unsupported' | 'unexpected';
+export type ExportKind = ExportFormat | 'print';
+
+export type ExportErrorCode = 'zoomed' | 'cancelled' | 'tab-inactive' | 'blocked' | 'capture-failed' | 'too-large' | 'unsupported' | 'print-failed' | 'unexpected';
 
 export class ExportError extends Error {
   constructor(
@@ -74,6 +77,30 @@ export interface PageCaptureResult {
   /** True when only the top part of the page was saved. */
   truncated: boolean;
 }
+
+export interface PrintCaptureResult {
+  /** One PNG per A4 sheet, broken between lines of text where possible. */
+  pages: Blob[];
+  truncated: boolean;
+}
+
+interface RowEncoder<T> {
+  addRows(image: RgbaRows): Promise<void>;
+  finish(): Promise<T>;
+  abort(): Promise<void>;
+}
+
+type EncoderFactory<T> = (width: number) => RowEncoder<T>;
+
+const fileEncoder =
+  (format: ExportFormat): EncoderFactory<Blob> =>
+  (width) =>
+    format === 'png' ? new PngEncoder(width) : new PdfEncoder(width);
+
+const printEncoder: EncoderFactory<Blob[]> = (width) => {
+  const pdf = new PdfEncoder(width);
+  return { addRows: (image) => pdf.addRows(image), finish: () => pdf.finishImages(), abort: () => pdf.abort() };
+};
 
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => {
@@ -196,13 +223,13 @@ interface Layout {
 }
 
 /** Shared by both capture strategies: the strip canvas and the encoder rows it feeds. */
-class StripWriter {
+class StripWriter<T> {
   private readonly canvas = document.createElement('canvas');
   readonly ctx: CanvasRenderingContext2D;
-  readonly encoder: PngEncoder | PdfEncoder;
+  readonly encoder: RowEncoder<T>;
 
   constructor(
-    format: ExportFormat,
+    encode: EncoderFactory<T>,
     readonly outW: number,
     readonly scale: number,
     private readonly deps: PageCaptureDeps
@@ -213,7 +240,7 @@ class StripWriter {
     // Browsers hand out no canvas context when the canvas is bigger than they can allocate.
     if (!ctx) throw new ExportError('too-large', 'Canvas is unavailable');
     this.ctx = ctx;
-    this.encoder = format === 'png' ? new PngEncoder(outW) : new PdfEncoder(outW);
+    this.encoder = encode(outW);
   }
 
   /** Pixel rows of the output covering document rows [y0, y1); rounding is shared so strips never overlap or gap. */
@@ -249,7 +276,7 @@ class StripWriter {
     }
   }
 
-  async finish(): Promise<Blob> {
+  async finish(): Promise<T> {
     try {
       return await this.encoder.finish();
     } catch (error) {
@@ -259,8 +286,8 @@ class StripWriter {
   }
 }
 
-interface Captured {
-  writer: StripWriter;
+interface Captured<T> {
+  writer: StripWriter<T>;
   capturedH: number;
   complete: boolean;
 }
@@ -276,10 +303,10 @@ function outputScale(native: number, layout: Layout): number {
 }
 
 /** Firefox renders any area of the page on request, so the page never scrolls through and mobile address bars never resize the view. */
-async function captureByRegion(format: ExportFormat, layout: Layout, deps: PageCaptureDeps, check: () => void): Promise<Captured> {
+async function captureByRegion<T>(encode: EncoderFactory<T>, layout: Layout, deps: PageCaptureDeps, check: () => void): Promise<Captured<T>> {
   const { docW, docH } = layout;
   const scale = outputScale(window.devicePixelRatio || 1, layout);
-  const writer = new StripWriter(format, Math.max(1, Math.round(docW * scale)), scale, deps);
+  const writer = new StripWriter(encode, Math.max(1, Math.round(docW * scale)), scale, deps);
   const stripCss = Math.max(1, Math.min(REGION_STRIP_HEIGHT, Math.floor(MAX_STRIP_PIXELS / (writer.outW * scale))));
   const shots = new ShotTaker(deps, 0);
 
@@ -322,13 +349,13 @@ function visibleArea(): { left: number; top: number; width: number; shotWidth: n
 }
 
 /** Everywhere else: scroll tile by tile and screenshot the visible area each time. */
-async function captureByScrolling(
-  format: ExportFormat,
+async function captureByScrolling<T>(
+  encode: EncoderFactory<T>,
   layout: Layout,
   deps: PageCaptureDeps,
   check: () => void,
   hideAfterFirst: () => void
-): Promise<Captured> {
+): Promise<Captured<T>> {
   const { docH } = layout;
   let { docW } = layout;
   const area = visibleArea();
@@ -371,9 +398,9 @@ async function captureByScrolling(
   }
   let pending: CaptureImage | null = first;
   const scale = outputScale(captureScale, { ...layout, docW });
-  let writer: StripWriter;
+  let writer: StripWriter<T>;
   try {
-    writer = new StripWriter(format, Math.max(1, Math.round(docW * scale)), scale, deps);
+    writer = new StripWriter(encode, Math.max(1, Math.round(docW * scale)), scale, deps);
   } catch (error) {
     first.close();
     throw error;
@@ -452,7 +479,7 @@ async function captureByScrolling(
 }
 
 /** Memory stays bounded by one strip, so page height is limited only by MAX_EXPORT_HEIGHT. */
-export async function capturePage(format: ExportFormat, deps: PageCaptureDeps): Promise<PageCaptureResult> {
+async function captureWhole<T>(encode: EncoderFactory<T>, deps: PageCaptureDeps): Promise<{ output: T; truncated: boolean }> {
   const { signal } = deps;
   const check = () => {
     if (signal?.aborted) throw new ExportError('cancelled');
@@ -472,7 +499,7 @@ export async function capturePage(format: ExportFormat, deps: PageCaptureDeps): 
   const overrides = new StyleOverrides();
   const showOverlay = deps.hideOverlay();
 
-  let captured: Captured;
+  let captured: Captured<T>;
   try {
     overrides.set(document.documentElement, 'scroll-behavior', 'auto');
     if (document.body) overrides.set(document.body, 'scroll-behavior', 'auto');
@@ -484,8 +511,8 @@ export async function capturePage(format: ExportFormat, deps: PageCaptureDeps): 
     deps.onLayoutReady?.();
 
     captured = deps.captureRegion
-      ? await captureByRegion(format, layout, deps, check)
-      : await captureByScrolling(format, layout, deps, check, () => topFixed.forEach((el) => overrides.set(el, 'visibility', 'hidden')));
+      ? await captureByRegion(encode, layout, deps, check)
+      : await captureByScrolling(encode, layout, deps, check, () => topFixed.forEach((el) => overrides.set(el, 'visibility', 'hidden')));
   } finally {
     overrides.restore();
     window.scrollTo(startX, startY);
@@ -493,8 +520,18 @@ export async function capturePage(format: ExportFormat, deps: PageCaptureDeps): 
   }
   // Only the rows already captured are needed from here, so the page goes back to the user before the file is written.
   deps.onCaptured?.();
-  const blob = await captured.writer.finish();
-  return { blob, truncated: !captured.complete || captured.capturedH < fullH };
+  const output = await captured.writer.finish();
+  return { output, truncated: !captured.complete || captured.capturedH < fullH };
+}
+
+export async function capturePage(format: ExportFormat, deps: PageCaptureDeps): Promise<PageCaptureResult> {
+  const { output, truncated } = await captureWhole(fileEncoder(format), deps);
+  return { blob: output, truncated };
+}
+
+export async function capturePrintPages(deps: PageCaptureDeps): Promise<PrintCaptureResult> {
+  const { output, truncated } = await captureWhole(printEncoder, deps);
+  return { pages: output, truncated };
 }
 
 export type AreaCaptureDeps = Pick<PageCaptureDeps, 'captureViewport' | 'drawAnnotations' | 'hideOverlay'>;

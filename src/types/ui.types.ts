@@ -9,6 +9,8 @@ export interface ToolbarCallbacks {
   /** Opens the extension's options page, where settings and backup live. */
   onOpenOptions?: () => void;
   onExport?: (format: 'png' | 'pdf') => void;
+  /** Absent where the browser cannot print; the menu then has no Print item. */
+  onPrint?: () => void;
   onCaptureArea?: () => void;
 }
 

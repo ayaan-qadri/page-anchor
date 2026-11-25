@@ -25,7 +25,7 @@ Use it to point out problems on a website, give feedback on a design, study an a
 - Type notes, and move or edit them later
 - Erase, undo and redo
 - Select anything you've drawn and move it
-- Save the whole page with your notes as an image or a PDF
+- Save the whole page with your notes as an image or a PDF, or print it
 - Back up all your notes to a file and restore them any time
 
 Your notes stay next to the right content, even when the page layout changes.

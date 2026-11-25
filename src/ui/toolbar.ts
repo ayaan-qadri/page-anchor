@@ -582,6 +582,17 @@ export class FloatingToolbar {
         action: 'export-pdf',
         onSelect: () => this.callbacks.onExport?.('pdf'),
       }),
+      ...(this.callbacks.onPrint
+        ? [
+            this.createMenuItem({
+              role: 'menuitem',
+              icon: 'print',
+              label: 'Print',
+              action: 'print',
+              onSelect: () => this.callbacks.onPrint?.(),
+            }),
+          ]
+        : []),
       this.createMenuItem({
         role: 'menuitem',
         icon: 'captureArea',

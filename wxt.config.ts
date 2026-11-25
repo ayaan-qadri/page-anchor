@@ -15,6 +15,10 @@ export default defineConfig({
     permissions: ['storage', 'unlimitedStorage', 'activeTab', 'scripting'],
     // Content script matches alone don't let the background read tab URLs or re-inject into tabs open before an install or update.
     host_permissions: ['<all_urls>'],
+    // The print page runs in a hidden frame on the page; a per-session address stops websites probing for it to tell the extension is installed (Firefox already gives every install its own address, and Safari has no Print).
+    ...(browser === 'safari'
+      ? {}
+      : { web_accessible_resources: [{ resources: ['print.html'], matches: ['<all_urls>'], ...(browser === 'firefox' ? {} : { use_dynamic_url: true }) }] }),
     ...(browser === 'firefox'
       ? {
           browser_specific_settings: {

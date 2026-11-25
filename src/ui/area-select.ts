@@ -14,6 +14,8 @@ export interface AreaSelectHandlers {
   /** Takes the screenshot; the selector is inside the overlay that gets hidden for it. */
   capture(format: ExportFormat, rect: CaptureRect): Promise<Blob>;
   onSave(format: ExportFormat, blob: Blob): void;
+  /** Prints the area at `width` CSS pixels; absent where the browser cannot print. */
+  onPrint?(blob: Blob, width: number): Promise<void>;
   /** Absent where the page cannot write images to the clipboard. */
   onCopy?(blob: Promise<Blob>): Promise<void>;
   onError(error: unknown): void;
@@ -74,6 +76,7 @@ export class AreaSelector {
     this.actions.append(
       this.button('saveImage', 'Save PNG', 'area-png', () => this.save('png')),
       this.button('savePdf', 'Save PDF', 'area-pdf', () => this.save('pdf')),
+      ...(handlers.onPrint ? [this.button('print', 'Print', 'area-print', () => this.print())] : []),
       this.button('close', '', 'area-cancel', () => this.close(), 'Cancel')
     );
 
@@ -235,6 +238,8 @@ export class AreaSelector {
 
   /** Below the area if it fits, else above it, else inside its bottom edge; always on screen. */
   private placeActions(rect: CaptureRect): void {
+    // Measured at the left edge, where nothing squeezes the row into wrapping more than it must.
+    Object.assign(this.actions.style, { left: '0px', top: '0px' });
     const { offsetWidth: w, offsetHeight: h } = this.actions;
     const viewW = this.el.clientWidth;
     const viewH = this.el.clientHeight;
@@ -260,6 +265,15 @@ export class AreaSelector {
     this.start(format, async (blob) => {
       const ready = await blob;
       if (!this.closed) this.handlers.onSave(format, ready);
+    });
+  }
+
+  private print(): void {
+    if (!this.rect) return;
+    const { width } = this.toViewport(this.rect);
+    this.start('png', async (blob) => {
+      const ready = await blob;
+      if (!this.closed) await this.handlers.onPrint!(ready, width);
     });
   }
 

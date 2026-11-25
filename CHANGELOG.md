@@ -15,6 +15,10 @@ This project follows [Semantic Versioning](https://semver.org/).
   to bold, and a preview of how the highlight looks on light and dark pages.
 - A roughly straight sweep with the highlighter snaps to a neat, level bar
   with flat ends. Circles and other freehand marks stay as drawn.
+- Print the page with your drawings. Choose "Print" from the toolbar's
+  "More" menu, or print just a selected area from "Capture area". Long pages
+  are split into sheets between lines of text, and everything prints at the
+  same size on A4 or Letter paper. Not available in Safari.
 
 ### Changed
 

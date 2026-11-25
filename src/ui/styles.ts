@@ -1122,6 +1122,7 @@ export const SHADOW_STYLES = `
   user-select: none;
   background: rgba(0, 0, 0, 0.35);
   outline: none;
+  container-type: size;
 }
 
 .page-anchor-ui-root:has(> .pa-area) .pa-toolbar-wrapper {
@@ -1172,6 +1173,10 @@ export const SHADOW_STYLES = `
 .pa-area-actions {
   position: absolute;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: calc(100% - 16px);
+  box-sizing: border-box;
   gap: 4px;
   padding: 4px;
   border-radius: 12px;
@@ -1220,6 +1225,16 @@ export const SHADOW_STYLES = `
     min-height: 44px;
     min-width: 44px;
     justify-content: center;
+  }
+}
+
+/* A phone-width screen cannot fit every action side by side with its label, so labels go under the icons. */
+@container (max-width: 480px) {
+  .pa-area-btn {
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 6px;
+    font-size: 11px;
   }
 }
 

@@ -27,16 +27,20 @@ export class ZlibStream {
     return this.output;
   }
 
-  /** Firefox MV3 hands back a page-owned buffer whose views cannot be sliced from the content script, so the bytes are copied into one this script owns. */
   async closeToBytes(): Promise<Uint8Array> {
-    const pageBytes = new Uint8Array(await (await this.close()).arrayBuffer());
-    const bytes = new Uint8Array(pageBytes.length);
-    bytes.set(pageBytes);
-    return bytes;
+    return ownBytes(await this.close());
   }
 
   async abort(): Promise<void> {
     await this.writer.abort().catch(() => {});
     await this.output.catch(() => {});
   }
+}
+
+/** Firefox MV3 hands back a page-owned buffer whose views cannot be sliced from the content script, so the bytes are copied into one this script owns. */
+export async function ownBytes(blob: Blob): Promise<Uint8Array> {
+  const pageBytes = new Uint8Array(await blob.arrayBuffer());
+  const bytes = new Uint8Array(pageBytes.length);
+  bytes.set(pageBytes);
+  return bytes;
 }

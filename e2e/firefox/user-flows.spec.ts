@@ -86,11 +86,17 @@ test.describe('Firefox user flows (built extension)', () => {
   let firefox: BidiFirefox;
 
   test.beforeAll(async () => {
-    server = await startServer({ '/': PAGE, '/spa': PAGE, '/spa/other': PAGE, '/notes': PAGE, '/fresh': PAGE });
+    server = await startServer({ '/': PAGE, '/spa': PAGE, '/spa/other': PAGE, '/notes': PAGE, '/fresh': PAGE, '/print': PAGE });
     firefox = await BidiFirefox.launch({
       openBeforeInstall: `${server.origin}/`,
       // Grants a requested permission without Firefox's prompt, which automation cannot click.
-      prefs: { 'extensions.background.idle.timeout': IDLE_MS, 'extensions.webextOptionalPermissionPrompts': false },
+      prefs: {
+        'extensions.background.idle.timeout': IDLE_MS,
+        'extensions.webextOptionalPermissionPrompts': false,
+        // Prints without the dialog, which automation cannot close.
+        'print.always_print_silent': true,
+        print_printer: 'Mozilla Save to PDF',
+      },
     });
   });
 
@@ -142,6 +148,21 @@ test.describe('Firefox user flows (built extension)', () => {
     await expect.poll(() => badge(firefox)).toBe('3');
     await firefox.driver().screenshot(path.join(testInfo.outputDir, 'drawings.png'));
     await firefox.driver().waitForSave();
+  });
+
+  test('Print hands the page to the print dialog and then cleans up', async () => {
+    await firefox.driver().goto(`${server.origin}/print`);
+    await firefox.driver().openToolbar();
+    await drawPen(firefox, [200, 300], [420, 320]);
+
+    await firefox.evaluate(`(window.printSteps = [], window.addEventListener('message', (e) => window.printSteps.push(e.data?.type)), 0)`);
+    await clickOn(firefox, '[data-action="more"]');
+    await clickOn(firefox, '[data-action="print"]');
+    await expect
+      .poll(() => firefox.evaluate<string[]>('window.printSteps'), { message: 'print frame loaded the images and printed', timeout: 30000 })
+      .toEqual(['page-anchor:print-ready', 'page-anchor:print-started', 'page-anchor:print-done']);
+    await expect.poll(() => firefox.evaluate<number>(`${host}?.querySelectorAll('iframe').length ?? 0`), { message: 'print frame removed' }).toBe(0);
+    expect(await toolbarShown(firefox)).toBe(true);
   });
 
   test('drawings come back on reload after the background was suspended, and the toolbar still opens', async () => {

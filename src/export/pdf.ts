@@ -1,5 +1,6 @@
 import { ScanlineFilter, rgbRow, type RgbaRows } from './rows';
-import { ZlibStream } from './zlib';
+import { pngBlob } from './png';
+import { ZlibStream, ownBytes } from './zlib';
 
 /** A4 portrait in PDF points. */
 export const A4 = { width: 595.28, height: 841.89 } as const;
@@ -111,11 +112,24 @@ export class PdfEncoder {
     this.pages.push({ height: page.rows, data: await page.zlib.close() });
   }
 
-  async finish(): Promise<Blob> {
+  private async closeAll(): Promise<PageImage[]> {
     await this.compress(this.held);
     this.held = [];
     await this.closePage();
     if (this.pages.length === 0) throw new Error('No rows were added');
+    return this.pages;
+  }
+
+  /** Each page as its own PNG: /Predictor 15 page data is already the filtered, compressed scanlines a PNG IDAT holds. */
+  async finishImages(): Promise<Blob[]> {
+    const images: Blob[] = [];
+    // One page at a time, so only one page's bytes are copied at once.
+    for (const page of await this.closeAll()) images.push(pngBlob(this.width, page.height, await ownBytes(page.data)));
+    return images;
+  }
+
+  async finish(): Promise<Blob> {
+    const pages = await this.closeAll();
 
     const parts: BlobPart[] = [];
     const offsets: number[] = [];
@@ -139,7 +153,7 @@ export class PdfEncoder {
 
     const kids: string[] = [];
     let id = 3;
-    for (const page of this.pages) {
+    for (const page of pages) {
       const imageId = id++;
       const contentId = id++;
       const pageId = id++;

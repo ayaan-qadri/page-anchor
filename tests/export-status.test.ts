@@ -31,6 +31,13 @@ describe('ExportStatus', () => {
     expect(text('.pa-export-status-hint')).toBe('Touching the page or switching tabs stops saving.');
   });
 
+  it('names printing, and says the same actions stop it', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    new ExportStatus(document.body, 'print', vi.fn());
+    expect(text('.pa-export-status-title')).toBe('Preparing page to print');
+    expect(text('.pa-export-status-hint')).toBe('Scrolling, clicking, pressing a key or switching tabs stops printing.');
+  });
+
   it('stops on the Stop button, and drops the stop hint once only the file is left to write', () => {
     const onStop = vi.fn();
     const status = new ExportStatus(document.body, 'png', onStop);
