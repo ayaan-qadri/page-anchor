@@ -24,6 +24,8 @@ async function fakePermissionsInExtensionPages(context: BrowserContext): Promise
 async function backgroundWithoutAccess(context: BrowserContext): Promise<Worker> {
   const worker = (await getServiceWorker(context))!;
   await worker.evaluate(async () => {
+    // Once the install check has run, so it does not see the missing access and open settings in the test's tab.
+    await (globalThis as { pageAnchorInstallChecked?: Promise<void> }).pageAnchorInstallChecked;
     chrome.permissions.contains = (async () => false) as typeof chrome.permissions.contains;
     await chrome.storage.local.remove('site_access_choice');
     // Any change to the choice makes the background look again.

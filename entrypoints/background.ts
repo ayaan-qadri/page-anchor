@@ -188,17 +188,25 @@ export default defineBackground(() => {
     } catch {}
   });
 
-  ext.runtime?.onInstalled?.addListener(async (details?: { reason?: string }) => {
-    const reason = details?.reason;
-    if (reason !== 'install' && reason !== 'update') return;
+  let installChecked = () => {};
+  // Lets the e2e suite change the access it reports only after this check has read it.
+  (globalThis as { pageAnchorInstallChecked?: Promise<void> }).pageAnchorInstallChecked = new Promise<void>((resolve) => (installChecked = resolve));
 
-    if (reason === 'update') {
-      await rekeySavedPages().catch(() => {});
+  ext.runtime?.onInstalled?.addListener(async (details?: { reason?: string }) => {
+    try {
+      const reason = details?.reason;
+      if (reason !== 'install' && reason !== 'update') return;
+
+      if (reason === 'update') {
+        await rekeySavedPages().catch(() => {});
+      }
+      if (reason === 'install' && (await needsToAsk())) {
+        await openOptions();
+        return;
+      }
+      await injectIntoOpenTabs();
+    } finally {
+      installChecked();
     }
-    if (reason === 'install' && (await needsToAsk())) {
-      await openOptions();
-      return;
-    }
-    await injectIntoOpenTabs();
   });
 });
