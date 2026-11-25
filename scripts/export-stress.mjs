@@ -1,12 +1,14 @@
 /**
- * Stress, performance and leak suite for "Save as PNG / PDF", on a desktop window and an emulated phone.
+ * Stress, performance and leak suite for "Save as PNG / PDF" and Print, on a desktop window and an emulated phone.
  *
  * Drives the real built extension in Chromium: long pages, the height cap, repeated exports, cancelling by key and by touch,
  * infinite-scroll and very large DOMs. Checks output correctness, page frame times, heap, DOM nodes and leftover listeners.
  *
  * Usage: pnpm build && node scripts/export-stress.mjs
  * Env: PA_EXT_DIR=<built extension dir>, PA_RESULTS_FILE=<file name>, PA_PROFILES=desktop,mobile, PA_ONLY=<scenario>[,...]
+ *      PA_SHARDS=<n> browsers run scenarios side by side (default 4); PA_SHARDS=1 runs them one after another, for timings without CPU contention.
  */
+import { spawn } from 'child_process';
 import { chromium } from '@playwright/test';
 import http from 'http';
 import fs from 'fs';
@@ -25,6 +27,85 @@ const PROFILES = {
   // Galaxy Note20 Ultra class phone, the device the feature was first tested on.
   mobile: { viewport: { width: 412, height: 883 }, deviceScaleFactor: 2.625, isMobile: true, hasTouch: true },
 };
+
+const SCENARIOS = [
+  'scenarioIdle',
+  'scenarioLongPage',
+  'scenarioHeightCap',
+  'scenarioRepeatLeak',
+  'scenarioCancel',
+  'scenarioCancelStorm',
+  'scenarioInfinite',
+  'scenarioBigDom',
+  'scenarioEdgeBands',
+  'scenarioEdgeWide',
+  'scenarioEdgeShortAndLocked',
+  'scenarioEdgeBrowserZoom',
+  'scenarioEdgePinchZoom',
+  'scenarioEdgeDoubleTrigger',
+  'scenarioEdgeHiddenDrawings',
+  'scenarioEdgeTabSwitch',
+  'scenarioEdgeLazyImages',
+  'scenarioPrintLongPage',
+  'scenarioPrintHeightCap',
+  'scenarioPrintRepeatLeak',
+  'scenarioPrintStrictPage',
+  'scenarioPrintCancel',
+  'scenarioPrintDoubleTrigger',
+];
+
+/** Started first, so the run ends with short scenarios filling the gaps instead of waiting on a long one that started last. */
+const SLOW = new Set(['scenarioCancelStorm', 'scenarioHeightCap', 'scenarioPrintHeightCap', 'scenarioBigDom', 'scenarioRepeatLeak', 'scenarioPrintRepeatLeak', 'scenarioLongPage', 'scenarioPrintLongPage']);
+
+const SHARDS = Math.max(1, Number(process.env.PA_SHARDS ?? 4));
+
+/** Chrome allows each browser only about two screenshots a second, so every scenario gets its own browser and several run at once. */
+if (SHARDS > 1 && !process.env.PA_WORKER) {
+  const profiles = (process.env.PA_PROFILES ?? 'desktop,mobile').split(',');
+  const only = process.env.PA_ONLY?.split(',');
+  const names = SCENARIOS.filter((n) => !only || only.includes(n));
+  const tasks = profiles.flatMap((profile) => names.map((scenario) => ({ profile, scenario })));
+  tasks.sort((a, b) => Number(SLOW.has(b.scenario)) - Number(SLOW.has(a.scenario)));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pa-export-stress-shards-'));
+  const merged = [];
+  let next = 0;
+  const work = async () => {
+    while (next < tasks.length) {
+      const index = next++;
+      const { profile, scenario } = tasks[index];
+      const file = path.join(tmp, `${index}.json`);
+      const code = await new Promise((resolve) => {
+        const child = spawn(process.execPath, [fileURLToPath(import.meta.url)], {
+          env: { ...process.env, PA_WORKER: '1', PA_PROFILES: profile, PA_ONLY: scenario, PA_RESULTS_FILE: file },
+          stdio: ['ignore', 'inherit', 'inherit'],
+        });
+        child.on('exit', resolve);
+      });
+      if (fs.existsSync(file)) merged.push(...JSON.parse(fs.readFileSync(file, 'utf8')).results.map((r) => ({ ...r, scenario })));
+      else merged.push({ profile, scenario, name: `${scenario} did not finish`, pass: false, metrics: { exitCode: code } });
+    }
+  };
+  const t0 = Date.now();
+  await Promise.all(Array.from({ length: Math.min(SHARDS, tasks.length) }, work));
+  fs.rmSync(tmp, { recursive: true, force: true });
+
+  // Every browser checks its own console; one result per profile reports them all.
+  const consoleCheck = 'no extension errors in page consoles';
+  const results = merged.filter((r) => r.name !== consoleCheck);
+  for (const profile of profiles) {
+    const checks = merged.filter((r) => r.profile === profile && r.name === consoleCheck);
+    const errors = checks.flatMap((r) => r.metrics.errors ?? []);
+    results.push({ profile, scenario: '', name: consoleCheck, pass: checks.every((r) => r.pass), metrics: { errors: errors.slice(0, 10) } });
+  }
+  const order = (r) => profiles.indexOf(r.profile) * 1000 + (r.scenario ? SCENARIOS.indexOf(r.scenario) : 999);
+  results.sort((a, b) => order(a) - order(b));
+  fs.writeFileSync(path.resolve(ROOT, RESULTS_FILE), JSON.stringify({ ext: EXT, generatedAt: new Date().toISOString(), shards: SHARDS, results }, null, 2));
+  const failed = results.filter((r) => !r.pass);
+  console.log(`
+${results.length - failed.length}/${results.length} checks passed in ${Math.round((Date.now() - t0) / 1000)}s with ${SHARDS} browsers, wrote ${RESULTS_FILE}`);
+  for (const r of failed) console.log(`FAIL  [${r.profile}] ${r.name}`);
+  process.exit(failed.length ? 1 : 0);
+}
 
 const results = [];
 function record(profile, name, pass, metrics) {
@@ -193,7 +274,8 @@ const near = (a, b) => a.every((v, i) => Math.abs(v - b[i]) <= 16);
 /** Inline styles the export might have left on page elements. */
 const leftoverStyles = (page) =>
   page.evaluate(
-    () => [...document.querySelectorAll('[style]')].filter((el) => el.id !== 'page-anchor-host' && /visibility|scroll-behavior/.test(el.getAttribute('style') ?? '')).length
+    // The extension's own layers (host, highlighter layers) pin their styles on purpose and are not leftovers.
+    () => [...document.querySelectorAll('[style]')].filter((el) => el.id !== 'page-anchor-host' && !el.localName.startsWith('page-anchor') && /visibility|scroll-behavior/.test(el.getAttribute('style') ?? '')).length
   );
 
 // ---------------------------------------------------------------- per profile
@@ -208,8 +290,22 @@ async function runProfile(profileName) {
     ...PROFILES[profileName],
     args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   });
+  // The print dialog cannot run under automation: the print page reports what it would print, then acts as if the dialog was closed.
+  await context.addInitScript(() => {
+    if (!location.pathname.endsWith('/print.html')) return;
+    window.print = () => {
+      const imgs = [...document.images];
+      window.parent.postMessage(
+        { type: 'stress-print', sheets: imgs.length, width: imgs[0]?.naturalWidth ?? 0, heights: imgs.map((i) => i.naturalHeight), loaded: imgs.every((i) => i.complete && i.naturalWidth > 0) },
+        '*'
+      );
+      setTimeout(() => window.dispatchEvent(new Event('afterprint')), 50);
+    };
+  });
   let sw = context.serviceWorkers()[0];
   if (!sw) sw = await context.waitForEvent('serviceworker', { timeout: 15000 });
+  // The one-time phone hint is a toast of its own and would be read as an export's result.
+  await sw.evaluate(() => chrome.storage.local.set({ page_anchor_settings: { scrollHintDismissed: true } }));
   const rec = (name, pass, m) => record(profileName, name, pass, m);
   const pageErrors = [];
 
@@ -820,7 +916,211 @@ async function runProfile(profileName) {
     await page.close();
   }
 
-  const scenarios = [
+  const printFrames = (page) => page.evaluate(() => document.getElementById('page-anchor-host').shadowRoot.querySelectorAll('iframe').length);
+
+  /** Prints from the More menu and samples page frames, long tasks and heap until the print frame is gone again; `summary` is what the print page was given. */
+  async function printOnce(page, cdp, { during, expectPrint = true } = {}) {
+    await page.evaluate(() => {
+      const s = { d: [], lt: [], raf: 0, obs: null, prints: [] };
+      window.__ex = s;
+      // Added once per page, so the listener check counts only the extension's own.
+      if (!window.__printListening) {
+        window.__printListening = true;
+        window.addEventListener('message', (e) => e.data?.type === 'stress-print' && window.__ex.prints.push(e.data));
+      }
+      let last = performance.now();
+      const loop = (t) => {
+        s.d.push(t - last);
+        last = t;
+        s.raf = requestAnimationFrame(loop);
+      };
+      s.raf = requestAnimationFrame(loop);
+      s.obs = new PerformanceObserver((l) => l.getEntries().forEach((e) => s.lt.push(e.duration)));
+      s.obs.observe({ entryTypes: ['longtask'] });
+    });
+    let peakHeap = 0;
+    let sampling = true;
+    const sampler = (async () => {
+      while (sampling) {
+        try {
+          peakHeap = Math.max(peakHeap, (await metrics(cdp)).JSHeapUsedSize);
+        } catch {
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    })();
+    const before = await metrics(cdp);
+    const toastsBefore = await pa(page, '.pa-toast-text').count();
+    const t0 = Date.now();
+    await page.evaluate(() => document.getElementById('page-anchor-host').shadowRoot.querySelector('[data-action="print"]').click());
+    if (during) await during();
+    if (expectPrint) await page.waitForFunction(() => window.__ex.prints.length > 0, undefined, { timeout: 180000 });
+    else await toast(page).waitFor({ state: 'visible', timeout: 180000 });
+    const ms = Date.now() - t0;
+    // The frame goes once the dialog reports it closed.
+    for (let i = 0; i < 50 && (await printFrames(page)) > 0; i++) await page.waitForTimeout(100);
+    await page.waitForTimeout(300);
+    sampling = false;
+    await sampler;
+    const after = await metrics(cdp);
+    const f = await page.evaluate(() => {
+      const s = window.__ex;
+      cancelAnimationFrame(s.raf);
+      s.obs.disconnect();
+      return { d: s.d.slice(1), lt: s.lt, summary: s.prints[0] ?? null };
+    });
+    const newToasts = (await pa(page, '.pa-toast-text').count()) > toastsBefore;
+    return {
+      summary: f.summary,
+      toast: newToasts ? await toast(page).textContent() : null,
+      framesLeft: await printFrames(page),
+      ms,
+      scriptMs: Math.round((after.ScriptDuration - before.ScriptDuration) * 1000),
+      frameP50: pct(f.d, 50),
+      frameP95: pct(f.d, 95),
+      longTasks: f.lt.length,
+      maxLongTask: f.lt.length ? Math.round(Math.max(...f.lt)) : 0,
+      peakHeapMb: mb(peakHeap),
+      heapBeforeMb: mb(before.JSHeapUsedSize),
+    };
+  }
+
+  // A long page with sticky header and drawings, printed as A4 sheets that hold every row once.
+  async function scenarioPrintLongPage() {
+    const { page, cdp } = await open(`${origin}/long`);
+    await draw(page);
+    await page.evaluate(() => window.scrollTo(0, 1234));
+    const scrollBefore = await page.evaluate(() => window.scrollY);
+    const docH = await page.evaluate(() => document.documentElement.scrollHeight);
+    const r = await printOnce(page, cdp);
+    const scale = await captureScale(page, sw);
+    const total = r.summary?.heights.reduce((a, b) => a + b, 0) ?? 0;
+    const sheetRows = Math.floor(((r.summary?.width ?? 0) * 841.89) / 595.28);
+    const scrollBack = await page.evaluate(() => window.scrollY);
+    rec(
+      `Print of a ${docH}px page`,
+      !!r.summary?.loaded &&
+        r.summary.sheets > 1 &&
+        r.summary.heights.every((h) => h <= sheetRows) &&
+        Math.abs(total - docH * scale) <= 2 &&
+        r.framesLeft === 0 &&
+        r.toast === null &&
+        scrollBack === scrollBefore &&
+        (await leftoverStyles(page)) === 0,
+      { ...r, expectedRows: Math.round(docH * scale), printedRows: total, scrollBefore, scrollBack }
+    );
+    await page.close();
+  }
+
+  // Over the height cap, the top 40,000px are printed and the user is told.
+  async function scenarioPrintHeightCap() {
+    const { page, cdp } = await open(`${origin}/huge`);
+    const r = await printOnce(page, cdp);
+    const total = r.summary?.heights.reduce((a, b) => a + b, 0) ?? 0;
+    const cssH = total / (await captureScale(page, sw));
+    rec(
+      'Print of a page over 40,000px prints the top part and says so',
+      !!r.summary?.loaded && Math.abs(cssH - 40000) <= 2 && r.toast === 'Printing only the top part of the page' && r.framesLeft === 0,
+      { ...r, printedCssHeight: Math.round(cssH) }
+    );
+    await page.close();
+  }
+
+  // Repeated prints must not grow memory, DOM, listeners or frames.
+  async function scenarioPrintRepeatLeak() {
+    const { page, cdp } = await open(`${origin}/medium`);
+    await draw(page);
+    await printOnce(page, cdp);
+    const base = await settledMetrics(cdp);
+    const baseListeners = await rootListeners(cdp);
+    const heaps = [];
+    const rounds = 10;
+    let allPrinted = true;
+    for (let i = 0; i < rounds; i++) {
+      const r = await printOnce(page, cdp);
+      allPrinted &&= !!r.summary?.loaded && r.framesLeft === 0;
+      heaps.push(mb((await settledMetrics(cdp)).JSHeapUsedSize));
+    }
+    const end = await settledMetrics(cdp);
+    const endListeners = await rootListeners(cdp);
+    const growthMb = mb(end.JSHeapUsedSize - base.JSHeapUsedSize);
+    const sameListeners = JSON.stringify(baseListeners) === JSON.stringify(endListeners);
+    rec(`${rounds} prints in a row do not leak`, allPrinted && growthMb < 2 && end.Nodes - base.Nodes <= 20 && end.Frames <= base.Frames && sameListeners && (await leftoverStyles(page)) === 0, {
+      allPrinted,
+      heapGrowthMb: growthMb,
+      heapsMb: heaps,
+      nodesBefore: base.Nodes,
+      nodesAfter: end.Nodes,
+      framesBefore: base.Frames,
+      framesAfter: end.Frames,
+      listenersBefore: baseListeners,
+      listenersAfter: endListeners,
+    });
+    await page.close();
+  }
+
+  // A page whose content rules forbid frames, images and connections still prints.
+  async function scenarioPrintStrictPage() {
+    const { page, cdp } = await open(`${origin}/csp`);
+    await draw(page);
+    const r = await printOnce(page, cdp);
+    rec('Print works on a page with strict content rules', !!r.summary?.loaded && r.summary.sheets >= 1 && r.framesLeft === 0 && r.toast === null, r);
+    await page.close();
+  }
+
+  // Escape on desktop, a touch on phones, while the page is prepared: nothing is printed and the page is put back.
+  async function scenarioPrintCancel() {
+    const { page, cdp } = await open(`${origin}/long`);
+    await page.evaluate(() => {
+      window.__printListening = true;
+      window.addEventListener('message', (e) => e.data?.type === 'stress-print' && window.__ex.prints.push(e.data));
+      window.scrollTo(0, 777);
+    });
+    const scrollBefore = await page.evaluate(() => window.scrollY);
+    const listenersBefore = await rootListeners(cdp);
+    const r = await printOnce(page, cdp, {
+      expectPrint: false,
+      during: async () => {
+        await page.waitForTimeout(1500);
+        if (PROFILES[profileName].hasTouch) await page.touchscreen.tap(200, 500);
+        else await page.keyboard.press('Escape');
+      },
+    });
+    await page.waitForTimeout(300);
+    const scrollY = await page.evaluate(() => window.scrollY);
+    const listenersAfter = await rootListeners(cdp);
+    const sameListeners = JSON.stringify(listenersBefore) === JSON.stringify(listenersAfter);
+    const how = PROFILES[profileName].hasTouch ? 'a touch' : 'Escape';
+    rec(
+      `${how} cancels a print and restores the page`,
+      r.toast === 'Print cancelled' && r.summary === null && r.framesLeft === 0 && scrollY === scrollBefore && sameListeners && (await leftoverStyles(page)) === 0,
+      { ms: r.ms, toast: r.toast, printed: !!r.summary, scrollBefore, scrollY, sameListeners, listenersBefore, listenersAfter }
+    );
+    await page.close();
+  }
+
+  // Print and Save pressed together run only the first.
+  async function scenarioPrintDoubleTrigger() {
+    const { page } = await open(`${origin}/csp`);
+    const downloads = [];
+    page.on('download', (d) => downloads.push(d.suggestedFilename()));
+    await page.evaluate(() => {
+      window.__prints = 0;
+      window.addEventListener('message', (e) => e.data?.type === 'stress-print' && window.__prints++);
+      const root = document.getElementById('page-anchor-host').shadowRoot;
+      root.querySelector('[data-action="print"]').click();
+      root.querySelector('[data-action="export-png"]').click();
+      root.querySelector('[data-action="print"]').click();
+    });
+    await page.waitForFunction(() => window.__prints > 0, undefined, { timeout: 60000 });
+    await page.waitForTimeout(3000);
+    const prints = await page.evaluate(() => window.__prints);
+    rec('Print and Save pressed at once run a single print', prints === 1 && downloads.length === 0 && (await printFrames(page)) === 0, { prints, downloads });
+    await page.close();
+  }
+
+  const scenarios = {
     scenarioIdle,
     scenarioLongPage,
     scenarioHeightCap,
@@ -838,9 +1138,16 @@ async function runProfile(profileName) {
     scenarioEdgeHiddenDrawings,
     scenarioEdgeTabSwitch,
     scenarioEdgeLazyImages,
-  ];
+    scenarioPrintLongPage,
+    scenarioPrintHeightCap,
+    scenarioPrintRepeatLeak,
+    scenarioPrintStrictPage,
+    scenarioPrintCancel,
+    scenarioPrintDoubleTrigger,
+  };
   const only = process.env.PA_ONLY?.split(',');
-  for (const s of scenarios.filter((x) => !only || only.includes(x.name))) {
+  for (const name of SCENARIOS.filter((n) => !only || only.includes(n))) {
+    const s = scenarios[name];
     try {
       await s();
     } catch (e) {
@@ -856,8 +1163,8 @@ async function runProfile(profileName) {
 
 for (const profile of (process.env.PA_PROFILES ?? 'desktop,mobile').split(',')) await runProfile(profile);
 
-fs.writeFileSync(path.join(ROOT, RESULTS_FILE), JSON.stringify({ ext: EXT, generatedAt: new Date().toISOString(), results }, null, 2));
-console.log(`\n${results.filter((r) => r.pass).length}/${results.length} checks passed, wrote ${RESULTS_FILE}`);
+fs.writeFileSync(path.resolve(ROOT, RESULTS_FILE), JSON.stringify({ ext: EXT, generatedAt: new Date().toISOString(), results }, null, 2));
+if (!process.env.PA_WORKER) console.log(`\n${results.filter((r) => r.pass).length}/${results.length} checks passed, wrote ${RESULTS_FILE}`);
 server.close();
 server.closeAllConnections();
 process.exit(results.every((r) => r.pass) ? 0 : 1);
