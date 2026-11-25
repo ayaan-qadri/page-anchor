@@ -222,6 +222,15 @@ export default defineUnlistedScript({
       return decodeCapture(response.dataUrl);
     };
 
+    const hideOverlay = () => {
+      uiContainer.style.setProperty('opacity', '0', 'important');
+      const showHighlights = engine.hideHighlights();
+      return () => {
+        uiContainer.style.removeProperty('opacity');
+        showHighlights();
+      };
+    };
+
     const exportPage = async (format: ExportFormat) => {
       if (exportAbort || !mounted) return;
       const controller = new AbortController();
@@ -254,10 +263,7 @@ export default defineUnlistedScript({
             placement = engine.measurePlacement();
           },
           drawAnnotations: (ctx, region, scale) => engine.renderRegion(ctx, region, scale, placement),
-          hideOverlay: () => {
-            uiContainer.style.setProperty('opacity', '0', 'important');
-            return () => uiContainer.style.removeProperty('opacity');
-          },
+          hideOverlay,
           signal: controller.signal,
           onProgress: (fraction) => status.setProgress(fraction),
           beforeShot: () => status.hide(),
@@ -294,10 +300,7 @@ export default defineUnlistedScript({
           captureArea(format, rect, {
             captureViewport: () => requestCapture(),
             drawAnnotations: (ctx, region, scale) => engine.renderRegion(ctx, region, scale),
-            hideOverlay: () => {
-              uiContainer.style.setProperty('opacity', '0', 'important');
-              return () => uiContainer.style.removeProperty('opacity');
-            },
+            hideOverlay,
           }),
         onSave: (format, blob) => {
           downloadBlob(blob, exportFileName(format, document.title, window.location.href));

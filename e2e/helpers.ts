@@ -1,4 +1,5 @@
 import http from 'http';
+import { inflateSync } from 'zlib';
 import type { AddressInfo } from 'net';
 import type { BrowserContext, Page, Worker } from '@playwright/test';
 import { expect } from './fixtures';
@@ -137,4 +138,55 @@ export async function startServer(routes: Record<string, string | (() => string)
         server.closeAllConnections();
       }),
   };
+}
+
+export type Rgb = [number, number, number];
+
+export interface DecodedPng {
+  width: number;
+  height: number;
+  pixel(x: number, y: number): Rgb;
+}
+
+export function decodePng(bytes: Buffer): DecodedPng {
+  expect(bytes.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  let at = 8;
+  let width = 0;
+  let height = 0;
+  const idat: Buffer[] = [];
+  while (at < bytes.length) {
+    const length = bytes.readUInt32BE(at);
+    const type = bytes.toString('latin1', at + 4, at + 8);
+    const data = bytes.subarray(at + 8, at + 8 + length);
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      expect([data[8], data[9]]).toEqual([8, 2]);
+    } else if (type === 'IDAT') idat.push(data);
+    at += 12 + length;
+  }
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * 3;
+  const rgb = new Uint8Array(stride * height);
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (stride + 1)];
+    for (let i = 0; i < stride; i++) {
+      const value = raw[y * (stride + 1) + 1 + i];
+      const up = y > 0 ? rgb[(y - 1) * stride + i] : 0;
+      rgb[y * stride + i] = filter === 2 ? (value + up) & 0xff : value;
+    }
+  }
+  return {
+    width,
+    height,
+    pixel: (x, y) => {
+      const i = (y * width + x) * 3;
+      return [rgb[i], rgb[i + 1], rgb[i + 2]];
+    },
+  };
+}
+
+export function expectColor(actual: Rgb, expected: Rgb, where: string): void {
+  const close = actual.every((v, i) => Math.abs(v - expected[i]) <= 12);
+  expect(close, `${where}: got rgb(${actual.join(',')}), want rgb(${expected.join(',')})`).toBe(true);
 }

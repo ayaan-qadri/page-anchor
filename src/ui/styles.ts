@@ -618,6 +618,67 @@ export const SHADOW_STYLES = `
   gap: 10px;
 }
 
+/* Six highlighter colours and the custom picker share one row. */
+.pa-color-grid.is-highlighter {
+  grid-template-columns: repeat(7, 26px);
+  column-gap: 4px;
+}
+
+.pa-hl-sample {
+  display: flex;
+  gap: 8px;
+}
+
+.pa-hl-chip {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  border-radius: 8px;
+  border: 1px solid var(--pa-line);
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.pa-hl-chip.is-light {
+  background: #ffffff;
+  color: #111827;
+}
+
+.pa-hl-chip.is-dark {
+  background: #0d1117;
+  color: #e6edf3;
+}
+
+.pa-hl-mark {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.pa-hl-chip.is-light .pa-hl-mark {
+  mix-blend-mode: multiply;
+}
+
+.pa-hl-chip.is-dark .pa-hl-mark {
+  mix-blend-mode: screen;
+}
+
+.pa-slider-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: -4px;
+  font-size: 11px;
+  color: var(--pa-muted);
+}
+
 .pa-color-swatch {
   position: relative;
   width: 26px;

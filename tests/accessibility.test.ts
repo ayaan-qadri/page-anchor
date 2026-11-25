@@ -165,7 +165,7 @@ describe('Accessibility (a11y) & WCAG 2.2 Conformance Audit', () => {
       const swatches = container.querySelectorAll('button.pa-color-swatch');
       expect(swatches.length).toBeGreaterThan(0);
       swatches.forEach((s) => {
-        expect(s.getAttribute('aria-label')).toMatch(/^Color /);
+        expect(s.getAttribute('aria-label')).toMatch(/^[A-Z][a-z]+$/);
         expect(['true', 'false']).toContain(s.getAttribute('aria-pressed'));
       });
     });

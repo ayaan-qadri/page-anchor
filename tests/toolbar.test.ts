@@ -55,6 +55,15 @@ function rectElement(id: string): ShapeElement {
   };
 }
 
+function drawHighlightOn(container: HTMLElement, engine: CanvasEngine) {
+  const canvas = container.querySelector<HTMLCanvasElement>('.page-anchor-active-canvas')!;
+  const before = engine.getElements().length;
+  canvas.dispatchEvent(new PointerEvent('pointerdown', { clientX: 10, clientY: 10, button: 0, pointerId: 1 }));
+  window.dispatchEvent(new PointerEvent('pointermove', { clientX: 60, clientY: 10, pointerId: 1 }));
+  window.dispatchEvent(new PointerEvent('pointerup', { clientX: 60, clientY: 10, pointerId: 1 }));
+  return engine.getElements()[before];
+}
+
 function settingsWith(patch: Partial<ExtensionSettings>): ExtensionSettings {
   return { ...DEFAULT_SETTINGS, shortcuts: { ...DEFAULT_SETTINGS.shortcuts }, ...patch };
 }
@@ -68,6 +77,7 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
   let mockCallbacks: ReturnType<typeof makeCallbacks>;
 
   const q = <T extends HTMLElement = HTMLButtonElement>(selector: string) => container.querySelector(selector) as T;
+  const drawHighlight = () => drawHighlightOn(container, engine);
 
   beforeEach(() => {
     container = document.createElement('div');
@@ -559,6 +569,80 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
     expect(stroke.strokeColor).toBe(picked);
   });
 
+  it('shows vivid presets for the highlighter and the regular ones for the pen', () => {
+    q('[data-tool="highlighter"]').click();
+    q('.pa-color-preview-btn').click();
+    const vivid = Array.from(container.querySelectorAll<HTMLButtonElement>('button.pa-color-swatch')).map((s) => s.dataset.color);
+    expect(vivid).toContain('#39ff14');
+    expect(vivid).toContain('#ff2bd6');
+    expect(q('.pa-color-swatch[data-color="#ffea00"]').getAttribute('aria-pressed')).toBe('true');
+    expect(vivid).toHaveLength(6);
+    expect(q('.pa-color-swatch[data-color="#39ff14"]').getAttribute('aria-label')).toBe('Green');
+
+    q('[data-tool="pen"]').click();
+    const regular = Array.from(container.querySelectorAll<HTMLButtonElement>('button.pa-color-swatch')).map((s) => s.dataset.color);
+    expect(regular).toContain('#ef4444');
+    expect(regular).not.toContain('#39ff14');
+    expect(q('.pa-color-swatch[data-color="#ef4444"]').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('applies and persists the highlighter intensity, and only shows it for the highlighter', () => {
+    const intensity = q<HTMLInputElement>('input[data-setting="defaultHighlighterIntensity"]');
+    const group = intensity.closest<HTMLElement>('.pa-slider-group')!;
+    expect(group.style.display).toBe('none');
+
+    q('[data-tool="highlighter"]').click();
+    q('.pa-color-preview-btn').click();
+    expect(group.style.display).toBe('flex');
+    expect(group.querySelector('.pa-slider-label span')!.textContent).toBe('Intensity');
+    expect(intensity.value).toBe('50');
+    expect(group.querySelector('.pa-slider-scale')!.textContent).toBe('SoftBold');
+
+    const marks = container.querySelectorAll<HTMLElement>('.pa-hl-mark');
+    expect(marks).toHaveLength(2);
+    expect(marks[0].style.opacity).toBe('0.6');
+
+    intensity.value = '100';
+    intensity.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(marks[0].style.opacity).toBe('1');
+    expect(marks[1].style.opacity).toBe('0.5');
+
+    const sample = q('.pa-hl-sample');
+    expect(sample.nextElementSibling?.classList.contains('pa-color-grid')).toBe(true);
+    const width = q<HTMLInputElement>('input[data-setting="defaultHighlighterWidth"]');
+    width.value = '10';
+    width.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(marks[0].style.height).toBe('8px');
+    width.value = '50';
+    width.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(marks[0].style.height).toBe('40px');
+    expect(marks[1].style.height).toBe('40px');
+    expect(intensity.getAttribute('aria-valuetext')).toBe('100 percent');
+    intensity.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(settingsOf(toolbar).defaultHighlighterIntensity).toBe(100);
+    expect(drawHighlight().opacity).toBe(1);
+
+    q('.pa-popover-reset').click();
+    expect(settingsOf(toolbar).defaultHighlighterIntensity).toBe(DEFAULT_SETTINGS.defaultHighlighterIntensity);
+    expect(intensity.value).toBe('50');
+    expect(engine.getElements()[0].opacity).toBe(1);
+    expect(drawHighlight().opacity).toBe(0.6);
+  });
+
+  it('keeps every intensity see-through and maps corrupt stored values into range', () => {
+    for (const [stored, opacity] of [
+      [0, 0.2],
+      [-40, 0.2],
+      [250, 1],
+      [Number.NaN, 0.6],
+    ] as const) {
+      toolbar.setSettings(settingsWith({ defaultHighlighterIntensity: stored }));
+      q('[data-tool="highlighter"]').click();
+      expect(drawHighlight().opacity).toBe(opacity);
+      engine.clear();
+    }
+  });
+
   it('keeps the pen colour unchanged when the highlighter colour is edited', () => {
     const penBefore = settingsOf(toolbar).defaultStrokeColor;
 
@@ -1004,11 +1088,22 @@ describe('FloatingToolbar: Dragging, Tool Switching, History & UI Controls', () 
       toolbar.updateActiveToolUI();
 
       q('.pa-color-preview-btn').click();
-      q('.pa-color-swatch[data-color="#22c55e"]').click();
+      q('.pa-color-swatch[data-color="#39ff14"]').click();
 
       const [stroke] = engine.getElements();
-      expect(stroke.strokeColor).toBe('#22c55e');
+      expect(stroke.strokeColor).toBe('#39ff14');
       expect(stroke.opacity).toBe(0.35);
+    });
+
+    it('offers the regular palette when the selection mixes highlighter and pen strokes', () => {
+      engine.addElement({ ...penElement('h'), type: 'highlighter', opacity: 0.35 });
+      engine.addElement(penElement('p'));
+      engine.selectAll();
+      toolbar.updateActiveToolUI();
+
+      q('.pa-color-preview-btn').click();
+      expect(container.querySelector('.pa-color-swatch[data-color="#3b82f6"]')).not.toBeNull();
+      expect(container.querySelector('.pa-color-swatch[data-color="#39ff14"]')).toBeNull();
     });
 
     it('shows an empty colour button for tools without a colour, and a prompt to select drawings with the select tool', () => {

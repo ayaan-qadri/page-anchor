@@ -5,6 +5,22 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Brighter highlighters that keep text readable. Highlights now tint the
+  page the way a real marker does: on light pages the text under them stays
+  black, and on dark pages it stays white, so even the strongest setting
+  never hides what you highlighted.
+- The highlighter has its own six vivid colours, an intensity slider from soft
+  to bold, and a preview of how the highlight looks on light and dark pages.
+- A roughly straight sweep with the highlighter snaps to a neat, level bar
+  with flat ends. Circles and other freehand marks stay as drawn.
+
+### Changed
+
+- Highlights are drawn under pen marks, shapes and notes instead of over them.
+- Colour swatches are announced by name, such as "Yellow", to screen readers.
+
 ## [1.1.2] - 2026-11-21
 
 ### Added

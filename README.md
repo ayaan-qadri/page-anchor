@@ -20,7 +20,7 @@ Use it to point out problems on a website, give feedback on a design, study an a
 
 ## What you can do
 
-- Draw with a pen or highlighter in any colour and size
+- Draw with a pen or highlighter in any colour and size; highlights keep the text under them readable on light and dark pages
 - Add boxes, circles, lines and arrows
 - Type notes, and move or edit them later
 - Erase, undo and redo

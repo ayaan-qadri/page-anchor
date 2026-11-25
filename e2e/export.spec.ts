@@ -1,8 +1,7 @@
 import fs from 'fs';
-import { inflateSync } from 'zlib';
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
-import { drawStroke, openToolbar, pa, startServer, waitForContentScript, type TestServer } from './helpers';
+import { decodePng, drawStroke, expectColor, openToolbar, pa, startServer, waitForContentScript, type Rgb, type TestServer } from './helpers';
 
 const RED: Rgb = [255, 0, 0];
 const BLUE: Rgb = [0, 0, 255];
@@ -10,8 +9,6 @@ const GREEN: Rgb = [0, 255, 0];
 const BLACK: Rgb = [0, 0, 0];
 const YELLOW: Rgb = [255, 255, 0];
 const STROKE: Rgb = [239, 68, 68];
-
-type Rgb = [number, number, number];
 
 /** A sticky red header and a fixed yellow footer over blue, green and black bands. */
 const STICKY_PAGE = `<!DOCTYPE html>
@@ -35,55 +32,6 @@ const BANDS_PAGE = `<!DOCTYPE html>
   <div style="height:10px;background:rgb(255,255,0)"></div>
   <div style="height:10px;background:rgb(0,0,0)"></div>
 </body></html>`;
-
-interface DecodedPng {
-  width: number;
-  height: number;
-  pixel(x: number, y: number): Rgb;
-}
-
-function decodePng(bytes: Buffer): DecodedPng {
-  expect(bytes.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
-  let at = 8;
-  let width = 0;
-  let height = 0;
-  const idat: Buffer[] = [];
-  while (at < bytes.length) {
-    const length = bytes.readUInt32BE(at);
-    const type = bytes.toString('latin1', at + 4, at + 8);
-    const data = bytes.subarray(at + 8, at + 8 + length);
-    if (type === 'IHDR') {
-      width = data.readUInt32BE(0);
-      height = data.readUInt32BE(4);
-      expect([data[8], data[9]]).toEqual([8, 2]);
-    } else if (type === 'IDAT') idat.push(data);
-    at += 12 + length;
-  }
-  const raw = inflateSync(Buffer.concat(idat));
-  const stride = width * 3;
-  const rgb = new Uint8Array(stride * height);
-  for (let y = 0; y < height; y++) {
-    const filter = raw[y * (stride + 1)];
-    for (let i = 0; i < stride; i++) {
-      const value = raw[y * (stride + 1) + 1 + i];
-      const up = y > 0 ? rgb[(y - 1) * stride + i] : 0;
-      rgb[y * stride + i] = filter === 2 ? (value + up) & 0xff : value;
-    }
-  }
-  return {
-    width,
-    height,
-    pixel: (x, y) => {
-      const i = (y * width + x) * 3;
-      return [rgb[i], rgb[i + 1], rgb[i + 2]];
-    },
-  };
-}
-
-function expectColor(actual: Rgb, expected: Rgb, where: string): void {
-  const close = actual.every((v, i) => Math.abs(v - expected[i]) <= 12);
-  expect(close, `${where}: got rgb(${actual.join(',')}), want rgb(${expected.join(',')})`).toBe(true);
-}
 
 /** Saves through the More menu; also reports the progress panel text seen while saving and where the panel sat. */
 async function exportVia(page: Page, action: 'export-png' | 'export-pdf') {

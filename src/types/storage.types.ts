@@ -31,6 +31,8 @@ export interface ExtensionSettings {
   defaultStrokeWidth: number;
   defaultHighlighterColor: string;
   defaultHighlighterWidth: number;
+  /** Highlighter intensity in percent; the engine maps it onto a see-through opacity range. */
+  defaultHighlighterIntensity: number;
   defaultFontSize: number;
   urlMatchMode: UrlMatchMode;
   strokeSimplification: boolean;

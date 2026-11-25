@@ -9,30 +9,48 @@ import { buildTooltip, isTouchFirst, markupToNodes, setMarkup } from './dom';
 import { TextEditorOverlay } from './text-editor';
 import { formatShortcutForDisplay } from '../core/shortcuts';
 import { DEFAULT_SETTINGS, saveSettings } from '../core/storage';
+import { DARK_BACKGROUND_STRENGTH, intensityToOpacity } from '../core/highlighter';
 
 export type { ToolbarCallbacks };
 
-const PRESET_COLORS = [
-  '#ef4444',
-  '#f97316',
-  '#facc15',
-  '#22c55e',
-  '#06b6d4',
-  '#3b82f6',
-  '#8b5cf6',
-  '#ec4899',
-  '#64748b',
-  '#ffffff',
-  '#000000',
+interface NamedColor {
+  color: string;
+  name: string;
+}
+
+const PRESET_COLORS: NamedColor[] = [
+  { color: '#ef4444', name: 'Red' },
+  { color: '#f97316', name: 'Orange' },
+  { color: '#facc15', name: 'Yellow' },
+  { color: '#22c55e', name: 'Green' },
+  { color: '#06b6d4', name: 'Cyan' },
+  { color: '#3b82f6', name: 'Blue' },
+  { color: '#8b5cf6', name: 'Purple' },
+  { color: '#ec4899', name: 'Pink' },
+  { color: '#64748b', name: 'Slate' },
+  { color: '#ffffff', name: 'White' },
+  { color: '#000000', name: 'Black' },
 ];
+
+const HIGHLIGHTER_COLORS: NamedColor[] = [
+  { color: '#ffea00', name: 'Yellow' },
+  { color: '#39ff14', name: 'Green' },
+  { color: '#00e5ff', name: 'Cyan' },
+  { color: '#ff2bd6', name: 'Pink' },
+  { color: '#ff9100', name: 'Orange' },
+  { color: '#b388ff', name: 'Purple' },
+];
+
+const SAMPLE_SCALE = 0.8;
+const SAMPLE_MAX_BAR = 40;
 
 const VIEWPORT_PADDING = 10;
 const TOAST_RESUME_MIN_MS = 1500;
 
 type ToolCategory = 'pen' | 'highlighter' | 'text' | 'shape' | 'none';
 type ColorSetting = 'defaultStrokeColor' | 'defaultHighlighterColor';
-type SizeSetting = 'defaultStrokeWidth' | 'defaultHighlighterWidth' | 'defaultFontSize';
-type PanelControl = 'strokeColor' | 'strokeWidth' | 'hlColor' | 'hlWidth' | 'fontSize' | 'none';
+type SizeSetting = 'defaultStrokeWidth' | 'defaultHighlighterWidth' | 'defaultHighlighterIntensity' | 'defaultFontSize';
+type PanelControl = 'strokeColor' | 'strokeWidth' | 'hlColor' | 'hlWidth' | 'hlIntensity' | 'hlSample' | 'fontSize' | 'none';
 
 interface ToolInfo {
   category: ToolCategory;
@@ -71,7 +89,7 @@ const GRID_LABELS: Record<StyleTarget, string> = {
 const PANEL_LAYOUT: Record<StyleTarget, Partial<Record<PanelControl, string>>> = {
   pen: { strokeColor: 'Custom pen colour', strokeWidth: 'Width' },
   shape: { strokeColor: 'Custom shape colour', strokeWidth: 'Width' },
-  highlighter: { hlColor: 'Custom highlighter colour', hlWidth: 'Width' },
+  highlighter: { hlColor: 'Custom highlighter colour', hlSample: '', hlWidth: 'Width', hlIntensity: 'Intensity' },
   text: { strokeColor: 'Custom text colour', fontSize: 'Text size' },
   selection: { strokeColor: 'Custom colour for the selection' },
   none: { none: '' },
@@ -80,7 +98,7 @@ const PANEL_LAYOUT: Record<StyleTarget, Partial<Record<PanelControl, string>>> =
 const BUTTON_LABELS: Record<StyleTarget, string> = {
   pen: 'Colour and width',
   shape: 'Colour and width',
-  highlighter: 'Colour and width',
+  highlighter: 'Colour, width and intensity',
   text: 'Colour and size',
   selection: 'Recolour selection',
   none: 'Colour and width',
@@ -1015,16 +1033,6 @@ export class FloatingToolbar {
     const grid = document.createElement('div');
     grid.className = 'pa-color-grid';
     grid.setAttribute('role', 'group');
-    for (const color of PRESET_COLORS) {
-      const swatch = document.createElement('button');
-      swatch.type = 'button';
-      swatch.className = 'pa-color-swatch';
-      swatch.style.backgroundColor = color;
-      swatch.dataset.color = color;
-      swatch.setAttribute('aria-label', `Color ${color}`);
-      swatch.addEventListener('click', () => this.applyColor(color));
-      grid.appendChild(swatch);
-    }
     body.appendChild(grid);
 
     this.panels = {
@@ -1032,12 +1040,15 @@ export class FloatingToolbar {
       strokeWidth: this.buildSliderField('defaultStrokeWidth', 1, 30),
       hlColor: this.buildCustomColorSwatch('defaultHighlighterColor'),
       hlWidth: this.buildSliderField('defaultHighlighterWidth', 8, 50),
+      hlIntensity: this.buildSliderField('defaultHighlighterIntensity', 0, 100, 5),
+      hlSample: this.buildHighlightSample(),
       fontSize: this.buildSliderField('defaultFontSize', 12, 36),
       none: { root: this.buildNonePanel() },
     };
     grid.appendChild(this.panels.strokeColor.root);
     grid.appendChild(this.panels.hlColor.root);
-    for (const key of ['strokeWidth', 'hlWidth', 'fontSize', 'none'] as const) body.appendChild(this.panels[key].root);
+    body.insertBefore(this.panels.hlSample.root, grid);
+    for (const key of ['strokeWidth', 'hlWidth', 'hlIntensity', 'fontSize', 'none'] as const) body.appendChild(this.panels[key].root);
 
     this.colorPopover.appendChild(body);
 
@@ -1104,8 +1115,10 @@ export class FloatingToolbar {
     input.setAttribute('aria-label', 'Custom colour');
     input.addEventListener('input', () => {
       if (this.styleTarget() === 'selection') return;
-      if (setting === 'defaultHighlighterColor') this.engine.setHighlighterColor(input.value);
-      else this.engine.setStrokeColor(input.value);
+      if (setting === 'defaultHighlighterColor') {
+        this.engine.setHighlighterColor(input.value);
+        this.paintHighlightSample({ color: input.value });
+      } else this.engine.setStrokeColor(input.value);
       this.colorPreviewBtn.style.backgroundColor = input.value;
     });
     input.addEventListener('change', () => this.applyColor(input.value));
@@ -1121,7 +1134,7 @@ export class FloatingToolbar {
   }
 
   /** A labelled slider with a live pixel readout inside the popover. */
-  private buildSliderField(setting: SizeSetting, min: number, max: number): PanelEntry {
+  private buildSliderField(setting: SizeSetting, min: number, max: number, step = 1): PanelEntry {
     const group = document.createElement('div');
     group.className = 'pa-slider-group';
 
@@ -1139,19 +1152,27 @@ export class FloatingToolbar {
     input.dataset.setting = setting;
     input.min = `${min}`;
     input.max = `${max}`;
+    input.step = `${step}`;
+    const isIntensity = setting === 'defaultHighlighterIntensity';
 
     const show = (val: number) => {
       input.value = `${val}`;
-      readout.textContent = `${val}px`;
-      input.setAttribute('aria-valuetext', `${val} pixels`);
+      const shown = parseInt(input.value, 10);
+      readout.textContent = isIntensity ? '' : `${shown}px`;
+      input.setAttribute('aria-valuetext', isIntensity ? `${shown} percent` : `${shown} pixels`);
     };
 
     const apply = (commit: boolean) => {
       const val = parseInt(input.value, 10);
       show(val);
       if (setting === 'defaultStrokeWidth') this.engine.setStrokeWidth(val);
-      else if (setting === 'defaultHighlighterWidth') this.engine.setHighlighterWidth(val);
-      else this.engine.setFontSize(val);
+      else if (setting === 'defaultHighlighterWidth') {
+        this.engine.setHighlighterWidth(val);
+        this.paintHighlightSample({ width: val });
+      } else if (isIntensity) {
+        this.engine.setHighlighterIntensity(val);
+        this.paintHighlightSample({ intensity: val });
+      } else this.engine.setFontSize(val);
       if (commit) {
         const patch: Partial<ExtensionSettings> = {};
         patch[setting] = val;
@@ -1164,7 +1185,76 @@ export class FloatingToolbar {
 
     group.appendChild(header);
     group.appendChild(input);
+    if (isIntensity) {
+      const scale = document.createElement('div');
+      scale.className = 'pa-slider-scale';
+      scale.setAttribute('aria-hidden', 'true');
+      for (const end of ['Soft', 'Bold']) {
+        const tick = document.createElement('span');
+        tick.textContent = end;
+        scale.appendChild(tick);
+      }
+      group.appendChild(scale);
+    }
     return { root: group, label: name, input, sync: () => show(this.settings[setting]) };
+  }
+
+  /** The highlight as it will land on a light page and a dark one, following colour, width and intensity together. */
+  private buildHighlightSample(): PanelEntry {
+    const sample = document.createElement('div');
+    sample.className = 'pa-hl-sample';
+    sample.setAttribute('aria-hidden', 'true');
+    for (const theme of ['light', 'dark']) {
+      const chip = document.createElement('span');
+      chip.className = `pa-hl-chip is-${theme}`;
+      const text = document.createElement('span');
+      text.className = 'pa-hl-text';
+      text.textContent = 'Highlighted';
+      const mark = document.createElement('span');
+      mark.className = 'pa-hl-mark';
+      chip.appendChild(text);
+      chip.appendChild(mark);
+      sample.appendChild(chip);
+    }
+    return { root: sample, sync: () => this.paintHighlightSample({}) };
+  }
+
+  /** Values not given come from the saved settings, so a slider can preview its unsaved value. */
+  private paintHighlightSample({
+    color = this.settings.defaultHighlighterColor,
+    width = this.settings.defaultHighlighterWidth,
+    intensity = this.settings.defaultHighlighterIntensity,
+  }: { color?: string; width?: number; intensity?: number }): void {
+    const opacity = intensityToOpacity(intensity);
+    // Scaled to the preview text, which is a little smaller than typical page text.
+    const height = `${Math.min(SAMPLE_MAX_BAR, Math.max(3, Math.round(width * SAMPLE_SCALE)))}px`;
+    this.panels.hlSample.root.querySelectorAll<HTMLElement>('.pa-hl-mark').forEach((mark) => {
+      mark.style.backgroundColor = color;
+      mark.style.height = height;
+      mark.style.opacity = `${mark.closest('.is-dark') ? opacity * DARK_BACKGROUND_STRENGTH : opacity}`;
+    });
+  }
+
+  /** Swatches are rebuilt only when the palette changes, so focus and hover survive ordinary refreshes. */
+  private renderSwatches(palette: NamedColor[]): void {
+    const grid = this.colorPopover.querySelector<HTMLElement>('.pa-color-grid');
+    if (!grid) return;
+    const key = palette === HIGHLIGHTER_COLORS ? 'highlighter' : 'regular';
+    grid.classList.toggle('is-highlighter', key === 'highlighter');
+    if (grid.dataset.palette === key) return;
+    grid.dataset.palette = key;
+    grid.querySelectorAll('button.pa-color-swatch').forEach((swatch) => swatch.remove());
+    const custom = grid.firstElementChild;
+    for (const { color, name } of palette) {
+      const swatch = document.createElement('button');
+      swatch.type = 'button';
+      swatch.className = 'pa-color-swatch';
+      swatch.dataset.color = color;
+      swatch.style.backgroundColor = color;
+      swatch.setAttribute('aria-label', name);
+      swatch.addEventListener('click', () => this.applyColor(color));
+      grid.insertBefore(swatch, custom);
+    }
   }
 
   /** A button that restores every drawing default to its factory value. */
@@ -1180,6 +1270,7 @@ export class FloatingToolbar {
         defaultStrokeWidth: DEFAULT_SETTINGS.defaultStrokeWidth,
         defaultHighlighterColor: DEFAULT_SETTINGS.defaultHighlighterColor,
         defaultHighlighterWidth: DEFAULT_SETTINGS.defaultHighlighterWidth,
+        defaultHighlighterIntensity: DEFAULT_SETTINGS.defaultHighlighterIntensity,
         defaultFontSize: DEFAULT_SETTINGS.defaultFontSize,
       })
     );
@@ -1191,6 +1282,7 @@ export class FloatingToolbar {
     this.engine.setStrokeWidth(this.settings.defaultStrokeWidth);
     this.engine.setHighlighterColor(this.settings.defaultHighlighterColor);
     this.engine.setHighlighterWidth(this.settings.defaultHighlighterWidth);
+    this.engine.setHighlighterIntensity(this.settings.defaultHighlighterIntensity);
     this.engine.setFontSize(this.settings.defaultFontSize);
   }
 
@@ -1223,6 +1315,12 @@ export class FloatingToolbar {
       return;
     }
     this.updateDrawingDefaults(target === 'highlighter' ? { defaultHighlighterColor: color } : { defaultStrokeColor: color });
+  }
+
+  private usesHighlighterPalette(target: StyleTarget): boolean {
+    if (target === 'highlighter') return true;
+    if (target !== 'selection') return false;
+    return this.engine.getSelectedElements().every((el) => el.type === 'highlighter');
   }
 
   /** The colour the selection shares, or null when it mixes colours. */
@@ -1286,6 +1384,7 @@ export class FloatingToolbar {
         tool === 'select' ? 'Select drawings to recolour them, or pick a tool.' : 'Pick a tool to set its colour and width.';
     }
 
+    this.renderSwatches(this.usesHighlighterPalette(target) ? HIGHLIGHTER_COLORS : PRESET_COLORS);
     this.colorPopover.querySelectorAll<HTMLButtonElement>('button.pa-color-swatch').forEach((swatch) => {
       const isActive = !!color && swatch.dataset.color === color.toLowerCase();
       swatch.classList.toggle('active', isActive);

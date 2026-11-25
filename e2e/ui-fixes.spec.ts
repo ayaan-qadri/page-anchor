@@ -478,15 +478,17 @@ test.describe('UI review fixes', () => {
       await page.mouse.click(270, 260);
       await pa(page, '.pa-color-preview-btn').click();
       await expect(pa(page, '.pa-popover-tool-name')).toHaveText('1 selected');
-      await pa(page, '.pa-color-swatch[data-color="#22c55e"]').click();
+      await pa(page, '.pa-color-swatch[data-color="#39ff14"]').click();
 
       await expect
         .poll(async () => {
           const all = await readStorage(context);
           const entry = Object.entries(all).find(([key]) => key.startsWith('page_anchor_data:') && key.includes('/recolor'));
-          return ((entry?.[1] as { elements?: Array<{ type: string; strokeColor: string }> })?.elements ?? []).map((el) => `${el.type}:${el.strokeColor}`);
+          return ((entry?.[1] as { elements?: Array<{ type: string; strokeColor: string; opacity: number }> })?.elements ?? []).map(
+            (el) => `${el.type}:${el.strokeColor}:${el.opacity}`
+          );
         })
-        .toEqual(['highlighter:#22c55e']);
+        .toEqual(['highlighter:#39ff14:0.6']);
     } finally {
       await server.close();
     }

@@ -163,7 +163,7 @@ describe('CanvasEngine: Drawing, Tooling, Shapes, Eraser, & Pointer Engine', () 
       expect(highlighter.type).toBe('highlighter');
       expect(highlighter.strokeColor).toBe('#fbbf24');
       expect(highlighter.strokeWidth).toBe(25);
-      expect(highlighter.opacity).toBe(0.35);
+      expect(highlighter.opacity).toBe(0.6);
     });
   });
 

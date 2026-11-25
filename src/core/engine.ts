@@ -10,6 +10,7 @@ import {
 } from '../types/engine.types';
 import { OrphanedAnchorMode } from '../types/storage.types';
 import { DOMAnchorManager } from './anchor';
+import { DARK_BACKGROUND_STRENGTH, blendAt, blendForBox, fillHighlightBar, intensityToOpacity, pageBlend, straightenHighlight, themeSignature, type HighlightBlend } from './highlighter';
 import {
   computeBoundingBox,
   FreehandOutline,
@@ -73,8 +74,41 @@ function strokeRenderOptions(type: StrokeElement['type'], width: number): Freeha
   };
 }
 
+const DEFAULT_HIGHLIGHTER_OPACITY = 0.35;
+const HIGHLIGHT_BLENDS: readonly HighlightBlend[] = ['multiply', 'screen'];
+
+/** Highlights sit outside the overlay's shadow host, whose stacking context would otherwise keep them from blending with the page. */
+interface HighlightLayer {
+  host: HTMLElement;
+  base: HTMLCanvasElement;
+  active: HTMLCanvasElement;
+  baseCtx: CanvasRenderingContext2D | null;
+  activeCtx: CanvasRenderingContext2D | null;
+}
+
+const HIGHLIGHT_HOST_STYLES: Record<string, string> = {
+  position: 'absolute',
+  top: '0',
+  left: '0',
+  width: '0',
+  height: '0',
+  margin: '0',
+  padding: '0',
+  overflow: 'visible',
+  'z-index': '2147483646',
+  display: 'block',
+  visibility: 'visible',
+  opacity: '1',
+  transform: 'none',
+  filter: 'none',
+  contain: 'none',
+  isolation: 'auto',
+  'clip-path': 'none',
+  'pointer-events': 'none',
+};
+
 function baseOpacity(el: AnchorElement): number {
-  return el.opacity || (el.type === 'highlighter' ? 0.35 : 1);
+  return el.opacity || (el.type === 'highlighter' ? DEFAULT_HIGHLIGHTER_OPACITY : 1);
 }
 
 function textFont(fontSize: number): string {
@@ -115,8 +149,19 @@ export class CanvasEngine {
   private activeTool: ToolType = 'pen';
   private strokeColor = '#ef4444';
   private strokeWidth = 4;
-  private highlighterColor = '#facc15';
+  private highlighterColor = '#ffea00';
   private highlighterWidth = 20;
+  private highlighterOpacity = intensityToOpacity(50);
+  private layers: Record<HighlightBlend, HighlightLayer>;
+  /** Blend picked for each highlight from the page under it; cleared when the page's theme may have changed. */
+  private blendCache = new WeakMap<AnchorElement, HighlightBlend>();
+  private pageBlendCache: HighlightBlend | null = null;
+  private activeBlend: HighlightBlend = 'multiply';
+  private themeObserver: MutationObserver | null = null;
+  private darkSchemeQuery: MediaQueryList | null = null;
+  private isDestroyed = false;
+  private layerPainted: Record<HighlightBlend, boolean> = { multiply: false, screen: false };
+  private activeLayerPainted = false;
   private fontSize = 18;
   private isActiveMode = false;
   private strokeSimplification = true;
@@ -175,8 +220,104 @@ export class CanvasEngine {
     this.baseCtx = this.baseCanvas.getContext('2d', { alpha: true });
     this.activeCtx = this.activeCanvas.getContext('2d', { alpha: true });
 
+    this.layers = { multiply: this.createHighlightLayer('multiply'), screen: this.createHighlightLayer('screen') };
+    this.attachHighlightLayers();
+    this.watchTheme();
+
     this.updateDprAndSize();
     this.bindEvents();
+  }
+
+  private createHighlightLayer(blend: HighlightBlend): HighlightLayer {
+    const host = document.createElement('page-anchor-highlights');
+    host.dataset.blend = blend;
+    host.setAttribute('aria-hidden', 'true');
+    for (const [property, value] of Object.entries(HIGHLIGHT_HOST_STYLES)) host.style.setProperty(property, value, 'important');
+    host.style.setProperty('mix-blend-mode', blend, 'important');
+    if (blend === 'screen') host.style.setProperty('opacity', `${DARK_BACKGROUND_STRENGTH}`, 'important');
+    const base = this.createLayer('page-anchor-highlight-canvas', '0');
+    const active = this.createLayer('page-anchor-highlight-active-canvas', '1');
+    for (const canvas of [base, active]) {
+      canvas.width = 0;
+      canvas.height = 0;
+      host.appendChild(canvas);
+    }
+    return { host, base, active, baseCtx: base.getContext('2d', { alpha: true }), activeCtx: active.getContext('2d', { alpha: true }) };
+  }
+
+  /** Highlight layers stay unallocated until a highlight lands on them, so pages without highlights carry no extra canvas memory. */
+  private sizeLayer(layer: HighlightLayer): void {
+    const { width, height } = this.baseCanvas;
+    for (const canvas of [layer.base, layer.active]) {
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+    }
+  }
+
+  /** Re-attached on every render, so a page that rewrites its document cannot drop the highlights. */
+  private attachHighlightLayers(): void {
+    if (this.isDestroyed) return;
+    const root = document.documentElement || document.body;
+    if (!root) return;
+    for (const blend of HIGHLIGHT_BLENDS) {
+      if (!this.layers[blend].host.isConnected) root.appendChild(this.layers[blend].host);
+    }
+  }
+
+  private readonly isOwnNode = (el: Element): boolean => !!el.closest('#page-anchor-host, page-anchor-highlights');
+
+  private themeKey = '';
+
+  private readonly invalidateTheme = (): void => {
+    const key = themeSignature();
+    if (key === this.themeKey) return;
+    this.themeKey = key;
+    this.blendCache = new WeakMap();
+    this.pageBlendCache = null;
+    this.onScroll();
+  };
+
+  /** Sites switch between light and dark by changing a class, attribute or style on the root, or by following the system setting. */
+  private watchTheme(): void {
+    this.themeKey = themeSignature();
+    if (typeof MutationObserver !== 'undefined') {
+      this.themeObserver = new MutationObserver(this.invalidateTheme);
+      for (const el of [document.documentElement, document.body]) {
+        if (el) this.themeObserver.observe(el, { attributes: true, attributeFilter: ['class', 'style', 'data-theme', 'data-color-mode', 'data-mode'] });
+      }
+    }
+    if (typeof matchMedia === 'function') {
+      this.darkSchemeQuery = matchMedia('(prefers-color-scheme: dark)');
+      this.darkSchemeQuery.addEventListener?.('change', this.invalidateTheme);
+    }
+  }
+
+  private currentPageBlend(): HighlightBlend {
+    this.pageBlendCache ??= pageBlend();
+    return this.pageBlendCache;
+  }
+
+  /** Blend for a highlight, sampled where it sits on screen; one off screen uses the page's own blend until it scrolls into view. */
+  private blendFor(el: AnchorElement, eff: EffectiveBBox): HighlightBlend {
+    const cached = this.blendCache.get(el);
+    if (cached) return cached;
+    const { minX, minY, maxX, maxY } = eff.bbox;
+    const sx = window.scrollX;
+    const sy = window.scrollY;
+    const sampled = blendForBox({ minX: minX - sx, minY: minY - sy, maxX: maxX - sx, maxY: maxY - sy }, this.isOwnNode);
+    if (!sampled) return this.currentPageBlend();
+    this.blendCache.set(el, sampled);
+    return sampled;
+  }
+
+  /** Hides the highlight layers for a screenshot; returns the function that shows them again. */
+  public hideHighlights(): () => void {
+    for (const blend of HIGHLIGHT_BLENDS) this.layers[blend].host.style.setProperty('visibility', 'hidden', 'important');
+    return () => {
+      for (const blend of HIGHLIGHT_BLENDS) this.layers[blend].host.style.setProperty('visibility', 'visible', 'important');
+    };
   }
 
   private createLayer(className: string, zIndex: string): HTMLCanvasElement {
@@ -297,6 +438,10 @@ export class CanvasEngine {
     this.highlighterWidth = width;
   }
 
+  public setHighlighterIntensity(percent: number): void {
+    this.highlighterOpacity = intensityToOpacity(percent);
+  }
+
   public setFontSize(size: number): void {
     this.fontSize = size;
   }
@@ -335,6 +480,7 @@ export class CanvasEngine {
 
   public setAnnotationsVisible(visible: boolean): void {
     this.baseCanvas.style.display = visible ? 'block' : 'none';
+    for (const blend of HIGHLIGHT_BLENDS) this.layers[blend].base.style.display = visible ? 'block' : 'none';
     // Also drop any in-progress preview so a half-drawn stroke does not linger
     // on the active layer while annotations are hidden.
     if (!visible) this.clearActiveCanvas();
@@ -472,7 +618,8 @@ export class CanvasEngine {
     this.viewportWidth = w;
     this.viewportHeight = h;
 
-    for (const canvas of [this.baseCanvas, this.activeCanvas]) {
+    const canvases = [this.baseCanvas, this.activeCanvas];
+    for (const canvas of [...canvases, ...HIGHLIGHT_BLENDS.flatMap((b) => [this.layers[b].base, this.layers[b].active])]) {
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
     }
@@ -480,10 +627,10 @@ export class CanvasEngine {
     const pixelW = Math.round(w * this.dpr);
     const pixelH = Math.round(h * this.dpr);
     if (this.baseCanvas.width !== pixelW || this.baseCanvas.height !== pixelH) {
-      this.baseCanvas.width = pixelW;
-      this.baseCanvas.height = pixelH;
-      this.activeCanvas.width = pixelW;
-      this.activeCanvas.height = pixelH;
+      for (const canvas of canvases) {
+        canvas.width = pixelW;
+        canvas.height = pixelH;
+      }
 
       this.renderBase();
     }
@@ -603,6 +750,7 @@ export class CanvasEngine {
     }
 
     if (tool === 'pen' || tool === 'highlighter') {
+      if (tool === 'highlighter') this.activeBlend = blendAt(e.clientX, e.clientY, this.isOwnNode) ?? this.currentPageBlend();
       this.currentStrokePoints = [this.clientToDoc(e.clientX, e.clientY, e.pressure)];
       this.scheduleActiveStrokeDraw();
       return;
@@ -845,7 +993,8 @@ export class CanvasEngine {
 
     const isHighlighter = type === 'highlighter';
     const width = isHighlighter ? this.highlighterWidth : this.strokeWidth;
-    const points = this.strokeSimplification ? simplifyPointsRDP(raw, 0.7) : raw.slice();
+    const straight = isHighlighter ? straightenHighlight(raw) : null;
+    const points = straight ?? (this.strokeSimplification ? simplifyPointsRDP(raw, 0.7) : raw.slice());
 
     const stroke: StrokeElement = {
       id: `stroke_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -853,7 +1002,7 @@ export class CanvasEngine {
       points,
       strokeColor: isHighlighter ? this.highlighterColor : this.strokeColor,
       strokeWidth: width,
-      opacity: isHighlighter ? 0.35 : 1.0,
+      opacity: isHighlighter ? this.highlighterOpacity : 1.0,
       createdAt: Date.now(),
       bbox: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
     };
@@ -864,7 +1013,7 @@ export class CanvasEngine {
     }
 
     // The preview was traced from the raw points; reusing that outline stops the stroke reshaping on lift.
-    if (raw.length > 1) {
+    if (raw.length > 1 && !straight) {
       this.strokeOutlines.set(stroke, getFreehandOutline(raw, strokeRenderOptions(type, width)));
     }
 
@@ -995,6 +1144,12 @@ export class CanvasEngine {
 
   private clearActiveCanvas(): void {
     this.activeCtx?.clearRect(0, 0, this.activeCanvas.width, this.activeCanvas.height);
+    if (!this.activeLayerPainted) return;
+    this.activeLayerPainted = false;
+    for (const blend of HIGHLIGHT_BLENDS) {
+      const { active, activeCtx } = this.layers[blend];
+      activeCtx?.clearRect(0, 0, active.width, active.height);
+    }
   }
 
   /** Saves `ctx` and maps document coordinates onto the viewport-fixed canvas; pair with `ctx.restore()`. */
@@ -1019,15 +1174,24 @@ export class CanvasEngine {
     if (this.currentStrokePoints.length === 0 || !ctx) return;
     if (this.activeTool !== 'pen' && this.activeTool !== 'highlighter') return;
 
-    const isHighlighter = this.activeTool === 'highlighter';
+    if (this.activeTool === 'highlighter') {
+      const layerCtx = this.layers[this.activeBlend].activeCtx;
+      if (!layerCtx) return;
+      this.sizeLayer(this.layers[this.activeBlend]);
+      this.activeLayerPainted = true;
+      this.beginDocTransform(layerCtx);
+      layerCtx.fillStyle = this.highlighterColor;
+      layerCtx.globalAlpha = this.highlighterOpacity;
+      const straight = straightenHighlight(this.currentStrokePoints);
+      if (straight) fillHighlightBar(layerCtx, straight[0], straight[1], this.highlighterWidth);
+      else renderFreehandStroke(layerCtx, this.currentStrokePoints, strokeRenderOptions('highlighter', this.highlighterWidth));
+      layerCtx.restore();
+      return;
+    }
+
     this.beginDocTransform(ctx);
-    ctx.fillStyle = isHighlighter ? this.highlighterColor : this.strokeColor;
-    ctx.globalAlpha = isHighlighter ? 0.35 : 1.0;
-    renderFreehandStroke(
-      ctx,
-      this.currentStrokePoints,
-      strokeRenderOptions(this.activeTool, isHighlighter ? this.highlighterWidth : this.strokeWidth)
-    );
+    ctx.fillStyle = this.strokeColor;
+    renderFreehandStroke(ctx, this.currentStrokePoints, strokeRenderOptions(this.activeTool, this.strokeWidth));
     ctx.restore();
   }
 
@@ -1046,6 +1210,19 @@ export class CanvasEngine {
     if (!ctx) return;
 
     ctx.clearRect(0, 0, this.baseCanvas.width, this.baseCanvas.height);
+    this.attachHighlightLayers();
+    const highlightCtxs: Partial<Record<HighlightBlend, CanvasRenderingContext2D>> = {};
+    const highlightCtx = (blend: HighlightBlend): CanvasRenderingContext2D | null => {
+      const existing = highlightCtxs[blend];
+      if (existing) return existing;
+      const { base, baseCtx } = this.layers[blend];
+      if (!baseCtx) return null;
+      this.sizeLayer(this.layers[blend]);
+      baseCtx.clearRect(0, 0, base.width, base.height);
+      this.beginDocTransform(baseCtx);
+      highlightCtxs[blend] = baseCtx;
+      return baseCtx;
+    };
     this.anchorManager.syncScroll();
     this.beginDocTransform(ctx);
 
@@ -1062,11 +1239,20 @@ export class CanvasEngine {
       // Viewport frustum culling is always on: an element whose effective
       // bounding box misses the padded viewport cannot be visible.
       if (!intersectsBoundingBox(eff.bbox, viewportBox)) continue;
-      this.renderSingleElementWithOffset(ctx, el, eff);
+      const target = el.type === 'highlighter' ? (highlightCtx(this.blendFor(el, eff)) ?? ctx) : ctx;
+      this.renderSingleElementWithOffset(target, el, eff);
     }
 
     this.renderSelection(ctx, viewportBox);
     ctx.restore();
+    // A layer is only cleared when it was drawn on, so pages without highlights pay nothing for them.
+    for (const blend of HIGHLIGHT_BLENDS) {
+      const used = highlightCtxs[blend];
+      const layer = this.layers[blend];
+      if (used) used.restore();
+      else if (this.layerPainted[blend]) layer.baseCtx?.clearRect(0, 0, layer.base.width, layer.base.height);
+      this.layerPainted[blend] = !!used;
+    }
     this.reportSelectionChange();
   }
 
@@ -1094,6 +1280,7 @@ export class CanvasEngine {
     const scrolledY = baseline ? window.scrollY - baseline.scrollY : 0;
     ctx.save();
     ctx.setTransform(scale, 0, 0, scale, -region.minX * scale, -region.minY * scale);
+    const visible: Array<[AnchorElement, EffectiveBBox]> = [];
     for (const el of this.elements) {
       let eff = this.getElementEffectiveBBox(el);
       const before = baseline?.boxes.get(el);
@@ -1102,7 +1289,19 @@ export class CanvasEngine {
         eff = before;
       }
       if (this.isHidden(eff) || !intersectsBoundingBox(eff.bbox, padded)) continue;
-      this.renderSingleElementWithOffset(ctx, el, eff);
+      visible.push([el, eff]);
+    }
+    // Highlights go under the other drawings, as they do on screen.
+    for (const [el, eff] of visible) {
+      if (el.type !== 'highlighter') continue;
+      ctx.save();
+      const blend = this.blendFor(el, this.getElementEffectiveBBox(el));
+      ctx.globalCompositeOperation = blend;
+      this.renderSingleElementWithOffset(ctx, el, eff, blend === 'screen' ? DARK_BACKGROUND_STRENGTH : 1);
+      ctx.restore();
+    }
+    for (const [el, eff] of visible) {
+      if (el.type !== 'highlighter') this.renderSingleElementWithOffset(ctx, el, eff);
     }
     ctx.restore();
   }
@@ -1114,7 +1313,7 @@ export class CanvasEngine {
     this.callbacks.onSelectionChange?.();
   }
 
-  private renderSingleElementWithOffset(ctx: CanvasRenderingContext2D, el: AnchorElement, eff: EffectiveBBox): void {
+  private renderSingleElementWithOffset(ctx: CanvasRenderingContext2D, el: AnchorElement, eff: EffectiveBBox, alphaScale = 1): void {
     ctx.save();
     if (eff.clip) {
       ctx.beginPath();
@@ -1124,7 +1323,7 @@ export class CanvasEngine {
     if (eff.deltaX !== 0 || eff.deltaY !== 0) {
       ctx.translate(eff.deltaX, eff.deltaY);
     }
-    this.renderSingleElement(ctx, el, eff.isOrphaned ? ORPHAN_DIM_FACTOR : 1);
+    this.renderSingleElement(ctx, el, (eff.isOrphaned ? ORPHAN_DIM_FACTOR : 1) * alphaScale);
 
     if (eff.isOrphaned) {
       ctx.strokeStyle = 'rgba(239, 68, 68, 0.65)';
@@ -1211,6 +1410,10 @@ export class CanvasEngine {
   }
 
   private renderStroke(ctx: CanvasRenderingContext2D, el: StrokeElement): void {
+    if (el.type === 'highlighter' && el.points.length === 2) {
+      fillHighlightBar(ctx, el.points[0], el.points[1], el.strokeWidth);
+      return;
+    }
     const options = strokeRenderOptions(el.type, el.strokeWidth);
     if (el.points.length < 2) {
       renderFreehandStroke(ctx, el.points, options);
@@ -1442,5 +1645,9 @@ export class CanvasEngine {
     this.callbacks = {};
     this.baseCanvas.remove();
     this.activeCanvas.remove();
+    this.isDestroyed = true;
+    this.themeObserver?.disconnect();
+    this.darkSchemeQuery?.removeEventListener?.('change', this.invalidateTheme);
+    for (const blend of HIGHLIGHT_BLENDS) this.layers[blend].host.remove();
   }
 }
